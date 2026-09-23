@@ -1,6 +1,6 @@
-// Shot List — app-shell cache. Your project data lives in IndexedDB, not here;
+// Producrr — app-shell cache. Your project data lives in IndexedDB, not here;
 // this only makes sure the app itself still opens with no signal.
-const CACHE_NAME = "shotlist-shell-v1";
+const CACHE_NAME = "producrr-shell-v2";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
