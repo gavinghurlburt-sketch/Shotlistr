@@ -251,7 +251,6 @@ main { padding: 16px; max-width: 1600px; margin: 0 auto; }
 /* ---------- audio / tempo ---------- */
 .audio-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .track-name { font-weight: 600; font-size: 13px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#player { flex: 1 1 240px; min-width: 200px; height: 34px; }
 .tc-display {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 15px;
@@ -518,6 +517,9 @@ table.sched tr.done-row td { background-color: var(--done); }
 .rchip.on.r-blooper, .rbadge.r-blooper { background-color: #a855f7; border-color: #a855f7; color: #fff; }
 .rbadge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background-color: var(--surface-3); color: var(--text); }
 .take-note { flex: 1 1 160px; min-width: 120px; }
+.loc-select { font-size: 12px; padding: 4px 6px; max-width: 180px; }
+.chip-loc { background-color: var(--surface-3); color: var(--text); font-weight: 600; }
+.tile-loc { display: flex; align-items: center; gap: 6px; }
 .shoot-transport { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* ---------- cut ---------- */
@@ -651,6 +653,13 @@ table.sched tr.done-row td { background-color: var(--done); }
 .type-choice:hover { border-color: var(--accent); }
 @media (max-width: 640px) { .type-choices { grid-template-columns: 1fr; } .part-title { font-size: 19px; } }
 
+.toast {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 400; max-width: min(92vw, 460px);
+  background-color: var(--head-bg); color: var(--head-fg);
+  padding: 10px 14px; border-radius: 8px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+
 /* ---------- print ---------- */
 #printRoot { display: none; }
 .print-doc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; background-color: #fff; font-size: 11px; }
@@ -735,8 +744,10 @@ table.sched tr.done-row td { background-color: var(--done); }
           <button id="uploadTrackBtn" class="btn">Upload track</button>
           <input type="file" id="trackFileInput" accept="audio/*,.mp3,.m4a,.wav,.aac,.aiff,.caf,.flac,.ogg" hidden>
           <span id="trackName" class="track-name muted">No track loaded</span>
-          <audio id="player" controls preload="auto" class="hidden"></audio>
+          <audio id="player" preload="auto" class="hidden"></audio>
+          <button id="draftPlayBtn" class="btn small" disabled>Play</button>
           <span class="tc-display">0:00.0</span>
+          <span class="spacer"></span>
           <button id="removeTrackBtn" class="btn small danger-text hidden">Remove track</button>
         </div>
         <canvas id="waveformCanvas" class="waveform hidden" aria-label="Waveform — click to seek"></canvas>
@@ -986,6 +997,7 @@ table.sched tr.done-row td { background-color: var(--done); }
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="cutHideBad" checked> Hide unusable takes &amp; bloopers</label>
       <label class="check"><input type="checkbox" id="cutOnlyTaken"> Only shots with takes</label>
+      <select id="cutLocFilter" class="field" aria-label="Filter takes by location"></select>
       <span class="spacer"></span>
       <button class="btn" id="exportTakeLogBtn">Export take log (CSV)</button>
       <button class="btn" id="printTakeLogBtn">Print / PDF</button>
@@ -1035,6 +1047,18 @@ table.sched tr.done-row td { background-color: var(--done); }
     </div>
   </div>
 </div>
+<div id="locModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>Take locations</h3>
+    <p class="modal-hint">Tag each take with where it was shot. Renaming a location updates every take that uses it.</p>
+    <div id="locList"></div>
+    <div class="lens-add-row">
+      <input type="text" id="newLocInput" class="field" placeholder="e.g. Kitchen, Rooftop, Car">
+      <button id="addLocBtn" class="btn primary">Add</button>
+    </div>
+    <div class="modal-actions"><span></span><button id="closeLocBtn" class="btn primary">Done</button></div>
+  </div>
+</div>
 <div id="backupModal" class="modal hidden">
   <div class="modal-inner">
     <h3>Backup &amp; transfer</h3>
@@ -1053,6 +1077,7 @@ table.sched tr.done-row td { background-color: var(--done); }
   <button class="lb-nav lb-next" data-lb="next" aria-label="Next">&#8250;</button>
   <button class="lb-remove btn" data-lb="remove">Remove image</button>
 </div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 <div id="printRoot"></div>
 
 <script>
@@ -1199,7 +1224,7 @@ function normalizeRow(r) {
   const row = Object.assign(defaultRow(), r || {});
   if (!row.id) row.id = uid();
   row.images = Array.isArray(row.images) ? row.images : [];
-  row.takes = Array.isArray(row.takes) ? row.takes.map((t, i) => Object.assign({ id: uid(), n: i + 1, rating: "", note: "", editorNote: "", selected: false, at: null }, t)) : [];
+  row.takes = Array.isArray(row.takes) ? row.takes.map((t, i) => Object.assign({ id: uid(), n: i + 1, rating: "", note: "", editorNote: "", selected: false, at: null, locTag: "" }, t)) : [];
   return row;
 }
 const COLUMN_IDS = ["take", "setupNum", "shotNum", "subject", "size", "angle", "movement", "equipment", "lens", "sound", "setupTime", "ref", "notes", "timestamp", "shootTime"];
@@ -1246,6 +1271,8 @@ function normalizeRecord(rec) {
   p.producerNotes = p.producerNotes || "";
   p.callSheet = Object.assign({ productionCo: "", director: "", producer: "", crewCall: "", talentCall: "", contacts: "", parking: "", hospital: "", weather: "", notes: "" }, p.callSheet || {});
   p.workspace = WORKSPACES.includes(p.workspace) ? p.workspace : "draft";
+  p.locationTags = (Array.isArray(p.locationTags) ? p.locationTags : []).map(t => ({ id: t.id || uid(), name: t.name || "Location" }));
+  if (!p.locationTags.some(t => t.id === p.lastLocTag)) p.lastLocTag = "";
   return p;
 }
 
@@ -1787,6 +1814,7 @@ function renderCurrentShot(s) {
   const takes = [...r.takes].reverse().map(t => `<div class="take" data-take-id="${t.id}">
       <span class="take-num">Take ${t.n}</span>
       <div class="rating-chips">${RATINGS.map(x => `<button type="button" class="rchip r-${x.id} ${t.rating === x.id ? "on" : ""}" data-action="rate" data-rating="${x.id}">${x.label}</button>`).join("")}</div>
+      ${locSelectHTML(t)}
       <input type="text" class="field take-note" data-take-note value="${esc(t.note)}" placeholder="Note for the editor">
       <button type="button" class="icon-btn" data-action="delete-take" aria-label="Delete take" title="Delete take">×</button>
     </div>`).join("");
@@ -1834,7 +1862,7 @@ function wireShoot() {
       case "add-take": {
         if (!row) return;
         const n = row.takes.reduce((m, t) => Math.max(m, t.n || 0), 0) + 1;
-        row.takes.push({ id: uid(), n, rating: "", note: "", editorNote: "", selected: false, at: new Date().toISOString() });
+        row.takes.push(newTake(n));
         scheduleSave(); renderShoot();
         break;
       }
@@ -1903,25 +1931,86 @@ function updateShootTrackInfo() {
     ? `${$("trackName").textContent}${tp.bpm ? ` · ${tp.bpm} BPM` : ""}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}`
     : (isContent() && !activeSong() ? "No song selected." : "No track — upload it in Draft.");
 }
-function ctx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+/* One engine plays everything — normal playback, seeking, count-ins and cues all run through
+   Web Audio, so there is never a second player competing for the device. The <audio> element is
+   only a fallback for files the browser can play but can't decode. */
+let pausePos = 0;          // playhead when stopped (Web Audio path)
+let ctxWatch = null;
+try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+function newContext() {
+  const C = window.AudioContext || window.webkitAudioContext;
+  let c;
+  try { c = new C({ latencyHint: "interactive" }); } catch (e) { c = new C(); }
+  c.onstatechange = () => {
+    if (audioCtx === c && cue && c.state !== "running") {
+      stopCue(true);
+      showNotice("Playback was interrupted by another app or tab. Press play again.");
+    }
+  };
+  return c;
+}
+function ctx() { if (!audioCtx || audioCtx.state === "closed") audioCtx = newContext(); return audioCtx; }
 function trackDuration() { return (audioBuffer && audioBuffer.duration) || player.duration || 0; }
 function transportTime() {
   if (cue && audioCtx) return Math.max(0, cue.offset + Math.max(0, audioCtx.currentTime - cue.ctxStart));
+  if (audioBuffer) return pausePos;
   return player.currentTime || 0;
 }
 function cueCountingIn() { return !!(cue && audioCtx && audioCtx.currentTime < cue.ctxStart); }
-function isPlaying() { return !!cue || (!!player.src && !player.paused && !player.ended); }
+function isPlaying() { return !!cue || (!audioBuffer && !!player.src && !player.paused && !player.ended); }
 function stopCue(keepPosition) {
-  if (!cue) return;
-  const pos = transportTime();
-  try { cue.src.onended = null; cue.src.stop(); } catch (e) {}
-  (cue.timers || []).forEach(clearTimeout);
-  cue = null;
-  if (keepPosition && player.src) { try { player.currentTime = Math.min(pos, player.duration || pos); } catch (e) {} }
+  if (cue) {
+    const pos = transportTime();
+    try { if (cue.src) { cue.src.onended = null; cue.src.stop(); } } catch (e) {}
+    (cue.clicks || []).forEach(n => { try { n.stop(); } catch (e) {} });
+    (cue.timers || []).forEach(clearTimeout);
+    cue = null;
+    if (keepPosition) pausePos = pos >= trackDuration() - 0.05 ? 0 : pos;
+  }
+  if (!player.paused) player.pause();
+  document.querySelectorAll("audio, video").forEach(m => { if (m !== player && !m.paused) m.pause(); });
   updateTransportUI();
 }
-function scheduleClick(time, accent) {
-  const c = ctx();
+function setPosition(t) {
+  const dur = trackDuration();
+  t = Math.max(0, Math.min(dur || t, t));
+  if (audioBuffer) {
+    const wasPlaying = !!cue && !cueCountingIn();
+    stopCue(false);
+    pausePos = t;
+    if (wasPlaying) playFrom(t, false);
+  } else if (player.src) { try { player.currentTime = t; } catch (e) {} }
+  updateTimecodes(); drawWaveform();
+}
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+function unlock(c) {
+  try { const b = c.createBuffer(1, 1, c.sampleRate), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } catch (e) {}
+}
+async function clockRunning(c) {
+  if (c.state !== "running") return false;
+  const t = c.currentTime;
+  await wait(80);
+  return c.currentTime > t;
+}
+/* Called from a tap: wake the engine inside the gesture, then prove its clock is moving.
+   A stalled or interrupted engine is thrown away and rebuilt. */
+async function readyEngine() {
+  let c = ctx();
+  if (c.state === "interrupted" || c.state === "closed") { try { c.close(); } catch (e) {} audioCtx = null; c = ctx(); }
+  unlock(c);
+  let p = null;
+  try { p = c.resume(); } catch (e) {}
+  try { await Promise.race([p, wait(600)]); } catch (e) {}
+  if (await clockRunning(c)) return c;
+  try { c.close(); } catch (e) {}
+  audioCtx = null;
+  c = ctx();
+  unlock(c);
+  try { await Promise.race([c.resume(), wait(600)]); } catch (e) {}
+  if (await clockRunning(c)) return c;
+  return null;
+}
+function scheduleClick(c, time, accent) {
   const osc = c.createOscillator(), gain = c.createGain();
   osc.type = "square";
   osc.frequency.value = accent ? 1600 : 1050;
@@ -1930,6 +2019,7 @@ function scheduleClick(time, accent) {
   gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
   osc.connect(gain).connect(c.destination);
   osc.start(time); osc.stop(time + 0.07);
+  return osc;
 }
 function cueTarget(t) {
   const tp = curTempo();
@@ -1939,45 +2029,59 @@ function cueTarget(t) {
   }
   return t;
 }
-async function playCue(ts) {
-  const t = parseTC(ts);
-  if (t == null) { alert(`"${ts || ""}" isn't a timestamp yet. Use a format like 1:05 or 0:42.5.`); return; }
-  if (!player.src) { alert("Load the track first (Draft → Track & tempo)."); return; }
-  const tpc = curTempo();
-  const target = Math.max(0, cueTarget(t) - (tpc.lead || 0) * 4 * (60 / (tpc.bpm || 120)));
+let playToken = 0;
+async function playFrom(target, withCountIn) {
+  const token = ++playToken;
   stopCue(false);
-  player.pause();
-  const c = ctx();
-  try { await c.resume(); } catch (e) {}
+  if (!audioBuffer) {                      // fallback: plain element, no count-in precision
+    try { player.currentTime = target; } catch (e) {}
+    player.play().catch(() => showNotice("The browser blocked playback. Press play again."));
+    startRaf(); updateTransportUI();
+    return;
+  }
+  const c = await readyEngine();
+  if (token !== playToken) return;         // another press superseded this one
+  if (!c) { showNotice("Audio is blocked right now — another app or tab may have it. Press play again."); return; }
   const tp = curTempo();
-  const bpm = tp.bpm || 120, beat = 60 / bpm;
-  const beats = tp.countIn ? (tp.bars || 1) * 4 : 0;
-  const t0 = c.currentTime + 0.1;
-  const timers = [];
+  const beat = 60 / (tp.bpm || 120);
+  const beats = withCountIn ? (tp.bars || 1) * 4 : 0;
+  const t0 = c.currentTime + 0.15;
+  const clicks = [], timers = [];
   for (let i = 0; i < beats; i++) {
-    scheduleClick(t0 + i * beat, i % 4 === 0);
-    timers.push(setTimeout(() => pulseTimecodes(), (0.1 + i * beat) * 1000));
+    clicks.push(scheduleClick(c, t0 + i * beat, i % 4 === 0));
+    timers.push(setTimeout(pulseTimecodes, (0.15 + i * beat) * 1000));
   }
   const songAt = t0 + beats * beat;
-  if (audioBuffer) {
-    const src = c.createBufferSource();
-    src.buffer = audioBuffer;
-    src.connect(c.destination);
-    src.start(songAt, Math.min(target, Math.max(0, audioBuffer.duration - 0.05)));
-    cue = { src, ctxStart: songAt, offset: target, timers };
-    src.onended = () => {
-      if (cue && cue.src === src) { const end = transportTime(); cue = null; try { player.currentTime = Math.min(end, player.duration || end); } catch (e) {} updateTransportUI(); }
-    };
-  } else {
-    timers.push(setTimeout(() => { player.currentTime = target; player.play(); }, (songAt - c.currentTime) * 1000));
-  }
+  const offset = Math.min(target, Math.max(0, audioBuffer.duration - 0.05));
+  const src = c.createBufferSource();
+  src.buffer = audioBuffer;
+  src.connect(c.destination);
+  src.start(songAt, offset);
+  cue = { src, ctxStart: songAt, offset, clicks, timers };
+  src.onended = () => { if (cue && cue.src === src) { cue = null; pausePos = 0; updateTransportUI(); drawWaveform(); } };
   startRaf();
   updateTransportUI();
 }
+function playCue(ts) {
+  const t = parseTC(ts);
+  if (t == null) { alert(`"${ts || ""}" isn't a timestamp yet. Use a format like 1:05 or 0:42.5.`); return; }
+  if (!player.src) { alert("Load the track first (Draft → Track & tempo)."); return; }
+  const tp = curTempo();
+  const target = Math.max(0, cueTarget(t) - (tp.lead || 0) * 4 * (60 / (tp.bpm || 120)));
+  playFrom(target, !!tp.countIn);
+}
 function togglePlay() {
-  if (cue) { stopCue(true); return; }
   if (!player.src) return;
-  if (player.paused) player.play(); else player.pause();
+  if (isPlaying()) { stopCue(true); playToken++; return; }
+  playFrom(transportTime(), false);
+}
+let noticeTimer = null;
+function showNotice(msg) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => el.classList.add("hidden"), 5000);
 }
 function pulseTimecodes() {
   document.querySelectorAll(".tc-display").forEach(el => { el.classList.add("pulse"); setTimeout(() => el.classList.remove("pulse"), 90); });
@@ -1987,9 +2091,9 @@ function updateTimecodes() {
   document.querySelectorAll(".tc-display").forEach(el => { el.textContent = text; });
 }
 function updateTransportUI() {
-  ["shootPlayBtn", "cutPlayBtn"].forEach(id => {
+  ["draftPlayBtn", "shootPlayBtn", "cutPlayBtn"].forEach(id => {
     const btn = $(id);
-    btn.textContent = isPlaying() ? (cue ? "Stop" : "Pause") : "Play";
+    btn.textContent = isPlaying() ? "Pause" : "Play";
     btn.disabled = !player.src;
   });
   updateTimecodes();
@@ -2003,15 +2107,16 @@ function tick() {
   if (isPlaying()) requestAnimationFrame(tick);
   else { rafOn = false; updateTransportUI(); drawWaveform(); }
 }
-player.addEventListener("play", () => { stopCue(false); startRaf(); updateTransportUI(); });
+player.addEventListener("play", () => { startRaf(); updateTransportUI(); });
 player.addEventListener("pause", updateTransportUI);
 player.addEventListener("seeked", () => { updateTimecodes(); drawWaveform(); });
 player.addEventListener("timeupdate", () => { if (!rafOn) { updateTimecodes(); drawWaveform(); } });
 player.addEventListener("loadedmetadata", drawWaveform);
 
 function resetPlayer() {
+  playToken++;
   stopCue(false);
-  player.pause();
+  pausePos = 0;
   if (currentTrackUrl) URL.revokeObjectURL(currentTrackUrl);
   currentTrackUrl = null;
   player.removeAttribute("src");
@@ -2030,7 +2135,6 @@ function loadTrackIntoPlayer(blob, name, restored) {
   resetPlayer();
   currentTrackUrl = URL.createObjectURL(blob);
   player.src = currentTrackUrl;
-  player.classList.remove("hidden");
   $("trackName").textContent = name || "Track";
   $("trackName").classList.remove("muted");
   $("removeTrackBtn").classList.remove("hidden");
@@ -2244,9 +2348,7 @@ function seekFromCanvas(e) {
   const dur = trackDuration();
   if (!dur) return;
   const rect = e.currentTarget.getBoundingClientRect();
-  stopCue(false);
-  player.currentTime = Math.max(0, Math.min(dur, ((e.clientX - rect.left) / rect.width) * dur));
-  drawWaveform(); updateTimecodes();
+  setPosition(((e.clientX - rect.left) / rect.width) * dur);
 }
 $("waveformCanvas").addEventListener("click", seekFromCanvas);
 $("shootWave").addEventListener("click", seekFromCanvas);
@@ -2359,6 +2461,7 @@ $("countInBars").addEventListener("change", e => { curTempo().bars = parseInt(e.
 $("snapToggle").addEventListener("change", e => { curTempo().snap = e.target.checked; scheduleSave(); });
 $("shootPlayBtn").addEventListener("click", togglePlay);
 $("cutPlayBtn").addEventListener("click", togglePlay);
+$("draftPlayBtn").addEventListener("click", togglePlay);
 
 /* ================= plan inputs ================= */
 document.querySelectorAll("#planView .subtab").forEach(b => b.addEventListener("click", () => { planSub = b.dataset.sub; renderPlan(); }));
@@ -2418,12 +2521,12 @@ function exportCSV() {
 $("exportTakeLogBtn").addEventListener("click", () => {
   const content = isContent();
   const head = content
-    ? ["Song", "Part", "Part starts", "Shot", "Take", "Rating", "Selected", "Set note", "Editor note", "Logged at"]
-    : ["Location", "Shot #", "Subject", "Timestamp", "Full/Cut", "Take", "Rating", "Selected", "Set note", "Editor note", "Logged at"];
+    ? ["Song", "Part", "Part starts", "Shot", "Take", "Take location", "Rating", "Selected", "Set note", "Editor note", "Logged at"]
+    : ["Section", "Shot #", "Subject", "Timestamp", "Full/Cut", "Take", "Take location", "Rating", "Selected", "Set note", "Editor note", "Logged at"];
   const lines = [head.map(csvCell).join(",")];
   project.sections.forEach(sec => sec.rows.forEach(r => sortedTakes(r, false).forEach(t => {
     const lead = content ? [(songOf(sec) || {}).name || "", sec.name, sec.time, r.subject] : [sec.name, r.shotNum, r.subject, r.timestamp, r.takeType];
-    lines.push([...lead, t.n, t.rating ? RATING_BY_ID[t.rating].label : "", t.selected ? "Y" : "", t.note, t.editorNote, t.at ? new Date(t.at).toLocaleString() : ""].map(csvCell).join(","));
+    lines.push([...lead, t.n, locName(t.locTag), t.rating ? RATING_BY_ID[t.rating].label : "", t.selected ? "Y" : "", t.note, t.editorNote, t.at ? new Date(t.at).toLocaleString() : ""].map(csvCell).join(","));
   })));
   downloadBlob(new Blob([lines.join("\n")], { type: "text/csv" }), `${safeName(project.docTitle)}-take-log.csv`);
 });
@@ -2431,7 +2534,7 @@ $("printTakeLogBtn").addEventListener("click", () => {
   const hideBad = $("cutHideBad").checked;
   const body = project.sections.filter(s => s.rows.length).map(sec => `<h2 style="--sec:${sec.color}">${esc(sectionTitle(sec) || "Untitled")}</h2>
     <table><thead><tr><th>Shot</th><th>Subject</th><th>In song</th><th>Takes (best first)</th></tr></thead><tbody>
-    ${sec.rows.map(r => `<tr><td>${esc(isContent() ? r.subject : (r.shotNum || "—"))}</td><td>${esc(isContent() ? r.notes : r.subject)}</td><td>${esc(isContent() ? sec.time : r.timestamp)}</td><td>${sortedTakes(r, hideBad).map(t => `T${t.n} ${t.rating ? RATING_BY_ID[t.rating].label : "Unrated"}${t.selected ? " ★" : ""}${t.note ? ` — ${esc(t.note)}` : ""}${t.editorNote ? ` [${esc(t.editorNote)}]` : ""}`).join("<br>") || "—"}</td></tr>`).join("")}
+    ${sec.rows.map(r => `<tr><td>${esc(isContent() ? r.subject : (r.shotNum || "—"))}</td><td>${esc(isContent() ? r.notes : r.subject)}</td><td>${esc(isContent() ? sec.time : r.timestamp)}</td><td>${sortedTakes(r, hideBad).map(t => `T${t.n} ${t.rating ? RATING_BY_ID[t.rating].label : "Unrated"}${t.locTag ? ` @ ${esc(locName(t.locTag))}` : ""}${t.selected ? " ★" : ""}${t.note ? ` — ${esc(t.note)}` : ""}${t.editorNote ? ` [${esc(t.editorNote)}]` : ""}`).join("<br>") || "—"}</td></tr>`).join("")}
     </tbody></table>`).join("");
   printHTML(`<div class="print-doc"><h1>${esc(project.docTitle)} — take log</h1>${body}</div>`);
 });
@@ -2951,7 +3054,7 @@ function tileHTML(r) {
     <div class="tile-top"><strong>${esc(r.subject || "Shot")}</strong><button type="button" class="tile-check ${r.checked ? "on" : ""}" data-c="tile-done">${r.checked ? "✓ Done" : "Mark done"}</button></div>
     ${r.notes ? `<div class="muted small">${esc(r.notes)}</div>` : ""}
     <div class="tile-takes">${pills}<button type="button" class="btn small primary" data-c="tile-take">+ Take</button></div>
-    ${active ? `<div class="tile-rate"><span class="small muted">Take ${active.n}</span><div class="rating-chips">${RATINGS.map(x => `<button type="button" class="rchip r-${x.id} ${active.rating === x.id ? "on" : ""}" data-c="tile-rate" data-take-id="${active.id}" data-rating="${x.id}">${x.label}</button>`).join("")}</div></div>` : ""}
+    ${active ? `<div class="tile-rate"><span class="small muted">Take ${active.n}</span><div class="rating-chips">${RATINGS.map(x => `<button type="button" class="rchip r-${x.id} ${active.rating === x.id ? "on" : ""}" data-c="tile-rate" data-take-id="${active.id}" data-rating="${x.id}">${x.label}</button>`).join("")}</div></div><div class="tile-loc">${locSelectHTML(active)}</div>` : ""}
   </div>`;
 }
 function currentShootPart() {
@@ -3085,7 +3188,7 @@ document.addEventListener("click", e => {
     case "tile-take": {
       if (!row) return;
       const n = row.takes.reduce((m, t) => Math.max(m, t.n || 0), 0) + 1;
-      const t = { id: uid(), n, rating: "", note: "", editorNote: "", selected: false, at: new Date().toISOString() };
+      const t = newTake(n);
       row.takes.push(t); tileActiveTake[row.id] = t.id;
       scheduleSave(); renderShootContent();
       break;
@@ -3170,7 +3273,8 @@ function drawCutTimeline() {
 }
 function cutCardHTML(r, sec, showLoc) {
   const hideBad = $("cutHideBad").checked;
-  const takes = sortedTakes(r, hideBad);
+  const lf = $("cutLocFilter").value;
+  const takes = sortedTakes(r, hideBad).filter(tk => !lf || (lf === "__none" ? !tk.locTag : tk.locTag === lf));
   const hiddenCount = r.takes.length - takes.length;
   const t = parseTC(isContent() ? sec.time : r.timestamp);
   return `<div class="cut-card" style="--sec:${sec.color}" data-row-id="${r.id}">
@@ -3189,6 +3293,7 @@ function cutCardHTML(r, sec, showLoc) {
       ${takes.map(tk => `<div class="cut-take ${tk.selected ? "selected" : ""}" data-take-id="${tk.id}">
         <span class="take-num">Take ${tk.n}</span>
         <span class="rbadge r-${tk.rating || "none"}">${tk.rating ? RATING_BY_ID[tk.rating].label : "Unrated"}</span>
+        ${tk.locTag ? `<span class="chip chip-loc">at ${esc(locName(tk.locTag))}</span>` : ""}
         ${tk.note ? `<span class="cut-note">“${esc(tk.note)}”</span>` : ""}
         <input type="text" class="field" data-editor-note value="${esc(tk.editorNote)}" placeholder="Editor note">
         <button type="button" class="btn small ${tk.selected ? "primary" : ""}" data-action="select-take">${tk.selected ? "★ Selected" : "☆ Select"}</button>
@@ -3213,7 +3318,7 @@ function renderCutMoment() {
 }
 function seekCut(t, fromUser) {
   cutTime = Math.max(0, t);
-  if (fromUser && player.src) { stopCue(false); try { player.currentTime = Math.min(cutTime, player.duration || cutTime); } catch (e) {} }
+  if (fromUser && player.src) setPosition(cutTime);
   renderCutMoment(); drawCutTimeline(); updateTimecodes();
 }
 function followCutPlayhead() {
@@ -3243,6 +3348,10 @@ function renderCut() {
     notes.innerHTML = project.producerNotes ? `<div class="panel-head"><h2>Notes from pre-production</h2></div><div class="prewrap">${esc(project.producerNotes)}</div>` : "";
   }
   if (cutTime > cutDuration()) cutTime = 0;
+  const lfSel = $("cutLocFilter"), lfVal = project.locationTags.some(t => t.id === lfSel.value) || lfSel.value === "__none" ? lfSel.value : "";
+  lfSel.innerHTML = `<option value="">All take locations</option>${project.locationTags.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}<option value="__none">No location set</option>`;
+  lfSel.value = lfVal;
+  lfSel.classList.toggle("hidden", !project.locationTags.length);
   renderCutMoment();
   const onlyTaken = $("cutOnlyTaken").checked;
   let html = "";
@@ -3286,7 +3395,77 @@ function wireCut() {
   });
   $("cutHideBad").addEventListener("change", renderCut);
   $("cutOnlyTaken").addEventListener("change", renderCut);
+  $("cutLocFilter").addEventListener("change", renderCut);
 }
+
+/* ================= take location tags ================= */
+function locName(id) { const t = project && project.locationTags.find(x => x.id === id); return t ? t.name : ""; }
+function newTake(n) {
+  return { id: uid(), n, rating: "", note: "", editorNote: "", selected: false, at: new Date().toISOString(), locTag: project.lastLocTag || "" };
+}
+function findTake(takeId) {
+  for (const sec of project.sections) for (const row of sec.rows) { const take = row.takes.find(t => t.id === takeId); if (take) return { row, take }; }
+  return { row: null, take: null };
+}
+function locSelectHTML(take) {
+  return `<select class="field loc-select" data-loc-take="${take.id}" aria-label="Where take ${take.n} was shot">
+    <option value="">No location</option>
+    ${project.locationTags.map(t => `<option value="${t.id}"${take.locTag === t.id ? " selected" : ""}>${esc(t.name)}</option>`).join("")}
+    <option value="__new">+ New location…</option>
+    ${project.locationTags.length ? `<option value="__manage">Manage locations…</option>` : ""}
+  </select>`;
+}
+function addLocTag(name) {
+  name = (name || "").trim();
+  if (!name) return null;
+  const existing = project.locationTags.find(t => t.name.toLowerCase() === name.toLowerCase());
+  if (existing) return existing;
+  const tag = { id: uid(), name };
+  project.locationTags.push(tag);
+  return tag;
+}
+document.addEventListener("change", e => {
+  const sel = e.target.closest("select[data-loc-take]");
+  if (!sel || !project) return;
+  const { take } = findTake(sel.dataset.locTake);
+  if (!take) return;
+  if (sel.value === "__manage") { sel.value = take.locTag; openLocModal(); return; }
+  if (sel.value === "__new") {
+    const tag = addLocTag(prompt("Name the new location", ""));
+    if (!tag) { sel.value = take.locTag; return; }
+    take.locTag = tag.id;
+  } else take.locTag = sel.value;
+  project.lastLocTag = take.locTag;
+  scheduleSave(); renderCurrent();
+});
+function openLocModal() { renderLocList(); $("locModal").classList.remove("hidden"); $("newLocInput").focus(); }
+function renderLocList() {
+  $("locList").innerHTML = project.locationTags.map(t => {
+    const uses = project.sections.reduce((n, s) => n + s.rows.reduce((m, r) => m + r.takes.filter(k => k.locTag === t.id).length, 0), 0);
+    return `<div class="list-item" data-loc-id="${t.id}"><input type="text" class="field" style="flex:1" data-loc-name value="${esc(t.name)}" aria-label="Location name"><span class="muted small">${uses} take${uses === 1 ? "" : "s"}</span><button type="button" class="icon-btn danger-text" data-loc-del aria-label="Delete ${esc(t.name)}">×</button></div>`;
+  }).join("") || `<p class="muted small">No locations yet.</p>`;
+}
+$("locList").addEventListener("input", e => {
+  if (!e.target.hasAttribute("data-loc-name")) return;
+  const t = project.locationTags.find(x => x.id === e.target.closest("[data-loc-id]").dataset.locId);
+  if (t) { t.name = e.target.value; scheduleSave(); }
+});
+$("locList").addEventListener("click", e => {
+  if (!e.target.closest("[data-loc-del]")) return;
+  const id = e.target.closest("[data-loc-id]").dataset.locId;
+  const t = project.locationTags.find(x => x.id === id);
+  if (!t || !confirm(`Delete "${t.name}"? Takes tagged with it keep their ratings but lose the location.`)) return;
+  project.locationTags = project.locationTags.filter(x => x.id !== id);
+  project.sections.forEach(s => s.rows.forEach(r => r.takes.forEach(k => { if (k.locTag === id) k.locTag = ""; })));
+  if (project.lastLocTag === id) project.lastLocTag = "";
+  scheduleSave(); renderLocList();
+});
+function addLocFromInput() { if (addLocTag($("newLocInput").value)) { $("newLocInput").value = ""; scheduleSave(); renderLocList(); } $("newLocInput").focus(); }
+$("addLocBtn").addEventListener("click", addLocFromInput);
+$("newLocInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addLocFromInput(); } });
+function closeLocModal() { $("locModal").classList.add("hidden"); renderCurrent(); }
+$("closeLocBtn").addEventListener("click", closeLocModal);
+$("locModal").addEventListener("click", e => { if (e.target.id === "locModal") closeLocModal(); });
 
 /* ================= first run ================= */
 function exampleRecord() {
