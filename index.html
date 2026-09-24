@@ -564,6 +564,93 @@ table.sched tr.done-row td { background-color: var(--done); }
 .demo-banner { background-color: #b45309; color: #fff; text-align: center; padding: 8px 12px; font-size: 13px; font-weight: 600; }
 .demo-banner a { color: #fff; }
 
+/* ---------- click-to-paste timecodes ---------- */
+.tc-paste {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px; padding: 5px 8px; white-space: nowrap;
+  border-style: dashed; color: var(--muted); background-color: inherit;
+}
+.tc-paste.has { border-style: solid; color: var(--text); font-weight: 600; }
+.tc-paste:hover { border-color: var(--accent); color: var(--accent); background-color: inherit; }
+
+/* ---------- content shoot ---------- */
+.song-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.song-tab { border-radius: 8px; padding: 8px 12px; font-weight: 600; background-color: var(--surface); }
+.song-tab.active, .song-tab.active:hover { background-color: var(--text); color: var(--bg); border-color: var(--text); }
+.song-tab-meta { font-weight: 500; font-size: 11px; opacity: .7; }
+.song-tab-add { border-style: dashed; color: var(--muted); }
+.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stack .panel { margin-bottom: 0; }
+.song-name-input { font-size: 18px; font-weight: 700; flex: 1; min-width: 0; }
+.preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.preset-btn .dot { margin-right: 2px; }
+.part-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 7px 8px; margin-bottom: 6px;
+  border: 1px solid var(--border); border-left: 4px solid var(--sec); border-radius: 7px;
+  background-color: var(--surface);
+}
+.part-row .part-name { flex: 1 1 140px; min-width: 100px; font-weight: 600; }
+.link-add { display: flex; gap: 6px; margin-bottom: 8px; }
+.link-add .field { flex: 1; min-width: 0; }
+.link-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.link-row a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
+.tpl-row { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tpl-row .field { flex: 1 1 140px; min-width: 0; }
+.tpl-row .tpl-detail { flex: 2 1 200px; }
+.tpl-add { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.tpl-add .field { flex: 1 1 160px; min-width: 0; }
+.cboard-song { margin-bottom: 18px; }
+.cboard-song h3 { margin: 4px 0 8px; font-size: 15px; }
+.board-col-add { margin: 0 8px 8px; align-self: flex-start; }
+.part-strip { display: flex; gap: 6px; overflow-x: auto; margin: 14px 0; padding: 2px; }
+.part-chip { flex: 0 0 auto; border-radius: 999px; font-weight: 600; padding: 8px 13px; background-color: var(--surface); }
+.part-chip.active, .part-chip.active:hover { border-color: var(--sec); box-shadow: 0 0 0 1px var(--sec); background-color: var(--surface-2); background-color: color-mix(in srgb, var(--sec) 22%, var(--surface)); }
+.part-chip.complete { opacity: .6; }
+.part-chip-meta { font-weight: 500; font-size: 11px; color: var(--muted); }
+.part-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.part-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; }
+.part-title .dot { width: 14px; height: 14px; }
+.big-btn { font-size: 15px; padding: 11px 18px; }
+.shot-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.tile {
+  border: 1px solid var(--border-strong); border-radius: 10px; padding: 12px;
+  background-color: var(--surface);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.tile.done { background-color: var(--done); }
+.tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tile-top strong { font-size: 16px; }
+.tile-check { font-size: 12px; padding: 4px 10px; border-radius: 999px; }
+.tile-check.on { background-color: #15803d; border-color: #15803d; color: #fff; }
+.tile-takes { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.take-pill { width: 30px; height: 30px; padding: 0; justify-content: center; border-radius: 50%; font-weight: 700; font-size: 12px; }
+.take-pill.active { box-shadow: 0 0 0 2px var(--accent); }
+.take-pill.r-perfect { background-color: #15803d; border-color: #15803d; color: #fff; }
+.take-pill.r-great { background-color: #2563eb; border-color: #2563eb; color: #fff; }
+.take-pill.r-okay { background-color: #64748b; border-color: #64748b; color: #fff; }
+.take-pill.r-unusable { background-color: #b91c1c; border-color: #b91c1c; color: #fff; }
+.take-pill.r-blooper { background-color: #a855f7; border-color: #a855f7; color: #fff; }
+.tile-rate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tile-add { border: 1px dashed var(--border-strong); border-radius: 10px; color: var(--muted); justify-content: center; min-height: 100px; font-size: 14px; background-color: var(--surface); }
+.part-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.part-nav .all-done { color: var(--good); font-weight: 700; }
+
+/* ---------- cut timeline ---------- */
+.cut-canvas { display: block; width: 100%; height: 120px; border-radius: 7px; margin-top: 10px; cursor: pointer; background-color: var(--wave-bg); }
+.cut-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; }
+.list-title { font-size: 15px; margin: 20px 0 10px; }
+.small-wave { height: 64px; }
+
+/* ---------- new project ---------- */
+.modal-inner.wide { width: 560px; }
+.type-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.type-choice { flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; text-align: left; border-radius: 10px; }
+.type-choice strong { font-size: 15px; }
+.type-choice span { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.type-choice:hover { border-color: var(--accent); }
+@media (max-width: 640px) { .type-choices { grid-template-columns: 1fr; } .part-title { font-size: 19px; } }
+
 /* ---------- print ---------- */
 #printRoot { display: none; }
 .print-doc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; background-color: #fff; font-size: 11px; }
@@ -628,10 +715,9 @@ table.sched tr.done-row td { background-color: var(--done); }
       <h1 class="projects-title">Projects</h1>
       <p class="muted">Each project keeps its own shots, references, track, schedule and takes. Everything is saved in this browser.</p>
       <div class="row-flex">
-        <input type="text" id="newProjectName" class="field" placeholder="New project name, e.g. Smalljoy fall campaign">
-        <button id="createProjectBtn" class="btn primary">+ New project</button>
+        <button id="newBtn" class="btn primary">New…</button>
+        <label for="importProjectInput" class="btn file-label">Import a backup file</label>
       </div>
-      <label for="importProjectInput" class="btn file-label">Import a backup file</label>
       <input type="file" id="importProjectInput" accept=".json,application/json" hidden>
       <div id="projectsStatus" class="muted small" style="margin-top:8px"></div>
       <div id="projectsList" class="projects-list"></div>
@@ -642,7 +728,8 @@ table.sched tr.done-row td { background-color: var(--done); }
   <section id="draftView" class="ws-view hidden">
     <p class="ws-intro">Get the idea down: references, the track, the shots and where they land in the song. Setup and shoot times are hidden here — you'll estimate those in Plan.</p>
     <div class="draft-top">
-      <div class="panel">
+      <div class="track-slot">
+      <div class="panel" id="trackPanel">
         <div class="panel-head"><h2>Track &amp; tempo</h2></div>
         <div class="audio-bar">
           <button id="uploadTrackBtn" class="btn">Upload track</button>
@@ -650,7 +737,6 @@ table.sched tr.done-row td { background-color: var(--done); }
           <span id="trackName" class="track-name muted">No track loaded</span>
           <audio id="player" controls preload="auto" class="hidden"></audio>
           <span class="tc-display">0:00.0</span>
-          <button id="copyTimecodeBtn" class="btn small hidden">Copy timecode</button>
           <button id="removeTrackBtn" class="btn small danger-text hidden">Remove track</button>
         </div>
         <canvas id="waveformCanvas" class="waveform hidden" aria-label="Waveform — click to seek"></canvas>
@@ -665,6 +751,7 @@ table.sched tr.done-row td { background-color: var(--done); }
           <label class="check" title="Moves each cue to the nearest beat so the count-in lines up with the song"><input type="checkbox" id="snapToggle"> Snap cues to the beat</label>
           <span id="tempoStatus" class="muted small"></span>
         </div>
+      </div>
       </div>
       <div class="draft-top-stack">
         <div class="panel">
@@ -766,12 +853,24 @@ table.sched tr.done-row td { background-color: var(--done); }
         <div id="timeGrid" class="time-grid"></div>
       </div>
       <div class="shoot-side">
-        <div class="panel">
+        <div class="transport-slot">
+        <div class="panel" id="shootTransport">
           <div class="shoot-transport">
             <button id="shootPlayBtn" class="btn small">Play</button>
             <span class="tc-display">0:00.0</span>
             <span id="shootTrackInfo" class="muted small"></span>
+            <span class="spacer"></span>
+            <label class="small">Start cues
+              <select id="leadSelect" class="field">
+                <option value="0">on the mark</option>
+                <option value="1">1 bar early</option>
+                <option value="2">2 bars early</option>
+                <option value="4">4 bars early</option>
+              </select>
+            </label>
           </div>
+          <canvas id="shootWave" class="waveform small-wave hidden" aria-label="Waveform — click to jump"></canvas>
+        </div>
         </div>
         <div class="panel" id="currentShot"></div>
         <div class="panel" id="shootNotesPanel">
@@ -782,10 +881,109 @@ table.sched tr.done-row td { background-color: var(--done); }
     </div>
   </section>
 
+  <!-- ===== content shoot: draft ===== -->
+  <section id="draftCView" class="ws-view hidden">
+    <p class="ws-intro">Add each song, mark the parts you want to shoot, and collect reference shots and links. Every shot in a part starts from that part's time. Shot templates live in Plan.</p>
+    <div id="draftSongTabs" class="song-tabs"></div>
+    <div id="draftSongEmpty" class="panel hidden">
+      <p style="margin-top:0">Start with the first song — you'll upload its track right after.</p>
+      <button type="button" class="btn primary" data-c="add-song">+ Add song</button>
+    </div>
+    <div id="draftSongBody" class="draft-top">
+      <div class="stack">
+        <div class="panel">
+          <div class="panel-head" style="margin-bottom:0">
+            <input type="text" id="songNameInput" class="field song-name-input" aria-label="Song name" placeholder="Song name">
+            <button type="button" class="btn small danger-text" data-c="delete-song">Delete song</button>
+          </div>
+        </div>
+        <div class="track-slot"></div>
+        <div class="panel">
+          <div class="panel-head"><h2>Parts to shoot</h2></div>
+          <div id="partPresets" class="preset-row"></div>
+          <div id="partsList"></div>
+          <p class="muted small" style="margin-bottom:0">Play the track, then click a part's time to drop in the playhead position.</p>
+        </div>
+      </div>
+      <div class="draft-top-stack">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Reference shots</h2>
+            <span class="spacer"></span>
+            <button type="button" id="addSongRefBtn" class="btn small">+ Add images</button>
+            <input type="file" id="songRefInput" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.gif,.webp" multiple hidden>
+          </div>
+          <div id="songRefs" class="vision-grid"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Links</h2></div>
+          <div class="link-add">
+            <input type="text" id="songLinkInput" class="field" placeholder="Paste an Instagram, TikTok or YouTube link">
+            <button type="button" id="addSongLinkBtn" class="btn">Add</button>
+          </div>
+          <div id="songLinks"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Notes for this song</h2></div>
+          <textarea id="songNotes" class="field notes-area" placeholder="Energy, wardrobe, what the artist wants from this one."></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== content shoot: plan ===== -->
+  <section id="planCView" class="ws-view hidden">
+    <p class="ws-intro">Set the formula once. Every part of every song gets one of each shot template, so on the day you can stay in a setup and get all the coverage before moving on.</p>
+    <div class="subtabs">
+      <button class="subtab" data-csub="templates">Shot templates</button>
+      <button class="subtab" data-csub="board">Shots by part</button>
+    </div>
+    <div data-csub-panel="templates">
+      <div class="panel">
+        <div class="panel-head"><h2>Shot templates</h2><span class="spacer"></span><span id="tplSummary" class="muted small"></span></div>
+        <div id="templateList"></div>
+        <div class="tpl-add">
+          <input type="text" id="newTplName" class="field" placeholder="New template, e.g. Low angle">
+          <input type="text" id="newTplDetail" class="field" placeholder="Detail (optional)">
+          <button type="button" id="addTplBtn" class="btn">+ Add template</button>
+        </div>
+        <div class="toolbar">
+          <button type="button" id="applyTplBtn" class="btn primary">Add missing shots to every part</button>
+          <span id="applyTplStatus" class="muted small"></span>
+        </div>
+        <p class="muted small" style="margin:0">New parts get these automatically. Renaming a template renames its shots everywhere.</p>
+      </div>
+    </div>
+    <div data-csub-panel="board" class="hidden">
+      <p class="muted small" style="margin-top:0">Each column is a song part. Drag shots to reorder or move them, add one-off extras, or remove what you don't need.</p>
+      <div id="cBoard"></div>
+    </div>
+  </section>
+
+  <!-- ===== content shoot: shoot ===== -->
+  <section id="shootCView" class="ws-view hidden">
+    <div id="cShootStatus" class="status-banner"></div>
+    <div id="shootSongTabs" class="song-tabs"></div>
+    <div class="transport-slot"></div>
+    <div id="partStrip" class="part-strip"></div>
+    <div id="partPanel" class="panel"></div>
+  </section>
+
   <!-- ===== cut ===== -->
   <section id="cutView" class="ws-view hidden">
-    <p class="ws-intro">What the editor needs: each shot, its references, where it lands in the song, and the takes called on set — best first.</p>
-    <div class="toolbar" style="margin-top:0">
+    <p class="ws-intro">The song is the timeline. Click anywhere on it, or press play, to see which shots cover that moment and the takes called on set. Every shot is listed below.</p>
+    <div id="cutSongTabs" class="song-tabs hidden"></div>
+    <div class="panel">
+      <div class="shoot-transport">
+        <button id="cutPlayBtn" class="btn small">Play</button>
+        <span class="tc-display">0:00.0</span>
+        <span id="cutInfo" class="muted small"></span>
+      </div>
+      <canvas id="cutCanvas" class="cut-canvas" aria-label="Song timeline — click to jump"></canvas>
+      <div id="cutLegend" class="cut-legend"></div>
+    </div>
+    <div id="cutMoment" class="panel"></div>
+    <div class="toolbar">
       <label class="check"><input type="checkbox" id="cutHideBad" checked> Hide unusable takes &amp; bloopers</label>
       <label class="check"><input type="checkbox" id="cutOnlyTaken"> Only shots with takes</label>
       <span class="spacer"></span>
@@ -793,11 +991,24 @@ table.sched tr.done-row td { background-color: var(--done); }
       <button class="btn" id="printTakeLogBtn">Print / PDF</button>
     </div>
     <div id="cutNotes" class="panel hidden"></div>
+    <h2 class="list-title">All shots</h2>
     <div id="cutList"></div>
   </section>
 </main>
 
 <!-- ===== modals ===== -->
+<div id="newModal" class="modal hidden">
+  <div class="modal-inner wide">
+    <h3>New</h3>
+    <p class="modal-hint">Name it (you can change this later), then pick what kind of shoot it is.</p>
+    <input type="text" id="newProjectName" class="field" style="width:100%" placeholder="e.g. Smalljoy fall campaign">
+    <div class="type-choices">
+      <button type="button" class="type-choice" data-type="production"><strong>Video production</strong><span>One song. Locations and setups, a timed schedule, a call sheet, and a live on-set tracker.</span></button>
+      <button type="button" class="type-choice" data-type="content"><strong>Content shoot</strong><span>Several songs. Mark the parts you want, stamp shot templates on every part, and get lots of coverage fast.</span></button>
+    </div>
+    <div class="modal-actions"><span></span><button type="button" id="closeNewBtn" class="btn">Cancel</button></div>
+  </div>
+</div>
 <div id="columnsModal" class="modal hidden">
   <div class="modal-inner">
     <h3 id="columnsTitle">Columns</h3>
@@ -870,6 +1081,18 @@ const RATINGS = [
 const RATING_BY_ID = Object.fromEntries(RATINGS.map(r => [r.id, r]));
 const WS_LABEL = { draft: "Draft", plan: "Plan", shoot: "Shoot", cut: "Cut" };
 const WS_DEFAULT_HIDDEN = { draft: ["setupTime", "shootTime"], plan: ["timestamp"] };
+const PART_PRESETS = [
+  { name: "Intro", color: "#14b8a6" }, { name: "Verse", color: "#3b82f6" }, { name: "Pre-chorus", color: "#a855f7" },
+  { name: "Chorus", color: "#f97316" }, { name: "Post-chorus", color: "#eab308" }, { name: "Bridge", color: "#ec4899" },
+  { name: "Drop", color: "#ef4444" }, { name: "Outro", color: "#22c55e" }
+];
+const DEFAULT_TEMPLATES = [
+  { name: "Close-up", detail: "Tight on the face" },
+  { name: "Wide", detail: "Full body and the space" },
+  { name: "Handheld", detail: "Moving with the energy" },
+  { name: "Slow-mo", detail: "60–120 fps" }
+];
+function defaultTempo() { return { bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 2, snap: false, lead: 0 }; }
 
 /* ================= helpers ================= */
 const $ = id => document.getElementById(id);
@@ -964,7 +1187,14 @@ function defaultRow() {
     setupTime: "", shootTime: "", notes: "", timestamp: "", images: [], takes: []
   };
 }
-function defaultSection(name, i) { return { id: uid(), name: name || "Unsorted", color: PALETTE[(i || 0) % PALETTE.length], address: "", rows: [] }; }
+function defaultSection(name, i) { return { id: uid(), name: name || "Unsorted", color: PALETTE[(i || 0) % PALETTE.length], address: "", songId: null, time: "", rows: [] }; }
+function normalizeSong(s) {
+  return {
+    id: s.id || uid(), name: s.name || "Untitled song",
+    tempo: Object.assign(defaultTempo(), s.tempo || {}),
+    refs: Array.isArray(s.refs) ? s.refs : [], links: Array.isArray(s.links) ? s.links : [], notes: s.notes || ""
+  };
+}
 function normalizeRow(r) {
   const row = Object.assign(defaultRow(), r || {});
   if (!row.id) row.id = uid();
@@ -993,12 +1223,15 @@ function normalizeColumnConfigs(cfgs, legacy) {
 function normalizeRecord(rec) {
   const p = Object.assign({}, rec);
   p.docTitle = p.docTitle || "Untitled project";
-  const secs = Array.isArray(p.sections) && p.sections.length ? p.sections : [defaultSection("Unsorted", 0)];
+  p.type = p.type === "content" ? "content" : "production";
+  const secs = Array.isArray(p.sections) && p.sections.length ? p.sections : (p.type === "content" ? [] : [defaultSection("Unsorted", 0)]);
   p.sections = secs.map((s, i) => ({
     id: s.id || uid(),
     name: s.name == null ? "Unsorted" : s.name,
     color: s.color || PALETTE[i % PALETTE.length],
     address: s.address || "",
+    songId: s.songId || null,
+    time: s.time || "",
     rows: (s.rows || []).map(normalizeRow)
   }));
   p.columnConfigs = normalizeColumnConfigs(p.columnConfigs, p.columnConfig);
@@ -1006,7 +1239,9 @@ function normalizeRecord(rec) {
   p.lensOptions = Array.isArray(p.lensOptions) && p.lensOptions.length ? p.lensOptions : [...DEFAULT_LENS_OPTIONS];
   p.schedule = Object.assign({ date: "", start: p.scheduleStart || "", buffer: Number(p.scheduleBuffer) || 20 }, p.schedule || {});
   delete p.scheduleStart; delete p.scheduleBuffer;
-  p.tempo = Object.assign({ bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 2, snap: false }, p.tempo || {});
+  p.tempo = Object.assign(defaultTempo(), p.tempo || {});
+  p.songs = Array.isArray(p.songs) ? p.songs.map(normalizeSong) : [];
+  p.shotTemplates = (Array.isArray(p.shotTemplates) ? p.shotTemplates : DEFAULT_TEMPLATES).map(t => ({ id: t.id || uid(), name: t.name || "Shot", detail: t.detail || "" }));
   p.visionBoard = Array.isArray(p.visionBoard) ? p.visionBoard : [];
   p.producerNotes = p.producerNotes || "";
   p.callSheet = Object.assign({ productionCo: "", director: "", producer: "", crewCall: "", talentCall: "", contacts: "", parking: "", hospital: "", weather: "", notes: "" }, p.callSheet || {});
@@ -1057,8 +1292,11 @@ async function putProjectRecord(rec) {
   await idb("projects", "readwrite", tx => { tx.objectStore("projects").put(rec); });
 }
 async function deleteProjectRecord(id) {
-  if (DEMO_MODE) { demoProjects.delete(id); demoTracks.delete(id); return; }
-  await idb(["projects", "tracks"], "readwrite", tx => { tx.objectStore("projects").delete(id); tx.objectStore("tracks").delete(id); });
+  if (DEMO_MODE) { demoProjects.delete(id); Array.from(demoTracks.keys()).forEach(k => { if (k === id || k.startsWith(id + "::")) demoTracks.delete(k); }); return; }
+  await idb(["projects", "tracks"], "readwrite", tx => {
+    tx.objectStore("projects").delete(id);
+    tx.objectStore("tracks").delete(IDBKeyRange.bound(id, id + "\uffff"));
+  });
 }
 async function saveTrack(projectId, blob, name) {
   if (DEMO_MODE) { demoTracks.set(projectId, { blob, name }); return; }
@@ -1135,11 +1373,18 @@ function refCellHtml(r) {
   });
   return h + `<button type="button" class="btn ref-add-btn" data-action="add-img" aria-label="Add reference image">+</button><input type="file" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.gif,.webp" multiple class="ref-file-input" hidden></div>`;
 }
-function timestampCell(r, ws) {
-  const extra = ws === "draft"
-    ? `<button type="button" class="icon-btn" data-action="set-ts" title="Set to the player's current position">Set</button><button type="button" class="icon-btn" data-action="jump-ts" title="Cue the track here">▶</button>`
+function pasteTcHtml(value, action) {
+  return `<button type="button" class="tc-paste ${value ? "has" : ""}" data-action="${action}" title="Fills in the player's current position">${value ? esc(value) : "Click to paste"}</button>`;
+}
+function timestampCell(r) {
+  const extra = r.timestamp
+    ? `<button type="button" class="icon-btn" data-action="jump-ts" title="Cue the track here" aria-label="Cue the track here">▶</button><button type="button" class="icon-btn" data-action="clear-ts" title="Clear timestamp" aria-label="Clear timestamp">×</button>`
     : "";
-  return `<div class="ts-cell">${textHtml("timestamp", r.timestamp, "0:00")}${extra}</div>`;
+  return `<div class="ts-cell">${pasteTcHtml(r.timestamp, "paste-ts")}${extra}</div>`;
+}
+function pastePlayhead() {
+  if (!player.src) { alert("Load the track first, then play or click the waveform to the spot you want."); return null; }
+  return fmtTC(transportTime());
 }
 const COLUMNS = [
   { id: "take", label: "Full / Cut", width: 96, cell: r => takeToggleHtml(r) },
@@ -1297,12 +1542,13 @@ function handleRowAction(b) {
       break;
     }
     case "jump-ts": { const { row } = findRow(rowId); if (row) playCue(row.timestamp); break; }
-    case "set-ts": {
-      if (!player.src) { alert("Load the track first, then play or scrub to the spot."); return; }
+    case "paste-ts": {
+      const tc = pastePlayhead();
       const { row } = findRow(rowId);
-      if (row) { row.timestamp = fmtTC(transportTime()); changed(); }
+      if (tc && row) { row.timestamp = tc; changed(); }
       break;
     }
+    case "clear-ts": { const { row } = findRow(rowId); if (row) { row.timestamp = ""; changed(); } break; }
     case "add-img": { const input = b.parentElement.querySelector(".ref-file-input"); if (input) input.click(); break; }
     case "open-lb": {
       const editable = !!b.closest(".sections-container");
@@ -1470,14 +1716,12 @@ function renderShootStatus(s) {
   el.innerHTML = `<span class="clock">${minToClock(d.getHours() * 60 + d.getMinutes())}</span><span>${esc(st.text)}</span>`;
 }
 function renderShoot() {
+  mountTransport("#shootView .transport-slot");
   const s = computeSchedule();
   const empty = $("shootEmpty"), body = $("shootBody");
   $("shootProducerNotes").textContent = project.producerNotes || "No notes left in Draft.";
   $("shootNotesPanel").classList.toggle("hidden", !project.producerNotes);
-  const tp = project.tempo;
-  $("shootTrackInfo").textContent = player.src
-    ? `${$("trackName").textContent}${tp.bpm ? ` · ${tp.bpm} BPM` : ""}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}`
-    : "No track — upload it in Draft.";
+  updateShootTrackInfo();
   if (!s || !s.shots.length) {
     $("shootStatus").className = "status-banner";
     $("shootStatus").textContent = !s ? "No schedule yet." : "No shots scheduled yet.";
@@ -1621,7 +1865,7 @@ function wireShoot() {
   });
 }
 
-/* ================= cut workspace ================= */
+/* ================= takes helpers ================= */
 function sortedTakes(row, hideBad) {
   return row.takes
     .filter(t => !hideBad || (t.rating !== "unusable" && t.rating !== "blooper"))
@@ -1631,69 +1875,34 @@ function sortedTakes(row, hideBad) {
       return ra - rb || a.n - b.n;
     });
 }
-function renderCut() {
-  const hideBad = $("cutHideBad").checked, onlyTaken = $("cutOnlyTaken").checked;
-  const notes = $("cutNotes");
-  notes.classList.toggle("hidden", !project.producerNotes);
-  notes.innerHTML = project.producerNotes ? `<div class="panel-head"><h2>Notes from pre-production</h2></div><div class="prewrap">${esc(project.producerNotes)}</div>` : "";
-  let any = false;
-  const html = project.sections.map(sec => {
-    const rows = sec.rows.filter(r => !onlyTaken || r.takes.length);
-    if (!rows.length) return "";
-    any = true;
-    return `<div class="cut-section"><div class="cut-section-head" style="--sec:${sec.color}"><span class="dot"></span>${esc(sec.name || "Untitled")}</div>
-      ${rows.map(r => {
-        const takes = sortedTakes(r, hideBad);
-        const hiddenCount = r.takes.length - takes.length;
-        return `<div class="cut-card" style="--sec:${sec.color}" data-row-id="${r.id}">
-          <div>
-            <h3>${esc(shotLabel(r))}${r.subject ? ` — ${esc(r.subject)}` : ""}</h3>
-            <div class="cut-meta">${r.timestamp ? `<span class="chip">In song at ${esc(r.timestamp)}</span>` : ""}${r.takeType ? `<span class="chip chip-${r.takeType}">${r.takeType === "full" ? "Full take" : "Cut-back"}</span>` : ""}</div>
-            ${r.notes ? `<p class="prewrap small" style="margin:4px 0">${esc(r.notes)}</p>` : ""}
-            ${r.images.length ? `<div class="cur-refs">${r.images.map((src, i) => `<img src="${src}" alt="Reference ${i + 1}" data-action="open-lb" data-row-id="${r.id}" data-img-index="${i}">`).join("")}</div>` : ""}
-          </div>
-          <div>
-            ${takes.map(t => `<div class="cut-take ${t.selected ? "selected" : ""}" data-take-id="${t.id}">
-              <span class="take-num">Take ${t.n}</span>
-              <span class="rbadge r-${t.rating || "none"}">${t.rating ? RATING_BY_ID[t.rating].label : "Unrated"}</span>
-              ${t.note ? `<span class="cut-note">“${esc(t.note)}”</span>` : ""}
-              <input type="text" class="field" data-editor-note value="${esc(t.editorNote)}" placeholder="Editor note">
-              <button type="button" class="btn small ${t.selected ? "primary" : ""}" data-action="select-take">${t.selected ? "★ Selected" : "☆ Select"}</button>
-            </div>`).join("") || `<p class="muted small" style="margin:0">${r.takes.length ? "Only unusable takes and bloopers were logged." : "No takes logged on set."}</p>`}
-            ${hiddenCount && takes.length ? `<p class="muted small" style="margin:4px 0 0">${hiddenCount} hidden (unusable or blooper).</p>` : ""}
-          </div>
-        </div>`;
-      }).join("")}
-    </div>`;
-  }).join("");
-  $("cutList").innerHTML = any ? html : `<div class="panel muted">${onlyTaken ? "No takes have been logged yet. Log them in Shoot." : "No shots yet."}</div>`;
-}
-function wireCut() {
-  const list = $("cutList");
-  list.addEventListener("click", e => {
-    const b = e.target.closest("[data-action]");
-    if (!b || !project) return;
-    if (b.dataset.action === "open-lb") { openRowLightbox(b.dataset.rowId, +b.dataset.imgIndex, false); return; }
-    if (b.dataset.action === "select-take") {
-      const { row } = findRow(b.closest("[data-row-id]").dataset.rowId);
-      const t = row && row.takes.find(x => x.id === b.closest("[data-take-id]").dataset.takeId);
-      if (t) { t.selected = !t.selected; scheduleSave(); renderCut(); }
-    }
-  });
-  list.addEventListener("input", e => {
-    if (!e.target.hasAttribute("data-editor-note")) return;
-    const { row } = findRow(e.target.closest("[data-row-id]").dataset.rowId);
-    const t = row && row.takes.find(x => x.id === e.target.closest("[data-take-id]").dataset.takeId);
-    if (t) { t.editorNote = e.target.value; scheduleSave(); }
-  });
-  $("cutHideBad").addEventListener("change", renderCut);
-  $("cutOnlyTaken").addEventListener("change", renderCut);
-}
 
 /* ================= audio transport ================= */
 const player = $("player");
 let audioCtx = null, audioBuffer = null, peaks = null, currentTrackUrl = null, decodeToken = 0;
 let cue = null; // cue playback through Web Audio: { src, ctxStart, offset }
+function isContent() { return !!project && project.type === "content"; }
+let activeSongId = null;
+function activeSong() { return project && project.songs.find(x => x.id === activeSongId) || null; }
+function curTempo() {
+  if (!project) return defaultTempo();
+  if (isContent()) { const sg = activeSong(); return sg ? sg.tempo : defaultTempo(); }
+  return project.tempo;
+}
+function trackKey() { return isContent() ? `${project.id}::${activeSongId}` : project.id; }
+function mountTransport(slotSelector) {
+  const el = $("shootTransport"), slot = document.querySelector(slotSelector);
+  if (slot && el.parentElement !== slot) slot.appendChild(el);
+  $("leadSelect").value = String(curTempo().lead || 0);
+  $("shootWave").classList.toggle("hidden", !player.src);
+  updateShootTrackInfo();
+  requestAnimationFrame(drawWaveform);
+}
+function updateShootTrackInfo() {
+  const tp = curTempo();
+  $("shootTrackInfo").textContent = player.src
+    ? `${$("trackName").textContent}${tp.bpm ? ` · ${tp.bpm} BPM` : ""}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}`
+    : (isContent() && !activeSong() ? "No song selected." : "No track — upload it in Draft.");
+}
 function ctx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
 function trackDuration() { return (audioBuffer && audioBuffer.duration) || player.duration || 0; }
 function transportTime() {
@@ -1723,7 +1932,7 @@ function scheduleClick(time, accent) {
   osc.start(time); osc.stop(time + 0.07);
 }
 function cueTarget(t) {
-  const tp = project.tempo;
+  const tp = curTempo();
   if (tp.snap && tp.bpm && tp.offset != null) {
     const beat = 60 / tp.bpm;
     return Math.max(0, tp.offset + Math.round((t - tp.offset) / beat) * beat);
@@ -1734,12 +1943,13 @@ async function playCue(ts) {
   const t = parseTC(ts);
   if (t == null) { alert(`"${ts || ""}" isn't a timestamp yet. Use a format like 1:05 or 0:42.5.`); return; }
   if (!player.src) { alert("Load the track first (Draft → Track & tempo)."); return; }
-  const target = cueTarget(t);
+  const tpc = curTempo();
+  const target = Math.max(0, cueTarget(t) - (tpc.lead || 0) * 4 * (60 / (tpc.bpm || 120)));
   stopCue(false);
   player.pause();
   const c = ctx();
   try { await c.resume(); } catch (e) {}
-  const tp = project.tempo;
+  const tp = curTempo();
   const bpm = tp.bpm || 120, beat = 60 / bpm;
   const beats = tp.countIn ? (tp.bars || 1) * 4 : 0;
   const t0 = c.currentTime + 0.1;
@@ -1777,9 +1987,11 @@ function updateTimecodes() {
   document.querySelectorAll(".tc-display").forEach(el => { el.textContent = text; });
 }
 function updateTransportUI() {
-  const btn = $("shootPlayBtn");
-  btn.textContent = isPlaying() ? (cue ? "Stop" : "Pause") : "Play";
-  btn.disabled = !player.src;
+  ["shootPlayBtn", "cutPlayBtn"].forEach(id => {
+    const btn = $(id);
+    btn.textContent = isPlaying() ? (cue ? "Stop" : "Pause") : "Play";
+    btn.disabled = !player.src;
+  });
   updateTimecodes();
 }
 let rafOn = false;
@@ -1787,6 +1999,7 @@ function startRaf() { if (rafOn) return; rafOn = true; requestAnimationFrame(tic
 function tick() {
   updateTimecodes();
   drawWaveform();
+  if (currentWs === "cut" && project && isPlaying() && !cueCountingIn()) followCutPlayhead();
   if (isPlaying()) requestAnimationFrame(tick);
   else { rafOn = false; updateTransportUI(); drawWaveform(); }
 }
@@ -1807,9 +2020,9 @@ function resetPlayer() {
   audioBuffer = null; peaks = null; decodeToken++;
   $("trackName").textContent = "No track loaded";
   $("trackName").classList.add("muted");
-  $("copyTimecodeBtn").classList.add("hidden");
   $("removeTrackBtn").classList.add("hidden");
   $("waveformCanvas").classList.add("hidden");
+  $("shootWave").classList.add("hidden");
   $("detectTempoBtn").disabled = true;
   updateTransportUI();
 }
@@ -1820,11 +2033,11 @@ function loadTrackIntoPlayer(blob, name, restored) {
   player.classList.remove("hidden");
   $("trackName").textContent = name || "Track";
   $("trackName").classList.remove("muted");
-  $("copyTimecodeBtn").classList.remove("hidden");
   $("removeTrackBtn").classList.remove("hidden");
   $("waveformCanvas").classList.remove("hidden");
+  $("shootWave").classList.remove("hidden");
   updateTransportUI();
-  decodeTrack(blob, !restored && !project.tempo.detected);
+  decodeTrack(blob, !restored && !curTempo().detected);
 }
 async function decodeTrack(blob, autoDetect) {
   const token = ++decodeToken;
@@ -1941,7 +2154,7 @@ function runTempoDetect() {
   setTimeout(() => {
     const r = analyzeTempo(audioBuffer);
     if (!r) { setTempoStatus("Couldn't find a steady beat. Type the BPM in instead."); return; }
-    Object.assign(project.tempo, { bpm: r.bpm, offset: r.offset, songStart: r.songStart, detected: true });
+    Object.assign(curTempo(), { bpm: r.bpm, offset: r.offset, songStart: r.songStart, detected: true });
     syncTempoInputs();
     setTempoStatus(`Detected about ${r.bpm} BPM; the music starts at ${fmtTC(r.songStart)}. The beat grid is drawn on the waveform — if it's off by double or half, fix the BPM by hand.`);
     scheduleSave();
@@ -1949,78 +2162,95 @@ function runTempoDetect() {
   }, 30);
 }
 function syncTempoInputs() {
-  const tp = project.tempo;
+  const tp = curTempo();
   if (document.activeElement !== $("bpmInput")) $("bpmInput").value = tp.bpm || "";
   $("countInToggle").checked = !!tp.countIn;
   $("countInBars").value = String(tp.bars || 2);
   $("snapToggle").checked = !!tp.snap;
   $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
+  $("leadSelect").value = String(tp.lead || 0);
 }
 
 /* ---------- waveform ---------- */
-function drawWaveform() {
-  const canvas = $("waveformCanvas");
-  if (canvas.classList.contains("hidden") || !canvas.offsetParent) return;
+function waveMarkers() {
+  if (!project) return [];
+  if (isContent()) return project.sections.filter(x => x.songId === activeSongId).map(x => ({ t: parseTC(x.time), color: x.color, label: x.name })).filter(m => m.t != null);
+  const out = [];
+  project.sections.forEach(sec => sec.rows.forEach(r => { const t = parseTC(r.timestamp); if (t != null) out.push({ t, color: sec.color, label: r.shotNum }); }));
+  return out;
+}
+function drawWaveBase(canvas, h) {
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth, h = canvas.clientHeight || 88;
+  const w = canvas.clientWidth;
   if (canvas.width !== Math.round(w * dpr)) canvas.width = Math.round(w * dpr);
   if (canvas.height !== Math.round(h * dpr)) canvas.height = Math.round(h * dpr);
   const g = canvas.getContext("2d");
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = "#0d1014";
   g.fillRect(0, 0, w, h);
-  const dur = trackDuration();
-  if (!peaks) {
-    g.fillStyle = "#6b7280"; g.font = "12px -apple-system, sans-serif";
-    g.fillText(player.src ? "Reading the waveform…" : "", 10, h / 2);
-    return;
-  }
-  const tp = project.tempo;
+  return { g, w };
+}
+function drawPeaks(g, w, top, h, dur) {
+  const tp = curTempo();
   if (dur && tp.bpm && tp.offset != null) {
     const beat = 60 / tp.bpm;
-    const kStart = -Math.floor(tp.offset / beat);
-    for (let k = kStart; ; k++) {
+    for (let k = -Math.floor(tp.offset / beat); ; k++) {
       const t = tp.offset + k * beat;
       if (t > dur) break;
       if (t < 0) continue;
-      const x = (t / dur) * w;
       g.fillStyle = (((k % 4) + 4) % 4 === 0) ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.06)";
-      g.fillRect(x, 0, 1, h);
+      g.fillRect((t / dur) * w, top, 1, h);
     }
   }
-  const mid = h / 2, bw = w / peaks.length;
+  if (!peaks) return;
+  const mid = top + h / 2, bw = w / peaks.length;
   g.fillStyle = "#4ade80";
   for (let i = 0; i < peaks.length; i++) {
     const [mn, mx] = peaks[i];
-    const y1 = mid - mx * mid * 0.92, y2 = mid - mn * mid * 0.92;
+    const y1 = mid - mx * h / 2 * 0.92, y2 = mid - mn * h / 2 * 0.92;
     g.fillRect(i * bw, y1, Math.max(1, bw - 0.3), Math.max(1, y2 - y1));
   }
-  if (dur && tp.songStart != null) {
-    const x = (tp.songStart / dur) * w;
-    g.fillStyle = "#f59e0b"; g.fillRect(x, 0, 2, h);
-  }
-  if (dur) {
-    g.font = "10px -apple-system, sans-serif";
-    project.sections.forEach(sec => sec.rows.forEach(r => {
-      const t = parseTC(r.timestamp);
-      if (t == null || t > dur) return;
-      const x = (t / dur) * w;
-      g.fillStyle = sec.color;
-      g.beginPath(); g.moveTo(x - 4, 0); g.lineTo(x + 4, 0); g.lineTo(x, 7); g.closePath(); g.fill();
-      if (r.shotNum) { g.fillStyle = "#e5e7eb"; g.fillText(r.shotNum, x + 5, 10); }
-    }));
-    const px = (transportTime() / dur) * w;
-    g.fillStyle = "#ffffff"; g.fillRect(px - 1, 0, 2, h);
-  }
+  if (dur && tp.songStart != null) { g.fillStyle = "#f59e0b"; g.fillRect((tp.songStart / dur) * w, top, 2, h); }
 }
-$("waveformCanvas").addEventListener("click", e => {
+function drawWaveOn(canvas) {
+  if (!canvas || canvas.classList.contains("hidden") || !canvas.offsetParent) return;
+  const h = canvas.clientHeight || 88;
+  const { g, w } = drawWaveBase(canvas, h);
+  const dur = trackDuration();
+  if (!peaks) {
+    g.fillStyle = "#6b7280"; g.font = "12px -apple-system, sans-serif";
+    if (player.src) g.fillText("Reading the waveform…", 10, h / 2);
+    return;
+  }
+  drawPeaks(g, w, 0, h, dur);
+  if (!dur) return;
+  g.font = "10px -apple-system, sans-serif";
+  waveMarkers().forEach(m => {
+    if (m.t > dur) return;
+    const x = (m.t / dur) * w;
+    g.fillStyle = m.color;
+    if (isContent()) { g.fillRect(x, 0, 2, h); }
+    g.beginPath(); g.moveTo(x - 4, 0); g.lineTo(x + 4, 0); g.lineTo(x, 7); g.closePath(); g.fill();
+    if (m.label) { g.fillStyle = "#e5e7eb"; g.fillText(m.label, x + 5, 10); }
+  });
+  g.fillStyle = "#ffffff"; g.fillRect((transportTime() / dur) * w - 1, 0, 2, h);
+}
+function drawWaveform() {
+  drawWaveOn($("waveformCanvas"));
+  drawWaveOn($("shootWave"));
+  if (currentWs === "cut" && project) drawCutTimeline();
+}
+function seekFromCanvas(e) {
   const dur = trackDuration();
   if (!dur) return;
   const rect = e.currentTarget.getBoundingClientRect();
   stopCue(false);
   player.currentTime = Math.max(0, Math.min(dur, ((e.clientX - rect.left) / rect.width) * dur));
   drawWaveform(); updateTimecodes();
-});
+}
+$("waveformCanvas").addEventListener("click", seekFromCanvas);
+$("shootWave").addEventListener("click", seekFromCanvas);
+$("leadSelect").addEventListener("change", e => { curTempo().lead = parseInt(e.target.value, 10) || 0; scheduleSave(); });
 window.addEventListener("resize", () => drawWaveform());
 
 /* ================= lightbox ================= */
@@ -2098,36 +2328,37 @@ $("trackFileInput").addEventListener("change", e => {
   const f = e.target.files[0];
   e.target.value = "";
   if (!f || !project) return;
-  project.tempo.detected = false;
+  if (isContent()) {
+    let sg = activeSong();
+    if (!sg) { sg = addSong(); }
+    if (!sg.name || sg.name === "Untitled song") sg.name = f.name.replace(/\.[^.]+$/, "");
+    scheduleSave();
+  }
+  curTempo().detected = false;
   loadTrackIntoPlayer(f, f.name, false);
-  saveTrack(project.id, f, f.name);
+  saveTrack(trackKey(), f, f.name);
+  if (isContent()) renderCurrent();
 });
 $("removeTrackBtn").addEventListener("click", () => {
   if (!project || !confirm("Remove the track from this project?")) return;
   resetPlayer();
-  clearTrack(project.id);
+  clearTrack(trackKey());
   setTempoStatus("");
-});
-$("copyTimecodeBtn").addEventListener("click", () => {
-  const tc = fmtTC(transportTime());
-  const btn = $("copyTimecodeBtn");
-  (navigator.clipboard ? navigator.clipboard.writeText(tc) : Promise.reject()).then(() => {
-    btn.textContent = "Copied " + tc;
-    setTimeout(() => { btn.textContent = "Copy timecode"; }, 1200);
-  }).catch(() => alert("Current timecode: " + tc));
+  if (isContent()) renderCurrent();
 });
 $("detectTempoBtn").addEventListener("click", runTempoDetect);
 $("bpmInput").addEventListener("input", e => {
   const v = parseFloat(e.target.value);
-  project.tempo.bpm = isFinite(v) && v >= 30 && v <= 300 ? v : null;
-  if (project.tempo.bpm && project.tempo.offset == null) project.tempo.offset = project.tempo.songStart || 0;
-  $("snapToggle").disabled = !(project.tempo.bpm && project.tempo.offset != null);
+  curTempo().bpm = isFinite(v) && v >= 30 && v <= 300 ? v : null;
+  if (curTempo().bpm && curTempo().offset == null) curTempo().offset = curTempo().songStart || 0;
+  $("snapToggle").disabled = !(curTempo().bpm && curTempo().offset != null);
   scheduleSave(); drawWaveform();
 });
-$("countInToggle").addEventListener("change", e => { project.tempo.countIn = e.target.checked; scheduleSave(); });
-$("countInBars").addEventListener("change", e => { project.tempo.bars = parseInt(e.target.value, 10) || 2; scheduleSave(); });
-$("snapToggle").addEventListener("change", e => { project.tempo.snap = e.target.checked; scheduleSave(); });
+$("countInToggle").addEventListener("change", e => { curTempo().countIn = e.target.checked; scheduleSave(); });
+$("countInBars").addEventListener("change", e => { curTempo().bars = parseInt(e.target.value, 10) || 2; scheduleSave(); });
+$("snapToggle").addEventListener("change", e => { curTempo().snap = e.target.checked; scheduleSave(); });
 $("shootPlayBtn").addEventListener("click", togglePlay);
+$("cutPlayBtn").addEventListener("click", togglePlay);
 
 /* ================= plan inputs ================= */
 document.querySelectorAll("#planView .subtab").forEach(b => b.addEventListener("click", () => { planSub = b.dataset.sub; renderPlan(); }));
@@ -2185,18 +2416,22 @@ function exportCSV() {
   downloadBlob(new Blob([lines.join("\n")], { type: "text/csv" }), `${safeName(project.docTitle)}-shot-list.csv`);
 }
 $("exportTakeLogBtn").addEventListener("click", () => {
-  const head = ["Section", "Shot #", "Subject", "Timestamp", "Full/Cut", "Take", "Rating", "Selected", "Set note", "Editor note", "Logged at"];
+  const content = isContent();
+  const head = content
+    ? ["Song", "Part", "Part starts", "Shot", "Take", "Rating", "Selected", "Set note", "Editor note", "Logged at"]
+    : ["Location", "Shot #", "Subject", "Timestamp", "Full/Cut", "Take", "Rating", "Selected", "Set note", "Editor note", "Logged at"];
   const lines = [head.map(csvCell).join(",")];
   project.sections.forEach(sec => sec.rows.forEach(r => sortedTakes(r, false).forEach(t => {
-    lines.push([sec.name, r.shotNum, r.subject, r.timestamp, r.takeType, t.n, t.rating ? RATING_BY_ID[t.rating].label : "", t.selected ? "Y" : "", t.note, t.editorNote, t.at ? new Date(t.at).toLocaleString() : ""].map(csvCell).join(","));
+    const lead = content ? [(songOf(sec) || {}).name || "", sec.name, sec.time, r.subject] : [sec.name, r.shotNum, r.subject, r.timestamp, r.takeType];
+    lines.push([...lead, t.n, t.rating ? RATING_BY_ID[t.rating].label : "", t.selected ? "Y" : "", t.note, t.editorNote, t.at ? new Date(t.at).toLocaleString() : ""].map(csvCell).join(","));
   })));
   downloadBlob(new Blob([lines.join("\n")], { type: "text/csv" }), `${safeName(project.docTitle)}-take-log.csv`);
 });
 $("printTakeLogBtn").addEventListener("click", () => {
   const hideBad = $("cutHideBad").checked;
-  const body = project.sections.filter(s => s.rows.length).map(sec => `<h2 style="--sec:${sec.color}">${esc(sec.name || "Untitled")}</h2>
+  const body = project.sections.filter(s => s.rows.length).map(sec => `<h2 style="--sec:${sec.color}">${esc(sectionTitle(sec) || "Untitled")}</h2>
     <table><thead><tr><th>Shot</th><th>Subject</th><th>In song</th><th>Takes (best first)</th></tr></thead><tbody>
-    ${sec.rows.map(r => `<tr><td>${esc(r.shotNum || "—")}</td><td>${esc(r.subject)}</td><td>${esc(r.timestamp)}</td><td>${sortedTakes(r, hideBad).map(t => `T${t.n} ${t.rating ? RATING_BY_ID[t.rating].label : "Unrated"}${t.selected ? " ★" : ""}${t.note ? ` — ${esc(t.note)}` : ""}${t.editorNote ? ` [${esc(t.editorNote)}]` : ""}`).join("<br>") || "—"}</td></tr>`).join("")}
+    ${sec.rows.map(r => `<tr><td>${esc(isContent() ? r.subject : (r.shotNum || "—"))}</td><td>${esc(isContent() ? r.notes : r.subject)}</td><td>${esc(isContent() ? sec.time : r.timestamp)}</td><td>${sortedTakes(r, hideBad).map(t => `T${t.n} ${t.rating ? RATING_BY_ID[t.rating].label : "Unrated"}${t.selected ? " ★" : ""}${t.note ? ` — ${esc(t.note)}` : ""}${t.editorNote ? ` [${esc(t.editorNote)}]` : ""}`).join("<br>") || "—"}</td></tr>`).join("")}
     </tbody></table>`).join("");
   printHTML(`<div class="print-doc"><h1>${esc(project.docTitle)} — take log</h1>${body}</div>`);
 });
@@ -2333,13 +2568,14 @@ async function renderProjectsList() {
   try { projects = await listProjects(); }
   catch (e) { list.innerHTML = ""; $("projectsStatus").textContent = "This browser is blocking the storage Producrr needs. Private browsing modes often do this."; return; }
   projects.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  if (!projects.length) { list.innerHTML = `<div class="projects-empty">No projects yet. Name one above to start.</div>`; return; }
+  if (!projects.length) { list.innerHTML = `<div class="projects-empty">No projects yet. Start one with New…</div>`; return; }
   list.innerHTML = projects.map(p => {
     const n = countShots(p);
+    const kind = p.type === "content" ? `Content shoot · ${(p.songs || []).length} song${(p.songs || []).length === 1 ? "" : "s"}` : "Video production";
     return `<div class="project-card">
       <div class="project-card-main" data-open-id="${p.id}" role="button" tabindex="0">
         <div class="project-card-name">${esc(p.docTitle || "Untitled project")}</div>
-        <div class="muted small">${n} shot${n === 1 ? "" : "s"} · in ${WS_LABEL[p.workspace] || "Draft"} · edited ${relativeTime(p.updatedAt)}</div>
+        <div class="muted small">${kind} · ${n} shot${n === 1 ? "" : "s"} · in ${WS_LABEL[p.workspace] || "Draft"} · edited ${relativeTime(p.updatedAt)}</div>
       </div>
       <button type="button" class="btn small" data-delete-id="${p.id}">Delete</button>
     </div>`;
@@ -2351,20 +2587,29 @@ $("projectsList").addEventListener("click", async e => {
   const d = e.target.closest("[data-delete-id]");
   if (d) {
     const name = d.closest(".project-card").querySelector(".project-card-name").textContent;
-    if (!confirm(`Delete "${name}"? Its shots, images, track and takes are removed for good.`)) return;
+    if (!confirm(`Delete "${name}"? Its shots, images, tracks and takes are removed for good.`)) return;
     try { await deleteProjectRecord(d.dataset.deleteId); } catch (err) { alert("Couldn't delete that project. Try again."); }
     renderProjectsList();
   }
 });
 $("projectsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.openId) openProject(e.target.dataset.openId); });
-async function createProject(name) {
+async function createProject(name, type) {
   const now = new Date().toISOString();
-  const rec = normalizeRecord({ id: uid(), docTitle: name || "Untitled project", createdAt: now, updatedAt: now, sections: [defaultSection("Unsorted", 0)] });
+  const base = { id: uid(), type, docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
+  if (type === "production") base.sections = [defaultSection("Unsorted", 0)];
+  const rec = normalizeRecord(base);
   await putProjectRecord(rec);
   await openProject(rec.id);
 }
-$("createProjectBtn").addEventListener("click", () => { const i = $("newProjectName"); createProject(i.value.trim()); i.value = ""; });
-$("newProjectName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("createProjectBtn").click(); } });
+$("newBtn").addEventListener("click", () => { $("newProjectName").value = ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); });
+$("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
+$("newModal").addEventListener("click", e => {
+  if (e.target.id === "newModal") { $("newModal").classList.add("hidden"); return; }
+  const b = e.target.closest("[data-type]");
+  if (!b) return;
+  $("newModal").classList.add("hidden");
+  createProject($("newProjectName").value.trim(), b.dataset.type);
+});
 $("importProjectInput").addEventListener("change", async e => {
   const f = e.target.files[0];
   e.target.value = "";
@@ -2377,11 +2622,29 @@ $("importProjectInput").addEventListener("change", async e => {
     $("projectsStatus").textContent = "Imported as a new project.";
   } catch (err) { $("projectsStatus").textContent = "That file isn't a Producrr backup."; }
 });
+async function loadActiveTrack() {
+  resetPlayer();
+  if (!project) return;
+  if (isContent() && !activeSong()) { renderAfterTrackChange(); return; }
+  const key = trackKey(), pid = project.id;
+  const saved = await loadTrack(key);
+  if (!project || project.id !== pid || trackKey() !== key) return;
+  if (saved && saved.blob) loadTrackIntoPlayer(saved.blob, saved.name, true);
+  renderAfterTrackChange();
+}
+function renderAfterTrackChange() {
+  syncTempoInputs();
+  updateShootTrackInfo();
+  if (currentWs === "shoot" || currentWs === "cut") renderCurrent();
+  else requestAnimationFrame(drawWaveform);
+}
 async function openProject(id) {
   const rec = await getProjectRecord(id);
   if (!rec) { alert("Couldn't find that project."); return; }
   project = normalizeRecord(rec);
-  focusedRowId = null; shootGridScrolled = false; planSub = "arrange";
+  focusedRowId = null; shootGridScrolled = false; planSub = "arrange"; cPlanSub = "templates";
+  activeSongId = project.songs.length ? project.songs[0].id : null;
+  cutTime = 0; shootPartId = null;
   resetPlayer();
   setTempoStatus("");
   $("docTitleInput").value = project.docTitle;
@@ -2390,11 +2653,7 @@ async function openProject(id) {
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.remove("hidden"));
   setSaveStatus(DEMO_MODE ? "Demo — not saved" : "Saved");
   switchWs(project.workspace, true);
-  const saved = await loadTrack(id);
-  if (saved && saved.blob && project && project.id === id) {
-    loadTrackIntoPlayer(saved.blob, saved.name, true);
-    if (currentWs === "shoot") renderShoot();
-  }
+  await loadActiveTrack();
 }
 async function goToProjects() {
   await persistNow();
@@ -2415,11 +2674,13 @@ $("docTitleInput").addEventListener("input", e => {
 });
 
 /* ================= workspaces ================= */
+function viewIdFor(ws) { return ws === "cut" ? "cutView" : ws + (isContent() ? "CView" : "View"); }
 function switchWs(ws, initial) {
   currentWs = ws;
   project.workspace = ws;
   document.querySelectorAll(".ws-tab").forEach(t => { t.classList.toggle("active", t.dataset.ws === ws); t.setAttribute("aria-current", t.dataset.ws === ws ? "page" : "false"); });
-  document.querySelectorAll(".ws-view").forEach(v => v.classList.toggle("hidden", v.id !== ws + "View"));
+  const vid = viewIdFor(ws);
+  document.querySelectorAll(".ws-view").forEach(v => v.classList.toggle("hidden", v.id !== vid));
   if (!initial) scheduleSave();
   renderCurrent();
   window.scrollTo(0, 0);
@@ -2427,13 +2688,21 @@ function switchWs(ws, initial) {
 document.querySelectorAll(".ws-tab").forEach(t => t.addEventListener("click", () => { if (project) switchWs(t.dataset.ws); }));
 function renderCurrent() {
   if (!project) return;
-  if (currentWs === "draft") renderDraft();
+  if (currentWs === "cut") { renderCut(); return; }
+  if (isContent()) {
+    if (currentWs === "draft") renderDraftContent();
+    else if (currentWs === "plan") renderPlanContent();
+    else renderShootContent();
+    return;
+  }
+  const slot = document.querySelector("#draftView .track-slot");
+  if (currentWs === "draft") { if ($("trackPanel").parentElement !== slot) slot.appendChild($("trackPanel")); renderDraft(); }
   else if (currentWs === "plan") renderPlan();
-  else if (currentWs === "shoot") renderShoot();
-  else renderCut();
+  else renderShoot();
 }
 setInterval(() => {
   if (!project || currentWs !== "shoot") return;
+  if (isContent()) { renderContentStatus(); return; }
   const s = computeSchedule();
   if (s && s.shots.length) { renderShootStatus(s); positionNowLine(); }
 }, 10000);
@@ -2442,12 +2711,582 @@ setInterval(() => {
 function applyTheme(t) {
   document.documentElement.setAttribute("data-theme", t);
   $("colorSchemeMeta").setAttribute("content", t);
-  $("themeColorMeta").setAttribute("content", t === "dark" ? "#0a0c10" : "#1f2937");
+  $("themeColorMeta").setAttribute("content", t === "dark" ? "#1b1f27" : "#1f2937");
   $("themeToggle").textContent = t === "dark" ? "Light mode" : "Dark mode";
   try { localStorage.setItem("producrr_theme", t); } catch (e) {}
   drawWaveform();
 }
 $("themeToggle").addEventListener("click", () => applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"));
+
+/* ================= content shoot: model helpers ================= */
+let cPlanSub = "templates";
+let shootPartId = null;
+const tileActiveTake = {};
+let tplSortable = null, cBoardSortables = [];
+
+function addSong(name) {
+  const sg = normalizeSong({ name: name || "Untitled song" });
+  project.songs.push(sg);
+  activeSongId = sg.id;
+  return sg;
+}
+function songOf(sec) { return project.songs.find(x => x.id === sec.songId) || null; }
+function sectionTitle(sec) { const sg = isContent() ? songOf(sec) : null; return sg ? `${sg.name} — ${sec.name}` : sec.name; }
+function songParts(songId) {
+  return project.sections.filter(x => x.songId === songId).sort((a, b) => {
+    const ta = parseTC(a.time), tb = parseTC(b.time);
+    if (ta == null && tb == null) return 0;
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return ta - tb;
+  });
+}
+function templateRow(t) { return Object.assign(defaultRow(), { subject: t.name, notes: t.detail, templateId: t.id }); }
+function addPart(sg, preset) {
+  const sec = defaultSection(preset ? preset.name : "New part", project.sections.length);
+  if (preset) sec.color = preset.color;
+  sec.songId = sg.id;
+  sec.rows = project.shotTemplates.map(templateRow);
+  project.sections.push(sec);
+  return sec;
+}
+function setActiveSong(id) {
+  if (!id || id === activeSongId) return;
+  activeSongId = id;
+  shootPartId = null;
+  renderCurrent();
+  loadActiveTrack();
+}
+function songTabsHTML(withAdd) {
+  return project.songs.map(sg => {
+    const parts = songParts(sg.id);
+    const total = parts.reduce((n, p) => n + p.rows.length, 0), done = parts.reduce((n, p) => n + p.rows.filter(r => r.checked).length, 0);
+    return `<button type="button" class="song-tab ${sg.id === activeSongId ? "active" : ""}" data-song-id="${sg.id}">${esc(sg.name)} <span class="song-tab-meta">${total ? `${done}/${total}` : "no shots"}</span></button>`;
+  }).join("") + (withAdd ? `<button type="button" class="song-tab song-tab-add" data-c="add-song">+ Add song</button>` : "");
+}
+function prettyLink(u) {
+  try { const x = new URL(u); return (x.hostname.replace(/^www\./, "") + x.pathname).replace(/\/$/, ""); } catch (e) { return u; }
+}
+
+/* ================= content: draft ================= */
+function renderDraftContent() {
+  $("draftSongTabs").innerHTML = songTabsHTML(true);
+  const sg = activeSong();
+  $("draftSongEmpty").classList.toggle("hidden", !!sg);
+  $("draftSongBody").classList.toggle("hidden", !sg);
+  if (!sg) return;
+  const slot = document.querySelector("#draftCView .track-slot");
+  if ($("trackPanel").parentElement !== slot) slot.appendChild($("trackPanel"));
+  if (document.activeElement !== $("songNameInput")) $("songNameInput").value = sg.name;
+  if (document.activeElement !== $("songNotes")) $("songNotes").value = sg.notes;
+  syncTempoInputs();
+  renderPartsList();
+  renderSongRefs();
+  renderSongLinks();
+  requestAnimationFrame(drawWaveform);
+}
+function renderPartsList() {
+  const sg = activeSong();
+  const parts = songParts(sg.id);
+  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row" data-section-id="${pt.id}" style="--sec:${pt.color}">
+      <button type="button" class="swatch" data-c="part-color" style="background-color:${pt.color}" aria-label="Change color" title="Change color"></button>
+      <input type="text" class="field part-name" data-part-name value="${esc(pt.name)}" aria-label="Part name">
+      <button type="button" class="tc-paste ${pt.time ? "has" : ""}" data-c="part-paste" title="Fills in the player's current position">${pt.time ? esc(pt.time) : "Click to paste"}</button>
+      ${pt.time ? `<button type="button" class="icon-btn" data-c="part-cue" title="Play from here" aria-label="Play from here">▶</button>` : ""}
+      <span class="muted small">${pt.rows.length} shot${pt.rows.length === 1 ? "" : "s"}</span>
+      <button type="button" class="icon-btn" data-c="part-delete" aria-label="Delete part" title="Delete part">×</button>
+    </div>`).join("")
+    : `<p class="muted small" style="margin:0 0 6px">No parts yet. Add the moments in this song you want to shoot.</p>`;
+}
+function renderSongRefs() {
+  const sg = activeSong();
+  $("songRefs").innerHTML = sg.refs.length
+    ? sg.refs.map((src, i) => `<button type="button" class="vb-item" data-ref-index="${i}"><img src="${src}" alt="Reference ${i + 1}"></button>`).join("")
+    : `<p class="muted small" style="margin:0;grid-column:1/-1">Screenshots of shots you want to recreate for this song.</p>`;
+}
+function renderSongLinks() {
+  const sg = activeSong();
+  $("songLinks").innerHTML = sg.links.length
+    ? sg.links.map((u, i) => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a><button type="button" class="icon-btn" data-c="del-link" data-i="${i}" aria-label="Remove link">×</button></div>`).join("")
+    : `<p class="muted small" style="margin:0">Reels, TikToks, or videos to reference.</p>`;
+}
+$("partPresets").innerHTML = PART_PRESETS.map((p, i) => `<button type="button" class="btn small preset-btn" data-c="add-part" data-preset="${i}" style="--sec:${p.color}"><span class="dot"></span>${p.name}</button>`).join("")
+  + `<button type="button" class="btn small" data-c="add-part" data-preset="-1">+ Custom</button>`;
+$("songNameInput").addEventListener("input", e => {
+  const sg = activeSong(); if (!sg) return;
+  sg.name = e.target.value; scheduleSave();
+  $("draftSongTabs").innerHTML = songTabsHTML(true);
+});
+$("songNotes").addEventListener("input", e => { const sg = activeSong(); if (sg) { sg.notes = e.target.value; scheduleSave(); } });
+$("partsList").addEventListener("input", e => {
+  if (!e.target.hasAttribute("data-part-name")) return;
+  const sec = getSection(e.target.closest("[data-section-id]").dataset.sectionId);
+  if (sec) { sec.name = e.target.value; scheduleSave(); drawWaveform(); }
+});
+$("addSongRefBtn").addEventListener("click", () => $("songRefInput").click());
+$("songRefInput").addEventListener("change", e => {
+  const files = Array.from(e.target.files || []), sg = activeSong();
+  e.target.value = "";
+  if (!files.length || !sg) return;
+  Promise.all(files.map(f => fileToDataURL(f, 1400).catch(() => null))).then(urls => {
+    const ok = urls.filter(Boolean);
+    if (ok.length < urls.length) alert("Some images couldn't be read. Try JPG or PNG.");
+    sg.refs.push(...ok); scheduleSave(); renderSongRefs();
+  });
+});
+$("songRefs").addEventListener("click", e => {
+  const b = e.target.closest("[data-ref-index]"), sg = activeSong();
+  if (!b || !sg) return;
+  openLightbox(() => sg.refs, +b.dataset.refIndex, i => { sg.refs.splice(i, 1); scheduleSave(); renderSongRefs(); });
+});
+function addLink() {
+  const sg = activeSong(), input = $("songLinkInput");
+  let v = input.value.trim();
+  if (!sg || !v) return;
+  if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+  try { new URL(v); } catch (e) { alert("That doesn't look like a link."); return; }
+  sg.links.push(v); input.value = ""; scheduleSave(); renderSongLinks();
+}
+$("addSongLinkBtn").addEventListener("click", addLink);
+$("songLinkInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addLink(); } });
+
+/* ================= content: plan ================= */
+function renderPlanContent() {
+  document.querySelectorAll("#planCView [data-csub]").forEach(b => b.classList.toggle("active", b.dataset.csub === cPlanSub));
+  document.querySelectorAll("#planCView [data-csub-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.csubPanel !== cPlanSub));
+  if (cPlanSub === "templates") renderTemplates(); else renderContentBoard();
+}
+function renderTemplates() {
+  const list = $("templateList");
+  list.innerHTML = project.shotTemplates.map(t => `<div class="tpl-row" data-tpl-id="${t.id}">
+      <span class="col-drag-handle" title="Drag to reorder">⠿</span>
+      <input type="text" class="field" data-tpl-field="name" value="${esc(t.name)}" aria-label="Template name">
+      <input type="text" class="field tpl-detail" data-tpl-field="detail" value="${esc(t.detail)}" placeholder="Detail (lens, frame rate, movement…)" aria-label="Template detail">
+      <button type="button" class="icon-btn" data-c="tpl-delete" aria-label="Delete template" title="Delete template">×</button>
+    </div>`).join("") || `<p class="muted small">No templates. Add one below.</p>`;
+  const nParts = project.sections.length, nT = project.shotTemplates.length;
+  $("tplSummary").textContent = nParts ? `${nParts} part${nParts === 1 ? "" : "s"} × ${nT} template${nT === 1 ? "" : "s"} = ${nParts * nT} planned shots` : "";
+  if (tplSortable) tplSortable.destroy();
+  tplSortable = typeof Sortable !== "undefined" ? new Sortable(list, {
+    handle: ".col-drag-handle", animation: 150,
+    onEnd: () => {
+      const order = Array.from(list.children).map(el => el.dataset.tplId);
+      project.shotTemplates.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+      scheduleSave();
+    }
+  }) : null;
+}
+$("templateList").addEventListener("input", e => {
+  const f = e.target.dataset.tplField;
+  if (!f) return;
+  const t = project.shotTemplates.find(x => x.id === e.target.closest("[data-tpl-id]").dataset.tplId);
+  if (!t) return;
+  const rowField = f === "name" ? "subject" : "notes";
+  const old = t[f];
+  t[f] = e.target.value;
+  project.sections.forEach(sec => sec.rows.forEach(r => { if (r.templateId === t.id && r[rowField] === old) r[rowField] = t[f]; }));
+  scheduleSave();
+});
+function addTemplate() {
+  const name = $("newTplName").value.trim();
+  if (!name) { $("newTplName").focus(); return; }
+  project.shotTemplates.push({ id: uid(), name, detail: $("newTplDetail").value.trim() });
+  $("newTplName").value = ""; $("newTplDetail").value = "";
+  scheduleSave(); renderTemplates();
+  $("applyTplStatus").textContent = project.sections.length ? "Use “Add missing shots to every part” to put it on the parts you already have." : "";
+}
+$("addTplBtn").addEventListener("click", addTemplate);
+$("newTplName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addTemplate(); } });
+$("newTplDetail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addTemplate(); } });
+$("applyTplBtn").addEventListener("click", () => {
+  let added = 0;
+  project.sections.forEach(sec => project.shotTemplates.forEach(t => {
+    if (!sec.rows.some(r => r.templateId === t.id)) { sec.rows.push(templateRow(t)); added++; }
+  }));
+  scheduleSave(); renderTemplates();
+  $("applyTplStatus").textContent = added ? `Added ${added} shot${added === 1 ? "" : "s"}.` : "Every part already has every template.";
+});
+document.querySelectorAll("#planCView [data-csub]").forEach(b => b.addEventListener("click", () => { cPlanSub = b.dataset.csub; renderPlanContent(); }));
+function renderContentBoard() {
+  const wrap = $("cBoard");
+  wrap.innerHTML = project.songs.map(sg => {
+    const parts = songParts(sg.id);
+    return `<div class="cboard-song"><h3>${esc(sg.name)}</h3>${parts.length ? `<div class="board">${parts.map(pt => `<div class="board-col" style="--sec:${pt.color}">
+        <div class="board-col-head"><span class="dot"></span><span class="board-col-name">${esc(pt.name)}</span><span class="muted small">${pt.time ? esc(pt.time) : "no time"} · ${pt.rows.length}</span></div>
+        <div class="board-list" data-section-id="${pt.id}">${pt.rows.map(r => `<div class="board-card setup-a ${r.checked ? "is-done" : ""}" data-row-id="${r.id}">
+            <div class="bc-top"><span class="bc-shot">${esc(r.subject || "Shot")}</span>${r.templateId ? "" : `<span class="chip">Extra</span>`}<span class="spacer"></span><button type="button" class="icon-btn" data-c="del-shot" aria-label="Remove shot" title="Remove shot">×</button></div>
+            ${r.notes ? `<div class="bc-meta muted small">${esc(r.notes)}</div>` : ""}
+          </div>`).join("")}</div>
+        <button type="button" class="btn small board-col-add" data-c="add-shot" data-section-id="${pt.id}">+ Add shot</button>
+      </div>`).join("")}</div>` : `<p class="muted small">No parts yet — add them in Draft.</p>`}</div>`;
+  }).join("") || `<div class="panel muted">Add a song in Draft first.</div>`;
+  cBoardSortables.forEach(x => x.destroy());
+  cBoardSortables = [];
+  if (typeof Sortable === "undefined") return;
+  wrap.querySelectorAll(".board-list").forEach(list => cBoardSortables.push(new Sortable(list, {
+    group: "cboard", animation: 150, emptyInsertThreshold: 30, filter: ".icon-btn", preventOnFilter: false,
+    onEnd: e => moveRowBetween(e.from.dataset.sectionId, e.to.dataset.sectionId, e.oldIndex, e.newIndex)
+  })));
+}
+
+/* ================= content: shoot ================= */
+function renderContentStatus() {
+  let total = 0, done = 0, takes = 0, first = null;
+  project.sections.forEach(p => p.rows.forEach(r => {
+    total++;
+    if (r.checked) done++;
+    r.takes.forEach(t => { takes++; if (t.at && (!first || t.at < first)) first = t.at; });
+  }));
+  const today = first && new Date(first).toDateString() === new Date().toDateString();
+  const mins = today ? (Date.now() - new Date(first).getTime()) / 60000 : 0;
+  const d = new Date();
+  const el = $("cShootStatus");
+  el.className = "status-banner " + (total && done === total ? "good" : "");
+  el.innerHTML = `<span class="clock">${minToClock(d.getHours() * 60 + d.getMinutes())}</span><span>${done} of ${total} shots done · ${takes} take${takes === 1 ? "" : "s"} logged${today && mins >= 1 ? ` · rolling for ${fmtDur(mins)}${done ? `, about ${fmtDur(mins / done)} per shot` : ""}` : ""}</span>`;
+}
+function tileHTML(r) {
+  const active = r.takes.find(t => t.id === tileActiveTake[r.id]) || r.takes[r.takes.length - 1];
+  const pills = r.takes.map(t => `<button type="button" class="take-pill r-${t.rating || "none"} ${active && t.id === active.id ? "active" : ""}" data-c="pick-take" data-take-id="${t.id}" title="Take ${t.n}${t.rating ? ": " + RATING_BY_ID[t.rating].label : ""}" aria-label="Take ${t.n}">${t.n}</button>`).join("");
+  return `<div class="tile ${r.checked ? "done" : ""}" data-row-id="${r.id}">
+    <div class="tile-top"><strong>${esc(r.subject || "Shot")}</strong><button type="button" class="tile-check ${r.checked ? "on" : ""}" data-c="tile-done">${r.checked ? "✓ Done" : "Mark done"}</button></div>
+    ${r.notes ? `<div class="muted small">${esc(r.notes)}</div>` : ""}
+    <div class="tile-takes">${pills}<button type="button" class="btn small primary" data-c="tile-take">+ Take</button></div>
+    ${active ? `<div class="tile-rate"><span class="small muted">Take ${active.n}</span><div class="rating-chips">${RATINGS.map(x => `<button type="button" class="rchip r-${x.id} ${active.rating === x.id ? "on" : ""}" data-c="tile-rate" data-take-id="${active.id}" data-rating="${x.id}">${x.label}</button>`).join("")}</div></div>` : ""}
+  </div>`;
+}
+function currentShootPart() {
+  const sg = activeSong();
+  if (!sg) return null;
+  const parts = songParts(sg.id);
+  return parts.find(p => p.id === shootPartId) || parts.find(p => p.rows.some(r => !r.checked)) || parts[0] || null;
+}
+function renderShootContent() {
+  mountTransport("#shootCView .transport-slot");
+  renderContentStatus();
+  $("shootSongTabs").innerHTML = songTabsHTML(false);
+  const sg = activeSong(), panel = $("partPanel"), strip = $("partStrip");
+  if (!sg) {
+    strip.innerHTML = "";
+    panel.innerHTML = `<p style="margin-top:0">Add songs and the parts you want to shoot in Draft first.</p><button type="button" class="btn primary" data-c="go-draft">Open Draft</button>`;
+    return;
+  }
+  const parts = songParts(sg.id);
+  if (!parts.length) {
+    strip.innerHTML = "";
+    panel.innerHTML = `<p style="margin-top:0">${esc(sg.name)} has no parts yet. Mark them in Draft.</p><button type="button" class="btn primary" data-c="go-draft">Open Draft</button>`;
+    return;
+  }
+  const pt = currentShootPart();
+  shootPartId = pt.id;
+  strip.innerHTML = parts.map(p => {
+    const d = p.rows.filter(r => r.checked).length;
+    return `<button type="button" class="part-chip ${p.id === pt.id ? "active" : ""} ${p.rows.length && d === p.rows.length ? "complete" : ""}" data-c="pick-part" data-section-id="${p.id}" style="--sec:${p.color}"><span class="dot"></span>${esc(p.name)} <span class="part-chip-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span></button>`;
+  }).join("");
+  const tp = curTempo();
+  const idx = parts.indexOf(pt), prev = parts[idx - 1], next = parts[idx + 1];
+  const nextSong = project.songs[project.songs.indexOf(sg) + 1];
+  const doneN = pt.rows.filter(r => r.checked).length;
+  const allDone = pt.rows.length > 0 && doneN === pt.rows.length;
+  panel.innerHTML = `<div class="part-head" style="--sec:${pt.color}">
+      <div><div class="part-title"><span class="dot"></span>${esc(pt.name)}</div><div class="muted small">${esc(sg.name)} · ${pt.time ? `every shot starts at ${esc(pt.time)}` : "no start time set — add one in Draft"}</div></div>
+      <span class="spacer"></span>
+      ${pt.time ? `<button type="button" class="btn primary big-btn" data-c="play-part">▶ Play ${esc(pt.name)}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
+    </div>
+    <div class="shot-tiles">${pt.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
+    <div class="part-nav">
+      ${allDone ? `<span class="all-done">All ${pt.rows.length} shots in ${esc(pt.name)} are done.</span>` : `<span class="muted small">${doneN} of ${pt.rows.length} done in this part</span>`}
+      <span class="spacer"></span>
+      ${prev ? `<button type="button" class="btn" data-c="goto-part" data-section-id="${prev.id}">‹ ${esc(prev.name)}</button>` : ""}
+      ${next ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="goto-part" data-section-id="${next.id}">Next: ${esc(next.name)} ›</button>`
+        : nextSong ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="next-song" data-song="${nextSong.id}">Next song: ${esc(nextSong.name)} ›</button>` : ""}
+    </div>`;
+}
+
+/* ================= content: shared actions ================= */
+document.addEventListener("click", e => {
+  if (!project) return;
+  const tab = e.target.closest(".song-tab[data-song-id]");
+  if (tab) { setActiveSong(tab.dataset.songId); return; }
+  const b = e.target.closest("[data-c]");
+  if (!b) return;
+  const secEl = b.closest("[data-section-id]");
+  const sec = getSection(b.dataset.sectionId || (secEl && secEl.dataset.sectionId) || "");
+  const tileEl = b.closest("[data-row-id]");
+  const row = tileEl ? findRow(tileEl.dataset.rowId).row : null;
+  switch (b.dataset.c) {
+    case "add-song": {
+      addSong(); scheduleSave(); renderCurrent(); loadActiveTrack();
+      setTimeout(() => { const i = $("songNameInput"); if (i && i.offsetParent) { i.focus(); i.select(); } }, 30);
+      break;
+    }
+    case "delete-song": {
+      const sg = activeSong();
+      if (!sg || !confirm(`Delete "${sg.name}" with its parts, shots, takes and track?`)) return;
+      clearTrack(`${project.id}::${sg.id}`);
+      project.sections = project.sections.filter(x => x.songId !== sg.id);
+      project.songs = project.songs.filter(x => x.id !== sg.id);
+      activeSongId = project.songs.length ? project.songs[0].id : null;
+      scheduleSave(); renderCurrent(); loadActiveTrack();
+      break;
+    }
+    case "add-part": {
+      const sg = activeSong(); if (!sg) return;
+      const i = +b.dataset.preset;
+      const p = addPart(sg, i >= 0 ? PART_PRESETS[i] : null);
+      if (player.src && transportTime() > 0 && !songParts(sg.id).some(x => x !== p && x.time === fmtTC(transportTime()))) p.time = fmtTC(transportTime());
+      scheduleSave(); renderDraftContent(); drawWaveform();
+      if (i < 0) { const inp = document.querySelector(`#partsList [data-section-id="${p.id}"] [data-part-name]`); if (inp) { inp.focus(); inp.select(); } }
+      break;
+    }
+    case "part-color": { if (!sec) return; sec.color = PALETTE[(PALETTE.indexOf(sec.color) + 1) % PALETTE.length]; scheduleSave(); renderDraftContent(); break; }
+    case "part-paste": { const tc = pastePlayhead(); if (tc && sec) { sec.time = tc; scheduleSave(); renderDraftContent(); } break; }
+    case "part-cue": if (sec) playCue(sec.time); break;
+    case "part-delete": {
+      if (!sec) return;
+      const takes = sec.rows.reduce((n, r) => n + r.takes.length, 0);
+      if (!confirm(`Delete ${sec.name}${takes ? ` and its ${takes} logged take${takes === 1 ? "" : "s"}` : ""}?`)) return;
+      project.sections = project.sections.filter(x => x.id !== sec.id);
+      scheduleSave(); renderDraftContent();
+      break;
+    }
+    case "del-link": { const sg = activeSong(); if (sg) { sg.links.splice(+b.dataset.i, 1); scheduleSave(); renderSongLinks(); } break; }
+    case "tpl-delete": {
+      const id = b.closest("[data-tpl-id]").dataset.tplId;
+      const t = project.shotTemplates.find(x => x.id === id);
+      if (!t) return;
+      project.shotTemplates = project.shotTemplates.filter(x => x.id !== id);
+      if (project.sections.some(s => s.rows.some(r => r.templateId === id)) && confirm(`Also remove the "${t.name}" shot from every part? Shots that already have takes are kept.`)) {
+        project.sections.forEach(s => { s.rows = s.rows.filter(r => r.templateId !== id || r.takes.length); });
+      }
+      scheduleSave(); renderTemplates();
+      break;
+    }
+    case "del-shot": {
+      const r = b.closest("[data-row-id]") && findRow(b.closest("[data-row-id]").dataset.rowId);
+      if (!r || !r.row) return;
+      if (r.row.takes.length && !confirm(`Remove ${r.row.subject || "this shot"} and its ${r.row.takes.length} take(s)?`)) return;
+      r.section.rows.splice(r.index, 1); changed();
+      break;
+    }
+    case "add-shot": case "add-extra": {
+      const target = b.dataset.c === "add-extra" ? currentShootPart() : sec;
+      if (!target) return;
+      const name = prompt("Name this shot", "Extra");
+      if (name == null) return;
+      target.rows.push(Object.assign(defaultRow(), { subject: name.trim() || "Extra" }));
+      changed();
+      break;
+    }
+    case "go-draft": switchWs("draft"); break;
+    case "pick-part": case "goto-part": if (sec) { shootPartId = sec.id; renderShootContent(); } break;
+    case "next-song": setActiveSong(b.dataset.song); break;
+    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time); break; }
+    case "tile-done": if (row) { row.checked = !row.checked; row.doneAt = row.checked ? new Date().toISOString() : null; scheduleSave(); renderShootContent(); } break;
+    case "tile-take": {
+      if (!row) return;
+      const n = row.takes.reduce((m, t) => Math.max(m, t.n || 0), 0) + 1;
+      const t = { id: uid(), n, rating: "", note: "", editorNote: "", selected: false, at: new Date().toISOString() };
+      row.takes.push(t); tileActiveTake[row.id] = t.id;
+      scheduleSave(); renderShootContent();
+      break;
+    }
+    case "pick-take": if (row) { tileActiveTake[row.id] = b.dataset.takeId; renderShootContent(); } break;
+    case "tile-rate": {
+      const t = row && row.takes.find(x => x.id === b.dataset.takeId);
+      if (!t) return;
+      t.rating = t.rating === b.dataset.rating ? "" : b.dataset.rating;
+      scheduleSave(); renderShootContent();
+      break;
+    }
+    case "cut-jump": { const t = parseFloat(b.dataset.t); if (isFinite(t)) seekCut(t, true); break; }
+  }
+});
+
+/* ================= cut: the song is the timeline ================= */
+let cutTime = 0, cutMomentKey = null;
+const CUT_WAVE_H = 76, CUT_LANE_H = 22;
+function cutDuration() {
+  const d = trackDuration();
+  if (d) return d;
+  let mx = 0;
+  if (isContent()) { const sg = activeSong(); if (sg) songParts(sg.id).forEach(p => { const t = parseTC(p.time); if (t != null) mx = Math.max(mx, t); }); }
+  else project.sections.forEach(s => s.rows.forEach(r => { const t = parseTC(r.timestamp); if (t != null) mx = Math.max(mx, t); }));
+  return Math.max(30, mx + 20);
+}
+function cutLanes() {
+  if (isContent()) { const sg = activeSong(); return sg ? songParts(sg.id).filter(p => parseTC(p.time) != null) : []; }
+  return project.sections.filter(sec => sec.rows.some(r => parseTC(r.timestamp) != null));
+}
+function cutRegions() {
+  const dur = cutDuration();
+  if (isContent()) {
+    const parts = cutLanes();
+    return parts.map((p, i) => ({ lane: 0, sec: p, t: parseTC(p.time), end: i + 1 < parts.length ? parseTC(parts[i + 1].time) : dur, part: true }));
+  }
+  const lanes = cutLanes(), all = [];
+  project.sections.forEach(sec => sec.rows.forEach(r => { const t = parseTC(r.timestamp); if (t != null) all.push({ sec, row: r, t }); }));
+  const times = [...new Set(all.map(a => a.t))].sort((a, b) => a - b);
+  return all.map(a => {
+    const nxt = times.find(x => x > a.t + 1e-6);
+    const full = a.row.takeType === "full";
+    return Object.assign(a, { lane: lanes.indexOf(a.sec), full, end: full ? dur : Math.min(nxt != null ? nxt : dur, dur) });
+  });
+}
+function drawCutTimeline() {
+  const canvas = $("cutCanvas");
+  if (!canvas.offsetParent) return;
+  const lanes = isContent() ? 1 : Math.max(1, cutLanes().length);
+  const h = CUT_WAVE_H + lanes * CUT_LANE_H + 6;
+  canvas.style.height = h + "px";
+  const { g, w } = drawWaveBase(canvas, h);
+  const dur = cutDuration();
+  const regions = cutRegions();
+  regions.forEach(r => {
+    if (r.full) return;
+    g.globalAlpha = isContent() ? 0.22 : 0.14;
+    g.fillStyle = r.sec.color;
+    g.fillRect((r.t / dur) * w, 0, ((r.end - r.t) / dur) * w, CUT_WAVE_H);
+  });
+  g.globalAlpha = 1;
+  if (peaks && trackDuration()) drawPeaks(g, w, 0, CUT_WAVE_H, dur);
+  else {
+    g.fillStyle = "#9aa2af"; g.font = "12px -apple-system, sans-serif";
+    g.fillText(player.src ? "Reading the waveform…" : "No track loaded — regions are placed on an estimated timeline.", 10, CUT_WAVE_H / 2 + 4);
+  }
+  for (let i = 0; i < lanes; i++) { g.fillStyle = "rgba(255,255,255,0.05)"; g.fillRect(0, CUT_WAVE_H + i * CUT_LANE_H + 3, w, CUT_LANE_H - 3); }
+  g.font = "bold 10px -apple-system, sans-serif";
+  regions.forEach(r => {
+    const y = CUT_WAVE_H + r.lane * CUT_LANE_H + 3;
+    const x0 = (r.t / dur) * w, x1 = Math.max(x0 + 3, (r.end / dur) * w);
+    g.fillStyle = r.sec.color;
+    if (r.full) { g.globalAlpha = 0.5; g.fillRect(x0, y + CUT_LANE_H - 9, x1 - x0, 5); g.globalAlpha = 1; return; }
+    g.fillRect(x0, y, Math.max(2, x1 - x0 - 1), CUT_LANE_H - 3);
+    const label = r.part ? r.sec.name : (r.row.shotNum ? r.row.shotNum : "");
+    const room = Math.floor((x1 - x0 - 8) / 6);
+    if (label && room >= 2) { g.fillStyle = "#0b0d10"; g.fillText(label.length > room ? label.slice(0, room - 1) + "…" : label, x0 + 4, y + 13); }
+  });
+  g.fillStyle = "#60a5fa"; g.fillRect((cutTime / dur) * w - 1, 0, 2, h);
+  if (player.src) { g.fillStyle = "#ffffff"; g.fillRect((transportTime() / dur) * w - 1, 0, 2, CUT_WAVE_H); }
+}
+function cutCardHTML(r, sec, showLoc) {
+  const hideBad = $("cutHideBad").checked;
+  const takes = sortedTakes(r, hideBad);
+  const hiddenCount = r.takes.length - takes.length;
+  const t = parseTC(isContent() ? sec.time : r.timestamp);
+  return `<div class="cut-card" style="--sec:${sec.color}" data-row-id="${r.id}">
+    <div>
+      <h3>${isContent() ? esc(r.subject || "Shot") : esc(shotLabel(r)) + (r.subject ? ` — ${esc(r.subject)}` : "")}</h3>
+      <div class="cut-meta">
+        ${showLoc ? `<span class="loc-chip"><span class="dot"></span>${esc(sec.name || "Untitled")}</span>` : ""}
+        ${!isContent() && t != null ? `<button type="button" class="btn small" data-c="cut-jump" data-t="${t}">▶ ${esc(r.timestamp)}</button>` : ""}
+        ${r.takeType ? `<span class="chip chip-${r.takeType}">${r.takeType === "full" ? "Full take" : "Cut-back"}</span>` : ""}
+        ${!r.templateId && isContent() ? `<span class="chip">Extra</span>` : ""}
+      </div>
+      ${r.notes ? `<p class="prewrap small" style="margin:4px 0">${esc(r.notes)}</p>` : ""}
+      ${r.images.length ? `<div class="cur-refs">${r.images.map((src, i) => `<img src="${src}" alt="Reference ${i + 1}" data-action="open-lb" data-row-id="${r.id}" data-img-index="${i}">`).join("")}</div>` : ""}
+    </div>
+    <div>
+      ${takes.map(tk => `<div class="cut-take ${tk.selected ? "selected" : ""}" data-take-id="${tk.id}">
+        <span class="take-num">Take ${tk.n}</span>
+        <span class="rbadge r-${tk.rating || "none"}">${tk.rating ? RATING_BY_ID[tk.rating].label : "Unrated"}</span>
+        ${tk.note ? `<span class="cut-note">“${esc(tk.note)}”</span>` : ""}
+        <input type="text" class="field" data-editor-note value="${esc(tk.editorNote)}" placeholder="Editor note">
+        <button type="button" class="btn small ${tk.selected ? "primary" : ""}" data-action="select-take">${tk.selected ? "★ Selected" : "☆ Select"}</button>
+      </div>`).join("") || `<p class="muted small" style="margin:0">${r.takes.length ? "Only unusable takes and bloopers were logged." : "No takes logged on set."}</p>`}
+      ${hiddenCount && takes.length ? `<p class="muted small" style="margin:4px 0 0">${hiddenCount} hidden (unusable or blooper).</p>` : ""}
+    </div>
+  </div>`;
+}
+function covering(t) { return cutRegions().filter(r => r.t <= t + 1e-6 && t < r.end); }
+function renderCutMoment() {
+  const regs = covering(cutTime);
+  cutMomentKey = regs.map(r => (r.row || r.sec).id).join(",");
+  const el = $("cutMoment");
+  const head = `<div class="panel-head"><h2>At ${fmtTC(cutTime)}</h2><span class="muted small">Follows the playhead while the song plays.</span></div>`;
+  if (!regs.length) { el.innerHTML = head + `<p class="muted small" style="margin:0">${cutLanes().length ? "Nothing planned at this point in the song." : (isContent() ? "Give this song's parts a start time in Draft to see them here." : "Give shots a timestamp in Draft to see them here.")}</p>`; return; }
+  if (isContent()) {
+    const pt = regs[regs.length - 1].sec;
+    el.innerHTML = head + `<div class="cut-section-head" style="--sec:${pt.color}"><span class="dot"></span>${esc(pt.name)} <span class="muted small" style="font-weight:400">from ${esc(pt.time)}</span></div>` + (pt.rows.map(r => cutCardHTML(r, pt, false)).join("") || `<p class="muted small">No shots in this part.</p>`);
+  } else {
+    el.innerHTML = head + regs.sort((a, b) => a.t - b.t).map(r => cutCardHTML(r.row, r.sec, true)).join("");
+  }
+}
+function seekCut(t, fromUser) {
+  cutTime = Math.max(0, t);
+  if (fromUser && player.src) { stopCue(false); try { player.currentTime = Math.min(cutTime, player.duration || cutTime); } catch (e) {} }
+  renderCutMoment(); drawCutTimeline(); updateTimecodes();
+}
+function followCutPlayhead() {
+  cutTime = transportTime();
+  const key = covering(cutTime).map(r => (r.row || r.sec).id).join(",");
+  if (key !== cutMomentKey) renderCutMoment();
+}
+function renderCut() {
+  const content = isContent();
+  $("cutSongTabs").classList.toggle("hidden", !content);
+  if (content) $("cutSongTabs").innerHTML = songTabsHTML(false);
+  $("cutInfo").textContent = player.src ? $("trackName").textContent : (content && !activeSong() ? "Add a song in Draft." : "No track loaded — upload it in Draft to hear it here.");
+  const lanes = cutLanes();
+  $("cutLegend").innerHTML = content ? "" : lanes.map(sec => `<span style="--sec:${sec.color}"><span class="dot"></span>${esc(sec.name || "Untitled")}</span>`).join("")
+    + (lanes.length && project.sections.some(s => s.rows.some(r => r.takeType === "full" && r.timestamp)) ? `<span class="muted">Thin bars are full takes, which run to the end.</span>` : "");
+  const notes = $("cutNotes");
+  if (content) {
+    const sg = activeSong();
+    const has = sg && (sg.notes || sg.refs.length || sg.links.length);
+    notes.classList.toggle("hidden", !has);
+    notes.innerHTML = has ? `<div class="panel-head"><h2>${esc(sg.name)}: references</h2></div>
+      ${sg.notes ? `<div class="prewrap" style="margin-bottom:8px">${esc(sg.notes)}</div>` : ""}
+      ${sg.refs.length ? `<div class="cur-refs">${sg.refs.map((src, i) => `<img src="${src}" alt="Reference ${i + 1}" data-song-ref="${i}">`).join("")}</div>` : ""}
+      ${sg.links.map(u => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a></div>`).join("")}` : "";
+  } else {
+    notes.classList.toggle("hidden", !project.producerNotes);
+    notes.innerHTML = project.producerNotes ? `<div class="panel-head"><h2>Notes from pre-production</h2></div><div class="prewrap">${esc(project.producerNotes)}</div>` : "";
+  }
+  if (cutTime > cutDuration()) cutTime = 0;
+  renderCutMoment();
+  const onlyTaken = $("cutOnlyTaken").checked;
+  let html = "";
+  const secs = content ? (activeSong() ? songParts(activeSongId) : []) : project.sections;
+  secs.forEach(sec => {
+    const rows = sec.rows.filter(r => !onlyTaken || r.takes.length);
+    if (!rows.length) return;
+    const t = content ? parseTC(sec.time) : null;
+    html += `<div class="cut-section"><div class="cut-section-head" style="--sec:${sec.color}"><span class="dot"></span>${esc(sec.name || "Untitled")}${t != null ? ` <button type="button" class="btn small" data-c="cut-jump" data-t="${t}">▶ ${esc(sec.time)}</button>` : ""}</div>${rows.map(r => cutCardHTML(r, sec, false)).join("")}</div>`;
+  });
+  $("cutList").innerHTML = html || `<div class="panel muted">${onlyTaken ? "No takes logged yet. Log them in Shoot." : "No shots yet."}</div>`;
+  updateTransportUI();
+  requestAnimationFrame(drawCutTimeline);
+}
+function wireCut() {
+  const view = $("cutView");
+  $("cutCanvas").addEventListener("click", e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    seekCut(((e.clientX - rect.left) / rect.width) * cutDuration(), true);
+  });
+  view.addEventListener("click", e => {
+    const img = e.target.closest("[data-song-ref]");
+    if (img) { const sg = activeSong(); if (sg) openLightbox(() => sg.refs, +img.dataset.songRef, null); return; }
+    const b = e.target.closest("[data-action]");
+    if (!b || !project) return;
+    if (b.dataset.action === "open-lb") { openRowLightbox(b.dataset.rowId, +b.dataset.imgIndex, false); return; }
+    if (b.dataset.action === "select-take") {
+      const { row } = findRow(b.closest("[data-row-id]").dataset.rowId);
+      const t = row && row.takes.find(x => x.id === b.closest("[data-take-id]").dataset.takeId);
+      if (t) { t.selected = !t.selected; scheduleSave(); renderCut(); }
+    }
+  });
+  view.addEventListener("input", e => {
+    if (!e.target.hasAttribute("data-editor-note")) return;
+    const { row } = findRow(e.target.closest("[data-row-id]").dataset.rowId);
+    const t = row && row.takes.find(x => x.id === e.target.closest("[data-take-id]").dataset.takeId);
+    if (t) {
+      t.editorNote = e.target.value; scheduleSave();
+      document.querySelectorAll(`#cutView [data-take-id="${t.id}"] [data-editor-note]`).forEach(inp => { if (inp !== e.target) inp.value = t.editorNote; });
+    }
+  });
+  $("cutHideBad").addEventListener("change", renderCut);
+  $("cutOnlyTaken").addEventListener("change", renderCut);
+}
 
 /* ================= first run ================= */
 function exampleRecord() {
@@ -2470,11 +3309,32 @@ function exampleRecord() {
     producerNotes: "Kayla wants the first verse done before lunch. Projector needs 10 min to warm up."
   });
 }
+function exampleContentRecord() {
+  const now = new Date().toISOString();
+  const tpls = DEFAULT_TEMPLATES.map(t => Object.assign({ id: uid() }, t));
+  const s1 = normalizeSong({ name: "Song one", notes: "Upload the track, then drag the part times to where they really land." });
+  const s2 = normalizeSong({ name: "Song two" });
+  const mk = (sg, preset, time) => {
+    const p = PART_PRESETS.find(x => x.name === preset);
+    return { id: uid(), name: preset, color: p.color, songId: sg.id, time, address: "", rows: tpls.map(t => Object.assign(defaultRow(), { subject: t.name, notes: t.detail, templateId: t.id })) };
+  };
+  return normalizeRecord({
+    id: uid(), type: "content", docTitle: "Example content shoot", createdAt: now, updatedAt: now,
+    songs: [s1, s2], shotTemplates: tpls,
+    sections: [mk(s1, "Verse", "0:12.0"), mk(s1, "Chorus", "0:41.5"), mk(s2, "Chorus", "0:35.0"), mk(s2, "Bridge", "1:48.0")]
+  });
+}
+async function seedContentExampleOnce() {
+  let seen = null;
+  try { seen = localStorage.getItem("producrr_content_example_v1"); } catch (e) {}
+  if (seen) return;
+  try { await putProjectRecord(exampleContentRecord()); localStorage.setItem("producrr_content_example_v1", "1"); } catch (e) {}
+}
 async function firstRunSetup() {
-  if (DEMO_MODE) { if (!demoProjects.size) await putProjectRecord(exampleRecord()); return; }
+  if (DEMO_MODE) { if (!demoProjects.size) { await putProjectRecord(exampleRecord()); await putProjectRecord(exampleContentRecord()); } return; }
   let flag = null;
   try { flag = localStorage.getItem("shotlist_migrated_v2"); } catch (e) {}
-  if (flag) return;
+  if (flag) { await seedContentExampleOnce(); return; }
   try {
     const existing = await listProjects();
     if (!existing.length) {
@@ -2490,6 +3350,7 @@ async function firstRunSetup() {
       }
     }
     try { localStorage.setItem("shotlist_migrated_v2", "1"); } catch (e) {}
+    await seedContentExampleOnce();
   } catch (e) { console.error("First-run setup skipped:", e); }
 }
 
