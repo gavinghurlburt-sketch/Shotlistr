@@ -1935,6 +1935,7 @@ function updateShootTrackInfo() {
    Web Audio, so there is never a second player competing for the device. The <audio> element is
    only a fallback for files the browser can play but can't decode. */
 let pausePos = 0;          // playhead when stopped (Web Audio path)
+let playStartPos = 0;      // where the current playback began — stopping returns here
 let ctxWatch = null;
 try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
 function newContext() {
@@ -1943,7 +1944,7 @@ function newContext() {
   try { c = new C({ latencyHint: "interactive" }); } catch (e) { c = new C(); }
   c.onstatechange = () => {
     if (audioCtx === c && cue && c.state !== "running") {
-      stopCue(true);
+      stopAndReturn();
       showNotice("Playback was interrupted by another app or tab. Press play again.");
     }
   };
@@ -1974,6 +1975,7 @@ function stopCue(keepPosition) {
 function setPosition(t) {
   const dur = trackDuration();
   t = Math.max(0, Math.min(dur || t, t));
+  playStartPos = t;
   if (audioBuffer) {
     const wasPlaying = !!cue && !cueCountingIn();
     stopCue(false);
@@ -2033,6 +2035,8 @@ let playToken = 0;
 async function playFrom(target, withCountIn) {
   const token = ++playToken;
   stopCue(false);
+  playStartPos = target;
+  pausePos = target;
   if (!audioBuffer) {                      // fallback: plain element, no count-in precision
     try { player.currentTime = target; } catch (e) {}
     player.play().catch(() => showNotice("The browser blocked playback. Press play again."));
@@ -2058,7 +2062,7 @@ async function playFrom(target, withCountIn) {
   src.connect(c.destination);
   src.start(songAt, offset);
   cue = { src, ctxStart: songAt, offset, clicks, timers };
-  src.onended = () => { if (cue && cue.src === src) { cue = null; pausePos = 0; updateTransportUI(); drawWaveform(); } };
+  src.onended = () => { if (cue && cue.src === src) { cue = null; pausePos = playStartPos; updateTransportUI(); drawWaveform(); } };
   startRaf();
   updateTransportUI();
 }
@@ -2070,9 +2074,16 @@ function playCue(ts) {
   const target = Math.max(0, cueTarget(t) - (tp.lead || 0) * 4 * (60 / (tp.bpm || 120)));
   playFrom(target, !!tp.countIn);
 }
+function stopAndReturn() {
+  playToken++;
+  stopCue(false);
+  pausePos = playStartPos;
+  if (!audioBuffer && player.src) { try { player.currentTime = playStartPos; } catch (e) {} }
+  updateTimecodes(); drawWaveform();
+}
 function togglePlay() {
   if (!player.src) return;
-  if (isPlaying()) { stopCue(true); playToken++; return; }
+  if (isPlaying()) { stopAndReturn(); return; }
   playFrom(transportTime(), false);
 }
 let noticeTimer = null;
@@ -2093,7 +2104,8 @@ function updateTimecodes() {
 function updateTransportUI() {
   ["draftPlayBtn", "shootPlayBtn", "cutPlayBtn"].forEach(id => {
     const btn = $(id);
-    btn.textContent = isPlaying() ? "Pause" : "Play";
+    btn.textContent = isPlaying() ? "Stop" : "Play";
+    btn.title = isPlaying() ? "Stop and return to where playback started" : "Play from the playhead";
     btn.disabled = !player.src;
   });
   updateTimecodes();
@@ -2116,7 +2128,7 @@ player.addEventListener("loadedmetadata", drawWaveform);
 function resetPlayer() {
   playToken++;
   stopCue(false);
-  pausePos = 0;
+  pausePos = 0; playStartPos = 0;
   if (currentTrackUrl) URL.revokeObjectURL(currentTrackUrl);
   currentTrackUrl = null;
   player.removeAttribute("src");
