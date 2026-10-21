@@ -2972,41 +2972,71 @@ $("countInBars").addEventListener("change", e => { curTempo().bars = parseInt(e.
 $("snapToggle").addEventListener("change", e => { curTempo().snap = e.target.checked; scheduleSave(); });
 $("shootPlayBtn").addEventListener("click", togglePlay);
 $("cutPlayBtn").addEventListener("click", togglePlay);
-/* swipe left / right to move between Draft, Plan, Shoot and Cut */
+/* swipe left / right between Draft, Plan, Shoot and Cut: the page follows your finger */
 (function () {
   const order = ["draft", "plan", "shoot", "cut"];
-  let sx = 0, sy = 0, st = 0, ok = false;
+  const main = document.querySelector("main");
+  let sx = 0, sy = 0, st = 0, ok = false, locked = false, dxNow = 0, crossed = false;
+  const reduce = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   function blocked(el) {
     for (let n = el; n && n !== document.body; n = n.parentElement) {
-      if (!n.classList) return true; if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.draggable) return true;
+      if (!n.classList) return true;
+      if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.draggable) return true;
       const cs = getComputedStyle(n);
       if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && n.scrollWidth > n.clientWidth + 2) return true;
     }
     return false;
   }
+  function neighbor(dx) {
+    const i = order.indexOf(currentWs), j = i + (dx < 0 ? 1 : -1);
+    if (i < 0 || j < 0 || j >= order.length) return null;
+    const tab = document.querySelector(`.ws-tab[data-ws="${order[j]}"]`);
+    return tab && !tab.classList.contains("hidden") ? tab : null;
+  }
+  function paint(dx) {
+    const W = window.innerWidth, off = neighbor(dx) ? dx : dx * 0.22;
+    main.style.transform = `translate3d(${off}px,0,0)`;
+    main.style.opacity = String(1 - Math.min(Math.abs(off) / (W * 1.1), 0.55));
+  }
+  function clear() { main.style.transform = ""; main.style.opacity = ""; main.style.willChange = ""; }
   document.addEventListener("touchstart", e => {
-    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now();
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false; crossed = false;
     ok = e.touches.length === 1 && !!project && $("projectsView").classList.contains("hidden") && !blocked(e.target);
   }, { passive: true });
-  document.addEventListener("touchend", e => {
-    if (!ok) return; ok = false;
-    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st > 700) return;
-    const i = order.indexOf(currentWs), j = i + (dx < 0 ? 1 : -1);
-    if (i < 0 || j < 0 || j >= order.length) return;
-    const tab = document.querySelector(`.ws-tab[data-ws="${order[j]}"]`);
-    if (tab && !tab.classList.contains("hidden")) {
-      try { window.nativeHaptic && window.nativeHaptic("light"); } catch (x) {}
-      const m = document.querySelector("main"), dir = dx < 0 ? 1 : -1;
-      const slow = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (!m.animate || slow) { tab.click(); window.scrollTo(0, 0); return; }
-      m.animate([{ transform: "translateX(0)", opacity: 1 }, { transform: `translateX(${-dir * 56}px)`, opacity: 0 }], { duration: 150, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" }).finished.then(() => {
-        tab.click(); window.scrollTo(0, 0);
-        m.getAnimations().forEach(a => a.cancel());
-        m.animate([{ transform: `translateX(${dir * 56}px)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1 }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
-      }).catch(() => { tab.click(); });
+  document.addEventListener("touchmove", e => {
+    if (!ok) return;
+    const t = e.touches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (!locked) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { ok = false; return; }
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) { locked = true; main.style.willChange = "transform, opacity"; } else return;
     }
-  }, { passive: true });
+    if (e.cancelable) e.preventDefault();
+    dxNow = dx; paint(dx);
+    const over = !!neighbor(dx) && Math.abs(dx) > window.innerWidth * 0.3;
+    if (over !== crossed) { crossed = over; if (over) { try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {} } }
+  }, { passive: false });
+  function finish(cancelled) {
+    if (!ok) return; ok = false;
+    if (!locked) return; locked = false;
+    const W = window.innerWidth, dx = dxNow, v = Math.abs(dx) / Math.max(1, Date.now() - st);
+    const tab = neighbor(dx), go = !cancelled && tab && (Math.abs(dx) > W * 0.3 || (v > 0.5 && Math.abs(dx) > 40));
+    const dir = dx < 0 ? 1 : -1, cur = main.style.transform || "translate3d(0,0,0)", curOp = parseFloat(main.style.opacity || "1");
+    if (!go) {
+      if (reduce() || !main.animate) { clear(); return; }
+      main.animate([{ transform: cur, opacity: curOp }, { transform: "translate3d(0,0,0)", opacity: 1 }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
+      clear(); return;
+    }
+    try { window.nativeHaptic && window.nativeHaptic("light"); } catch (x) {}
+    if (reduce() || !main.animate) { clear(); tab.click(); window.scrollTo(0, 0); return; }
+    const out = main.animate([{ transform: cur, opacity: curOp }, { transform: `translate3d(${-dir * W * 0.6}px,0,0)`, opacity: 0 }], { duration: 140, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" });
+    out.finished.then(() => {
+      tab.click(); window.scrollTo(0, 0);
+      clear(); out.cancel();
+      main.animate([{ transform: `translate3d(${dir * W * 0.3}px,0,0)`, opacity: 0 }, { transform: "translate3d(0,0,0)", opacity: 1 }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }).catch(() => { clear(); tab.click(); });
+  }
+  document.addEventListener("touchend", () => finish(false), { passive: true });
+  document.addEventListener("touchcancel", () => finish(true), { passive: true });
 })();
 $("draftPlayBtn").addEventListener("click", togglePlay);
 
