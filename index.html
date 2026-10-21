@@ -978,7 +978,6 @@ details.more > :not(summary) { margin-top: 8px; }
       <p class="muted">Each artist keeps their own shots, references, tracks, schedule and takes. Everything is saved in this browser.</p>
       <div class="row-flex">
         <button id="newBtn" class="btn primary">New…</button>
-        <label for="importProjectInput" class="btn file-label">Import a backup file</label>
       </div>
       <input type="file" id="importProjectInput" accept=".json,application/json" hidden>
       <div id="projectsStatus" class="muted small" style="margin-top:8px"></div>
@@ -991,6 +990,8 @@ details.more > :not(summary) { margin-top: 8px; }
       <h3>Settings</h3>
       <p class="modal-hint" style="margin-bottom:10px">Appearance</p>
       <div class="theme-seg"><button type="button" class="btn small" data-theme-pref="system">Device</button><button type="button" class="btn small" data-theme-pref="light">Light</button><button type="button" class="btn small" data-theme-pref="dark">Dark</button></div>
+      <p class="modal-hint" style="margin:16px 0 8px">Backups</p>
+      <label for="importProjectInput" class="btn small file-label">Import a backup file</label>
       <div class="modal-actions"><span></span><button id="settingsDone" class="btn primary">Done</button></div>
     </div>
   </div>
@@ -3365,7 +3366,7 @@ $("importProjectInput").addEventListener("change", async e => {
     const now = new Date().toISOString();
     await putProjectRecord(normalizeRecord(Object.assign({}, rec, { id: uid(), createdAt: now, updatedAt: now, docTitle: rec.docTitle || "Imported project" })));
     await renderProjectsList();
-    $("projectsStatus").textContent = "Imported as a new project.";
+    $("projectsStatus").textContent = "Imported as a new artist."; ["settingsModal", "accountModal"].forEach(m => { const el = $(m); if (el) el.classList.add("hidden"); });
   } catch (err) { $("projectsStatus").textContent = "That file isn't a Producrr backup."; }
 });
 async function loadActiveTrack() {
