@@ -2995,7 +2995,17 @@ $("cutPlayBtn").addEventListener("click", togglePlay);
     const i = order.indexOf(currentWs), j = i + (dx < 0 ? 1 : -1);
     if (i < 0 || j < 0 || j >= order.length) return;
     const tab = document.querySelector(`.ws-tab[data-ws="${order[j]}"]`);
-    if (tab && !tab.classList.contains("hidden")) { tab.click(); try { window.nativeHaptic && window.nativeHaptic("light"); } catch (x) {} window.scrollTo(0, 0); }
+    if (tab && !tab.classList.contains("hidden")) {
+      try { window.nativeHaptic && window.nativeHaptic("light"); } catch (x) {}
+      const m = document.querySelector("main"), dir = dx < 0 ? 1 : -1;
+      const slow = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!m.animate || slow) { tab.click(); window.scrollTo(0, 0); return; }
+      m.animate([{ transform: "translateX(0)", opacity: 1 }, { transform: `translateX(${-dir * 56}px)`, opacity: 0 }], { duration: 150, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" }).finished.then(() => {
+        tab.click(); window.scrollTo(0, 0);
+        m.getAnimations().forEach(a => a.cancel());
+        m.animate([{ transform: `translateX(${dir * 56}px)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1 }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
+      }).catch(() => { tab.click(); });
+    }
   }, { passive: true });
 })();
 $("draftPlayBtn").addEventListener("click", togglePlay);
