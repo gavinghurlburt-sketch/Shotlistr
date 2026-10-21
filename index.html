@@ -940,6 +940,44 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-del:hover { background-color: var(--danger); }
 .pc-del { opacity: 0; }
 .pc-wrap.rv .pc-del { opacity: 1; }
+/* v2.3 plan */
+.tpl-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; text-align: left; padding: 18px 20px; min-height: 0; border-radius: 26px; background-color: var(--surface); margin: 6px 0 16px; }
+.tpl-card:hover { background-color: var(--surface-2); }
+.tpl-card.compact { margin: 0; padding: 14px 16px; border-radius: 20px; background-color: var(--surface-2); }
+.tpl-card-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.tpl-card-title { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
+.tpl-card.compact .tpl-card-title { font-size: 20px; }
+.tpl-card-sub { font-size: 13px; color: var(--muted); font-weight: 500; font-style: normal; }
+.sec-line { display: flex; align-items: center; margin: 4px 2px 8px; }
+.sec-title { font-size: 20px; font-weight: 800; letter-spacing: -0.025em; margin: 0; }
+.day-card { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; justify-content: flex-start; padding: 12px; border-radius: 24px; background-color: var(--surface); margin-bottom: 10px; }
+.day-card:hover { background-color: var(--surface-2); }
+.day-card.past { opacity: .6; }
+.day-tile { width: 60px; height: 60px; border-radius: 18px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; background: linear-gradient(145deg, var(--c1, #888), var(--c2, #555)); text-shadow: 0 1px 6px rgba(0,0,0,.45); }
+.day-tile.img { background: center / cover no-repeat; }
+.day-tile small { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .95; }
+.day-tile b { font-size: 24px; font-weight: 800; line-height: 1; }
+.day-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.day-title { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.tpl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.float-pill { position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content; z-index: 55; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); min-height: 54px; padding: 0 28px; font-size: 16px; font-weight: 700; background-color: var(--pill); color: var(--text); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-shadow: 0 10px 34px rgba(0,0,0,.34), inset 0 0 0 1px var(--border); }
+.float-pill::before { content: "+"; font-size: 24px; font-weight: 400; line-height: 1; margin-right: 8px; margin-top: -2px; }
+@media (max-width: 760px) { .float-pill { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); } }
+/* home calendar: rounded squares; shoot days show the project photo */
+.cal { padding: 14px 14px 12px; }
+.cal-head b { font-size: 17px; }
+.cal-grid { gap: 6px; }
+.cal-dow { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 0 2px; }
+.cal-day { height: auto; aspect-ratio: 1 / 1; border-radius: 14px; background-color: var(--surface-2); font-size: 15px; font-weight: 600; color: var(--muted); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.cal-day.out { opacity: .4; }
+.cal-day.today { box-shadow: inset 0 0 0 2px var(--accent); color: var(--text); }
+.cal-day.shoot { background: linear-gradient(145deg, var(--c1, #888), var(--c2, #555)); color: #fff; opacity: 1; text-shadow: 0 1px 5px rgba(0,0,0,.55); font-weight: 800; }
+.cal-day.shoot.img { background-size: cover; background-position: center; }
+.cal-day.shoot.out { opacity: .55; }
+.cal-day.shoot::before { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,.28); }
+.cal-day.shoot span { position: relative; }
+.cal-day.sel { box-shadow: inset 0 0 0 2.5px var(--text); }
+.cal-day.sel:not(.shoot) { background-color: var(--surface-3); color: var(--text); }
 /* sheets, toast */
 .modal { background-color: rgba(0,0,0,.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 .modal-inner { background-color: var(--surface); border-radius: 28px; padding: 24px; }
@@ -1239,29 +1277,18 @@ details.more > :not(summary) { margin-top: 8px; }
 
   <!-- ===== content shoot: plan ===== -->
   <section id="planCView" class="ws-view hidden">
-    <p class="ws-intro">Set the formula once. Every part of every song gets one of each shot template, so on the day you can stay in a setup and get all the coverage before moving on.</p>
     <div class="subtabs">
-      <button class="subtab" data-csub="templates">Shot templates</button>
+      <button class="subtab" data-csub="shoots">Shoots</button>
       <button class="subtab" data-csub="board">Shots by part</button>
     </div>
-    <div data-csub-panel="templates">
-      <div class="panel">
-        <div class="panel-head"><h2>Shot templates</h2><span class="spacer"></span><span id="tplSummary" class="muted small"></span></div>
-        <div id="templateList"></div>
-        <div class="tpl-add">
-          <input type="text" id="newTplName" class="field" placeholder="New template, e.g. Low angle">
-          <input type="text" id="newTplDetail" class="field" placeholder="Detail (optional)">
-          <button type="button" id="addTplBtn" class="btn">+ Add template</button>
-        </div>
-        <div class="toolbar">
-          <button type="button" id="applyTplBtn" class="btn primary">Add missing shots to every part</button>
-          <span id="applyTplStatus" class="muted small"></span>
-        </div>
-        <p class="muted small" style="margin:0">New parts get these automatically. Renaming a template renames its shots everywhere.</p>
-      </div>
+    <div data-csub-panel="shoots">
+      <button type="button" id="tplCard" class="tpl-card" aria-label="Shot template"></button>
+      <div class="sec-line"><h2 class="sec-title">Upcoming shoots</h2><span class="spacer"></span><button type="button" id="allToCalBtn" class="btn small hidden">Add all to calendar</button></div>
+      <div id="shootDayList"></div>
+      <button type="button" id="newDayBtn" class="btn float-pill">New…</button>
     </div>
     <div data-csub-panel="board" class="hidden">
-      <p class="muted small" style="margin-top:0">Each column is a song part. Drag shots to reorder or move them, add one-off extras, or remove what you don't need.</p>
+      <p class="muted small" style="margin-top:0">Each column is a song section. Drag shots to reorder or move them, add one-off extras, or remove what you don't need.</p>
       <div id="cBoard"></div>
     </div>
   </section>
@@ -1319,6 +1346,39 @@ details.more > :not(summary) { margin-top: 8px; }
       <button type="button" class="type-choice" data-type="content"><strong>Content shoot</strong><span>Several songs. Mark the parts you want, stamp shot templates on every part, and get lots of coverage fast.</span></button>
     </div>
     <div class="modal-actions"><span></span><button type="button" id="closeNewBtn" class="btn">Cancel</button></div>
+  </div>
+</div>
+<div id="tplModal" class="modal hidden">
+  <div class="modal-inner wide">
+    <h3>Shot template</h3>
+    <p class="modal-hint">A template is the set of shots every song section gets. Pick one, or build your own and it's saved for next time.</p>
+    <div id="tplSwap" class="chip-row" style="margin-top:0"></div>
+    <input type="text" id="tplName" class="field" style="width:100%;font-weight:700" placeholder="Template name, e.g. Standard Shoot" autocapitalize="words">
+    <div id="tplShots" style="margin-top:6px"></div>
+    <div class="tpl-actions">
+      <button type="button" id="tplAddShot" class="btn small">+ Add shot</button>
+      <button type="button" id="tplCopy" class="btn small">Save as new template</button>
+    </div>
+    <div class="tpl-actions">
+      <button type="button" id="tplApply" class="btn small">Add missing shots to every section</button>
+      <span id="tplStatus" class="muted small"></span>
+    </div>
+    <div class="modal-actions"><button type="button" id="tplDelete" class="btn small danger-text">Delete template</button><button type="button" id="tplDone" class="btn primary">Done</button></div>
+  </div>
+</div>
+<div id="dayModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>Shoot day</h3>
+    <div class="detail-grid">
+      <label>Date <input type="date" id="dayDate" class="field"></label>
+      <label>Start time <input type="time" id="dayStart" class="field"></label>
+      <label style="grid-column:1/-1">Location <input type="text" id="dayLoc" class="field" placeholder="Studio, address, or venue" autocapitalize="words"></label>
+      <label>Length (hours) <input type="number" id="dayHours" class="field" min="1" max="24" step="0.5"></label>
+    </div>
+    <div class="detail-grid" style="grid-template-columns:1fr;margin-top:4px"><label>Notes <textarea id="dayNotes" class="field" rows="2" placeholder="Call time, parking, who's coming"></textarea></label></div>
+    <p class="modal-hint" style="margin:14px 0 8px">Shot template</p>
+    <button type="button" id="dayTplCard" class="tpl-card compact"></button>
+    <div class="modal-actions"><button type="button" id="dayDelete" class="btn small danger-text">Delete day</button><span class="spacer"></span><button type="button" id="dayCal" class="btn small">Add to calendar</button><button type="button" id="dayDone" class="btn primary">Done</button></div>
   </div>
 </div>
 <div id="detailsModal" class="modal hidden">
@@ -1560,6 +1620,9 @@ function normalizeRecord(rec) {
   p.docTitle = p.docTitle || "Untitled project";
   p.cover = typeof p.cover === "string" ? p.cover : "";
   p.artist = typeof p.artist === "string" ? p.artist.trim() : "";
+  p.shootDays = (Array.isArray(p.shootDays) ? p.shootDays : []).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date || "")).map(d => ({ id: d.id || uid(), date: d.date, start: d.start || "", location: d.location || "", notes: d.notes || "", hours: Number(d.hours) || 6 }));
+  p.templateName = typeof p.templateName === "string" && p.templateName ? p.templateName : "Standard Shoot";
+  p.templateLibId = typeof p.templateLibId === "string" ? p.templateLibId : "";
   p.shootDate = /^\d{4}-\d{2}-\d{2}$/.test(p.shootDate || "") ? p.shootDate : "";
   p.type = p.type === "content" ? "content" : "production";
   const secs = Array.isArray(p.sections) && p.sections.length ? p.sections : (p.type === "content" ? [] : [defaultSection("Unsorted", 0)]);
@@ -3344,22 +3407,30 @@ var calMonth = (function () { const d = new Date(); return new Date(d.getFullYea
 var calSel = null, artistFilter = null;
 function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function dayLabel(s, weekday) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, weekday ? { weekday: "short", month: "short", day: "numeric" } : { month: "short", day: "numeric" }); }
+function projectDates(p) { const s = new Set((p.shootDays || []).map(d => d.date)); if (p.shootDate) s.add(p.shootDate); return Array.from(s).sort(); }
+function primaryDate(p, today) {
+  const ds = projectDates(p); if (!ds.length) return "";
+  const up = ds.filter(d => d >= today); return up.length ? up[0] : ds[ds.length - 1];
+}
 function renderCalendar(projects) {
-  const y = calMonth.getFullYear(), m = calMonth.getMonth(), lead = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate(), today = ymd(new Date());
-  const has = new Set(projects.map(p => p.shootDate).filter(Boolean));
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), today = ymd(new Date());
+  const lead = (new Date(y, m, 1).getDay() + 6) % 7, rows = Math.ceil((lead + new Date(y, m + 1, 0).getDate()) / 7);
+  const byDay = {};
+  projects.forEach(p => projectDates(p).forEach(d => { (byDay[d] = byDay[d] || []).push(p); }));
   let cells = "";
-  for (let i = 0; i < lead; i++) cells += `<span class="cal-day empty"></span>`;
-  for (let d = 1; d <= days; d++) {
-    const s = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-    cells += `<button type="button" class="cal-day ${has.has(s) ? "has" : ""} ${s === today ? "today" : ""} ${s === calSel ? "sel" : ""}" data-day="${s}">${d}</button>`;
+  for (let i = 0; i < rows * 7; i++) {
+    const dt = new Date(y, m, 1 - lead + i), s = ymd(dt), pr = (byDay[s] || [])[0];
+    const st = pr ? ` style="${coverStyle(pr.id)}${pr.cover ? `;background-image:url(${pr.cover})` : ""}"` : "";
+    cells += `<button type="button" class="cal-day ${dt.getMonth() === m ? "" : "out"} ${pr ? "shoot" + (pr.cover ? " img" : "") : ""} ${s === today ? "today" : ""} ${s === calSel ? "sel" : ""}" data-day="${s}"${st}><span>${dt.getDate()}</span></button>`;
   }
-  $("calCard").innerHTML = `<div class="cal-head"><button type="button" data-cal="-1" aria-label="Previous month">‹</button><b>${calMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</b><button type="button" data-cal="1" aria-label="Next month">›</button></div>
-    <div class="cal-grid">${["S", "M", "T", "W", "T", "F", "S"].map(x => `<span class="cal-dow">${x}</span>`).join("")}${cells}</div>`;
+  $("calCard").innerHTML = `<div class="cal-head"><button type="button" data-cal="-1" aria-label="Previous month">‹</button><b>${calMonth.toLocaleDateString(undefined, { month: "short", year: "numeric" })}</b><button type="button" data-cal="1" aria-label="Next month">›</button></div>
+    <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(x => `<span class="cal-dow">${x}</span>`).join("")}${cells}</div>`;
 }
 function projectCardHTML(p) {
   const n = countShots(p);
   const kind = p.type === "content" ? `Content shoot · ${(p.songs || []).length} song${(p.songs || []).length === 1 ? "" : "s"}` : "Video production";
-  const bits = [p.shootDate ? dayLabel(p.shootDate, true) : "", p.artist, kind, `${n} shot${n === 1 ? "" : "s"}`].filter(Boolean).map(esc).join(" · ");
+  const pd = primaryDate(p, ymd(new Date()));
+  const bits = [pd ? dayLabel(pd, true) : "", p.artist, kind, `${n} shot${n === 1 ? "" : "s"}`].filter(Boolean).map(esc).join(" · ");
   return `<div class="pc-wrap">
       <button type="button" class="pc-del" data-delete-id="${p.id}">Delete</button>
       <div class="project-card">
@@ -3386,16 +3457,17 @@ async function renderProjectsList() {
   renderCalendar(projects);
   if (!all.length) { list.innerHTML = `<div class="projects-empty">No projects yet. Start one with New…</div>`; return; }
   const today = ymd(new Date());
-  const byDate = (a, b) => (a.shootDate || "").localeCompare(b.shootDate || "") || new Date(b.updatedAt) - new Date(a.updatedAt);
+  const byDate = (a, b) => (primaryDate(a, today) || "").localeCompare(primaryDate(b, today) || "") || new Date(b.updatedAt) - new Date(a.updatedAt);
   let html = "";
   if (calSel) {
-    const day = projects.filter(p => p.shootDate === calSel);
+    const day = projects.filter(p => projectDates(p).includes(calSel));
     html += `<div class="pl-head"><span>${esc(dayLabel(calSel, true))}</span><button type="button" class="btn small" data-day-clear="1">Show all</button></div>`;
     html += day.length ? day.map(projectCardHTML).join("") : `<div class="projects-empty">Nothing shooting that day.</div>`;
   } else {
-    const upcoming = projects.filter(p => p.shootDate && p.shootDate >= today).sort(byDate);
-    const none = projects.filter(p => !p.shootDate).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    const past = projects.filter(p => p.shootDate && p.shootDate < today).sort((a, b) => byDate(b, a));
+    const pd = p => primaryDate(p, today);
+    const upcoming = projects.filter(p => pd(p) && pd(p) >= today).sort(byDate);
+    const none = projects.filter(p => !pd(p)).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const past = projects.filter(p => pd(p) && pd(p) < today).sort((a, b) => byDate(b, a));
     if (upcoming.length) html += `<div class="pl-head"><span>Upcoming</span></div>` + upcoming.map(projectCardHTML).join("");
     if (none.length) html += `<div class="pl-head"><span>${upcoming.length || past.length ? "No shoot date yet" : "Projects"}</span></div>` + none.map(projectCardHTML).join("");
     if (past.length) html += `<div class="pl-head"><span>Past</span></div>` + past.map(projectCardHTML).join("");
@@ -3476,7 +3548,7 @@ $("projectsList").addEventListener("click", async e => {
 $("projectsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.openId) openProject(e.target.dataset.openId); });
 async function createProject(name, type, artist, date) {
   const now = new Date().toISOString();
-  const base = { id: uid(), type, artist: artist || "", shootDate: date || "", docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
+  const base = { id: uid(), type, artist: artist || "", shootDate: date || "", shootDays: (type === "content" && date) ? [{ id: uid(), date, start: "", location: "", notes: "", hours: 6 }] : [], docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
   if (type === "production") base.sections = [defaultSection("Unsorted", 0)];
   const rec = normalizeRecord(base);
   await putProjectRecord(rec);
@@ -3523,7 +3595,7 @@ async function openProject(id) {
   const rec = await getProjectRecord(id);
   if (!rec) { alert("Couldn't find that project."); return; }
   project = normalizeRecord(rec);
-  focusedRowId = null; shootGridScrolled = false; planSub = "arrange"; cPlanSub = "templates";
+  focusedRowId = null; shootGridScrolled = false; planSub = "arrange"; cPlanSub = "shoots";
   activeSongId = project.songs.length ? project.songs[0].id : null;
   cutTime = 0; shootPartId = null;
   resetPlayer();
@@ -3614,7 +3686,7 @@ $("settingsDone").addEventListener("click", () => $("settingsModal").classList.a
 $("settingsModal").addEventListener("click", e => { if (e.target === $("settingsModal")) $("settingsModal").classList.add("hidden"); });
 
 /* ================= content shoot: model helpers ================= */
-let cPlanSub = "templates";
+let cPlanSub = "shoots";
 let shootPartId = null;
 const tileActiveTake = {};
 let tplSortable = null, cBoardSortables = [];
@@ -3827,61 +3899,217 @@ $("addSongLinkBtn").addEventListener("click", addLink);
 $("songLinkInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addLink(); } });
 
 /* ================= content: plan ================= */
-function renderPlanContent() {
-  document.querySelectorAll("#planCView [data-csub]").forEach(b => b.classList.toggle("active", b.dataset.csub === cPlanSub));
-  document.querySelectorAll("#planCView [data-csub-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.csubPanel !== cPlanSub));
-  if (cPlanSub === "templates") renderTemplates(); else renderContentBoard();
+/* template library: bundles of shots people can save, name and swap (kept on this device) */
+const TPL_KEY = "producrr_tpl_lib_v1";
+function tplLib() {
+  let l = null;
+  try { l = JSON.parse(localStorage.getItem(TPL_KEY)); } catch (e) {}
+  if (!Array.isArray(l) || !l.length) { l = [{ id: uid(), name: "Standard Shoot", shots: DEFAULT_TEMPLATES.map(t => ({ name: t.name, detail: t.detail })) }]; saveTplLib(l); }
+  return l;
 }
-function renderTemplates() {
-  const list = $("templateList");
-  list.innerHTML = project.shotTemplates.map(t => `<div class="tpl-row" data-tpl-id="${t.id}">
-      <span class="col-drag-handle" title="Drag to reorder">⠿</span>
-      <input type="text" class="field" data-tpl-field="name" value="${esc(t.name)}" aria-label="Template name">
-      <input type="text" class="field tpl-detail" data-tpl-field="detail" value="${esc(t.detail)}" placeholder="Detail (lens, frame rate, movement…)" aria-label="Template detail">
-      <button type="button" class="icon-btn" data-c="tpl-delete" aria-label="Delete template" title="Delete template">×</button>
-    </div>`).join("") || `<p class="muted small">No templates. Add one below.</p>`;
-  const nParts = project.sections.length, nT = project.shotTemplates.length;
-  $("tplSummary").textContent = nParts ? `${nParts} part${nParts === 1 ? "" : "s"} × ${nT} template${nT === 1 ? "" : "s"} = ${nParts * nT} planned shots` : "";
-  if (tplSortable) tplSortable.destroy();
-  tplSortable = typeof Sortable !== "undefined" ? new Sortable(list, {
-    handle: ".col-drag-handle", animation: 150,
-    onEnd: () => {
-      const order = Array.from(list.children).map(el => el.dataset.tplId);
-      project.shotTemplates.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-      scheduleSave();
-    }
-  }) : null;
+function saveTplLib(l) { try { localStorage.setItem(TPL_KEY, JSON.stringify(l)); } catch (e) {} }
+function libEntryForProject() {
+  const l = tplLib();
+  let e = l.find(x => x.id === project.templateLibId) || l.find(x => x.name === project.templateName);
+  if (!e) { e = { id: uid(), name: project.templateName || "Standard Shoot", shots: [] }; l.push(e); }
+  project.templateLibId = e.id;
+  return { l, e };
 }
-$("templateList").addEventListener("input", e => {
-  const f = e.target.dataset.tplField;
-  if (!f) return;
-  const t = project.shotTemplates.find(x => x.id === e.target.closest("[data-tpl-id]").dataset.tplId);
-  if (!t) return;
-  const rowField = f === "name" ? "subject" : "notes";
-  const old = t[f];
-  t[f] = e.target.value;
-  project.sections.forEach(sec => sec.rows.forEach(r => { if (r.templateId === t.id && r[rowField] === old) r[rowField] = t[f]; }));
-  scheduleSave();
-});
-function addTemplate() {
-  const name = $("newTplName").value.trim();
-  if (!name) { $("newTplName").focus(); return; }
-  project.shotTemplates.push({ id: uid(), name, detail: $("newTplDetail").value.trim() });
-  $("newTplName").value = ""; $("newTplDetail").value = "";
-  scheduleSave(); renderTemplates();
-  $("applyTplStatus").textContent = project.sections.length ? "Use “Add missing shots to every part” to put it on the parts you already have." : "";
+function syncLib() {
+  const { l, e } = libEntryForProject();
+  e.name = project.templateName || "Untitled template";
+  e.shots = project.shotTemplates.map(t => ({ name: t.name, detail: t.detail }));
+  saveTplLib(l);
 }
-$("addTplBtn").addEventListener("click", addTemplate);
-$("newTplName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addTemplate(); } });
-$("newTplDetail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addTemplate(); } });
-$("applyTplBtn").addEventListener("click", () => {
+function tplCardHTML() {
+  const names = project.shotTemplates.map(t => t.name).filter(Boolean);
+  return `<span class="tpl-card-label">Shot template</span><span class="tpl-card-title">${esc(project.templateName || "Shot template")}</span><span class="tpl-card-sub">${names.length ? esc(names.join(", ")) : "No shots yet. Tap to add some."}</span>`;
+}
+function addMissingShots() {
   let added = 0;
   project.sections.forEach(sec => project.shotTemplates.forEach(t => {
     if (!sec.rows.some(r => r.templateId === t.id)) { sec.rows.push(templateRow(t)); added++; }
   }));
-  scheduleSave(); renderTemplates();
-  $("applyTplStatus").textContent = added ? `Added ${added} shot${added === 1 ? "" : "s"}.` : "Every part already has every template.";
+  return added;
+}
+function swapTemplate(entry) {
+  const oldIds = new Set(project.shotTemplates.map(t => t.id));
+  project.sections.forEach(sec => {
+    sec.rows = sec.rows.filter(r => !(oldIds.has(r.templateId) && !r.takes.length && !r.checked));
+    sec.rows.forEach(r => { if (oldIds.has(r.templateId)) r.templateId = ""; });
+  });
+  project.shotTemplates = entry.shots.map(s => ({ id: uid(), name: s.name || "", detail: s.detail || "" }));
+  project.templateLibId = entry.id; project.templateName = entry.name;
+  return addMissingShots();
+}
+
+/* shoot days */
+function fmt12(t) { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); if (!m) return ""; let hr = +m[1]; const ap = hr >= 12 ? "PM" : "AM"; hr = hr % 12 || 12; return `${hr}:${m[2]} ${ap}`; }
+function sortedDays() { return project.shootDays.slice().sort((a, b) => (a.date + (a.start || "")).localeCompare(b.date + (b.start || ""))); }
+function dayTileHTML(d) {
+  const [y, m, dd] = d.date.split("-").map(Number), mon = new Date(y, m - 1, dd).toLocaleDateString(undefined, { month: "short" });
+  return `<span class="day-tile ${project.cover ? "img" : ""}" style="${coverStyle(project.id)}${project.cover ? `;background-image:url(${project.cover})` : ""}"><small>${esc(mon)}</small><b>${dd}</b></span>`;
+}
+function dayCardHTML(d, past) {
+  const bits = [fmt12(d.start) ? fmt12(d.start) + " start" : "", d.location].filter(Boolean).map(esc).join(" · ");
+  return `<button type="button" class="day-card ${past ? "past" : ""}" data-day-id="${d.id}">${dayTileHTML(d)}<span class="day-text"><span class="day-title">${esc(dayLabel(d.date, true))}</span><span class="muted small">${bits || "Tap to add a time and location"}</span></span></button>`;
+}
+function renderPlanContent() {
+  document.querySelectorAll("#planCView [data-csub]").forEach(b => b.classList.toggle("active", b.dataset.csub === cPlanSub));
+  document.querySelectorAll("#planCView [data-csub-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.csubPanel !== cPlanSub));
+  $("newDayBtn").classList.toggle("hidden", cPlanSub !== "shoots");
+  if (cPlanSub !== "shoots") { renderContentBoard(); return; }
+  $("tplCard").innerHTML = tplCardHTML();
+  const today = ymd(new Date()), days = sortedDays();
+  const up = days.filter(d => d.date >= today), past = days.filter(d => d.date < today).reverse();
+  $("allToCalBtn").classList.toggle("hidden", !up.length);
+  $("shootDayList").innerHTML = (up.length ? up.map(d => dayCardHTML(d, false)).join("") : `<p class="muted small" style="margin:6px 2px 14px">No shoots scheduled yet. Tap New… to add a day.</p>`)
+    + (past.length ? `<div class="pl-head"><span>Past shoots</span></div>` + past.map(d => dayCardHTML(d, true)).join("") : "");
+}
+var editingDayId = null;
+function openDay(id) {
+  const d = project.shootDays.find(x => x.id === id); if (!d) return;
+  editingDayId = id;
+  $("dayDate").value = d.date; $("dayStart").value = d.start; $("dayLoc").value = d.location; $("dayNotes").value = d.notes; $("dayHours").value = d.hours;
+  $("dayTplCard").innerHTML = tplCardHTML();
+  $("dayModal").classList.remove("hidden");
+}
+function closeDay() { $("dayModal").classList.add("hidden"); editingDayId = null; renderPlanContent(); }
+$("newDayBtn").addEventListener("click", () => {
+  const last = sortedDays().pop(), today = ymd(new Date());
+  const d = { id: uid(), date: (project.shootDate && project.shootDate >= today) ? project.shootDate : today, start: last ? last.start : "", location: last ? last.location : "", notes: "", hours: 6 };
+  project.shootDays.push(d); scheduleSave(); renderPlanContent(); openDay(d.id);
 });
+$("shootDayList").addEventListener("click", e => { const b = e.target.closest("[data-day-id]"); if (b) openDay(b.dataset.dayId); });
+function curDay() { return project && project.shootDays.find(x => x.id === editingDayId); }
+[["dayDate", "date"], ["dayStart", "start"], ["dayLoc", "location"], ["dayNotes", "notes"]].forEach(([id, k]) => {
+  $(id).addEventListener("input", e => { const d = curDay(); if (!d) return; if (k === "date" && !e.target.value) return; d[k] = e.target.value; scheduleSave(); });
+});
+$("dayHours").addEventListener("input", e => { const d = curDay(), v = parseFloat(e.target.value); if (d && v > 0) { d.hours = v; scheduleSave(); } });
+$("dayDone").addEventListener("click", closeDay);
+$("dayModal").addEventListener("click", e => { if (e.target === $("dayModal")) closeDay(); });
+$("dayDelete").addEventListener("click", () => {
+  const d = curDay(); if (!d || !confirm(`Delete the ${dayLabel(d.date, true)} shoot day?`)) return;
+  project.shootDays = project.shootDays.filter(x => x.id !== d.id); scheduleSave(); closeDay();
+});
+$("dayTplCard").addEventListener("click", () => openTplModal());
+$("tplCard").addEventListener("click", () => openTplModal());
+
+/* calendar export (.ics opens in Apple Calendar, Google Calendar, Outlook) */
+function icsEsc(s) { return String(s || "").replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\;"); }
+function icsLocal(dt) { const p = n => String(n).padStart(2, "0"); return dt.getFullYear() + p(dt.getMonth() + 1) + p(dt.getDate()) + "T" + p(dt.getHours()) + p(dt.getMinutes()) + "00"; }
+function icsFor(days) {
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//creatrr//Shoot days//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const names = project.shotTemplates.map(t => t.name).filter(Boolean);
+  days.forEach(d => {
+    L.push("BEGIN:VEVENT", `UID:${d.id}@creatrr`, `DTSTAMP:${stamp}`);
+    if (d.start) {
+      const [y, m, dd] = d.date.split("-").map(Number), [hh, mm] = d.start.split(":").map(Number);
+      const s = new Date(y, m - 1, dd, hh, mm), e = new Date(s.getTime() + (d.hours || 6) * 3600000);
+      L.push(`DTSTART:${icsLocal(s)}`, `DTEND:${icsLocal(e)}`);
+    } else {
+      const [y, m, dd] = d.date.split("-").map(Number), n = new Date(y, m - 1, dd + 1);
+      L.push(`DTSTART;VALUE=DATE:${d.date.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${ymd(n).replace(/-/g, "")}`);
+    }
+    L.push(`SUMMARY:${icsEsc((project.docTitle || "Shoot") + (project.artist ? " (" + project.artist + ")" : "") + " shoot")}`);
+    if (d.location) L.push(`LOCATION:${icsEsc(d.location)}`);
+    L.push(`DESCRIPTION:${icsEsc([project.templateName ? "Template: " + project.templateName : "", names.length ? "Shots: " + names.join(", ") : "", d.notes].filter(Boolean).join("\n"))}`);
+    L.push("END:VEVENT");
+  });
+  L.push("END:VCALENDAR");
+  return L.join("\r\n");
+}
+function exportDays(days, name) { downloadBlob(new Blob([icsFor(days)], { type: "text/calendar" }), safeName(name) + ".ics"); }
+$("dayCal").addEventListener("click", () => { const d = curDay(); if (d) exportDays([d], `${project.docTitle}-${d.date}`); });
+$("allToCalBtn").addEventListener("click", () => { const today = ymd(new Date()), up = sortedDays().filter(d => d.date >= today); if (up.length) exportDays(up, `${project.docTitle}-shoots`); });
+
+/* template popup */
+function openTplModal() { renderTplModal(); $("tplStatus").textContent = ""; $("tplModal").classList.remove("hidden"); }
+function renderTplModal() {
+  const l = tplLib(), cur = libEntryForProject().e;
+  $("tplSwap").innerHTML = l.map(x => `<button type="button" class="btn small ${x.id === cur.id ? "primary" : ""}" data-lib="${x.id}">${esc(x.name)}</button>`).join("") + `<button type="button" class="btn small" data-lib="__new">+ New</button>`;
+  if (document.activeElement !== $("tplName")) $("tplName").value = project.templateName || "";
+  const list = $("tplShots");
+  list.innerHTML = project.shotTemplates.map(t => `<div class="tpl-row" data-tpl-id="${t.id}">
+      <span class="col-drag-handle" title="Drag to reorder">⠿</span>
+      <input type="text" class="field" data-tpl-field="name" value="${esc(t.name)}" placeholder="Shot, e.g. Close-up" aria-label="Shot name">
+      <input type="text" class="field tpl-detail" data-tpl-field="detail" value="${esc(t.detail)}" placeholder="Detail, e.g. Tight on the face" aria-label="Shot detail">
+      <button type="button" class="icon-btn" data-tpl-del="${t.id}" aria-label="Remove shot">×</button>
+    </div>`).join("") || `<p class="muted small">No shots yet. Add the ones every section should get.</p>`;
+  $("tplDelete").classList.toggle("hidden", l.length < 2);
+  if (tplSortable) tplSortable.destroy();
+  tplSortable = typeof Sortable !== "undefined" ? new Sortable(list, {
+    handle: ".col-drag-handle", animation: 150,
+    onEnd: () => { const order = Array.from(list.children).map(el => el.dataset.tplId); project.shotTemplates.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)); syncLib(); scheduleSave(); }
+  }) : null;
+}
+$("tplSwap").addEventListener("click", e => {
+  const b = e.target.closest("[data-lib]"); if (!b) return;
+  const l = tplLib();
+  if (b.dataset.lib === "__new") {
+    let n = "New template", i = 2; while (l.some(x => x.name === n)) n = "New template " + i++;
+    const entry = { id: uid(), name: n, shots: [{ name: "", detail: "" }] };
+    l.push(entry); saveTplLib(l); swapTemplate(entry);
+    scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); return;
+  }
+  const entry = l.find(x => x.id === b.dataset.lib);
+  if (!entry || entry.id === project.templateLibId) return;
+  if (!confirm(`Switch to "${entry.name}"? Shots from the current template that haven't been shot yet are replaced on every section.`)) return;
+  const added = swapTemplate(entry);
+  scheduleSave(); renderTplModal(); $("tplStatus").textContent = `Using ${entry.name}. ${added} shot${added === 1 ? "" : "s"} added.`;
+});
+$("tplName").addEventListener("input", e => { project.templateName = e.target.value; syncLib(); scheduleSave(); const cur = document.querySelector('#tplSwap .primary'); if (cur) cur.textContent = e.target.value || "Untitled template"; });
+$("tplShots").addEventListener("input", e => {
+  const f = e.target.dataset.tplField; if (!f) return;
+  const t = project.shotTemplates.find(x => x.id === e.target.closest("[data-tpl-id]").dataset.tplId); if (!t) return;
+  const rowField = f === "name" ? "subject" : "notes", old = t[f];
+  t[f] = e.target.value;
+  project.sections.forEach(sec => sec.rows.forEach(r => { if (r.templateId === t.id && r[rowField] === old) r[rowField] = t[f]; }));
+  syncLib(); scheduleSave();
+});
+$("tplShots").addEventListener("click", e => {
+  const b = e.target.closest("[data-tpl-del]"); if (!b) return;
+  const t = project.shotTemplates.find(x => x.id === b.dataset.tplDel); if (!t) return;
+  project.shotTemplates = project.shotTemplates.filter(x => x.id !== t.id);
+  if (project.sections.some(s => s.rows.some(r => r.templateId === t.id)) && confirm(`Also remove "${t.name || "this shot"}" from every section? Shots that already have takes are kept.`)) {
+    project.sections.forEach(s => { s.rows = s.rows.filter(r => r.templateId !== t.id || r.takes.length); });
+  }
+  syncLib(); scheduleSave(); renderTplModal();
+});
+$("tplAddShot").addEventListener("click", () => {
+  project.shotTemplates.push({ id: uid(), name: "", detail: "" }); syncLib(); scheduleSave(); renderTplModal();
+  const rows = document.querySelectorAll('#tplShots [data-tpl-field="name"]'); if (rows.length) rows[rows.length - 1].focus();
+});
+$("tplCopy").addEventListener("click", () => {
+  const l = tplLib(); let n = (project.templateName || "Template") + " copy", i = 2; while (l.some(x => x.name === n)) n = (project.templateName || "Template") + " copy " + i++;
+  const entry = { id: uid(), name: n, shots: project.shotTemplates.map(t => ({ name: t.name, detail: t.detail })) };
+  l.push(entry); saveTplLib(l); project.templateLibId = entry.id; project.templateName = n;
+  scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); $("tplStatus").textContent = "Saved as a new template. Give it a name.";
+});
+$("tplDelete").addEventListener("click", () => {
+  const l = tplLib(), cur = libEntryForProject().e;
+  if (l.length < 2 || !confirm(`Delete the template "${cur.name}" from your library?`)) return;
+  const rest = l.filter(x => x.id !== cur.id); saveTplLib(rest);
+  project.templateLibId = rest[0].id; project.templateName = rest[0].name;
+  project.shotTemplates = rest[0].shots.map(s => ({ id: uid(), name: s.name, detail: s.detail || "" }));
+  addMissingShots(); scheduleSave(); renderTplModal();
+});
+$("tplApply").addEventListener("click", () => {
+  const n = addMissingShots(); scheduleSave();
+  $("tplStatus").textContent = n ? `Added ${n} shot${n === 1 ? "" : "s"}.` : "Every section already has every shot.";
+});
+function closeTplModal() {
+  project.shotTemplates = project.shotTemplates.filter(t => t.name.trim() || t.detail.trim());
+  const keep = new Set(project.shotTemplates.map(t => t.id));
+  project.sections.forEach(sec => { sec.rows = sec.rows.filter(r => !r.templateId || keep.has(r.templateId) || r.takes.length || r.checked); });
+  syncLib(); scheduleSave();
+  $("tplModal").classList.add("hidden");
+  renderPlanContent();
+  if (!$("dayModal").classList.contains("hidden")) $("dayTplCard").innerHTML = tplCardHTML();
+}
+$("tplDone").addEventListener("click", closeTplModal);
+$("tplModal").addEventListener("click", e => { if (e.target === $("tplModal")) closeTplModal(); });
 document.querySelectorAll("#planCView [data-csub]").forEach(b => b.addEventListener("click", () => { cPlanSub = b.dataset.csub; renderPlanContent(); }));
 function renderContentBoard() {
   const wrap = $("cBoard");
@@ -4046,17 +4274,6 @@ document.addEventListener("click", e => {
       break;
     }
     case "del-link": { const sg = activeSong(); if (sg) { sg.links.splice(+b.dataset.i, 1); scheduleSave(); renderSongLinks(); } break; }
-    case "tpl-delete": {
-      const id = b.closest("[data-tpl-id]").dataset.tplId;
-      const t = project.shotTemplates.find(x => x.id === id);
-      if (!t) return;
-      project.shotTemplates = project.shotTemplates.filter(x => x.id !== id);
-      if (project.sections.some(s => s.rows.some(r => r.templateId === id)) && confirm(`Also remove the "${t.name}" shot from every part? Shots that already have takes are kept.`)) {
-        project.sections.forEach(s => { s.rows = s.rows.filter(r => r.templateId !== id || r.takes.length); });
-      }
-      scheduleSave(); renderTemplates();
-      break;
-    }
     case "del-shot": {
       const r = b.closest("[data-row-id]") && findRow(b.closest("[data-row-id]").dataset.rowId);
       if (!r || !r.row) return;
