@@ -1139,6 +1139,7 @@ details.more > :not(summary) { margin-top: 8px; }
           <div class="shoot-transport">
             <button id="shootPlayBtn" class="playsq" aria-label="Play"></button>
             <span class="tc-display">0:00.0</span>
+            <button id="clickToggle" class="btn small" aria-pressed="false" title="Play a click along with the track">Click</button>
             <span id="shootTrackInfo" class="muted small"></span>
             <span class="spacer"></span>
             <label class="small">Start cues
@@ -1385,7 +1386,7 @@ const DEFAULT_TEMPLATES = [
   { name: "Handheld", detail: "Moving with the energy" },
   { name: "Slow-mo", detail: "60–120 fps" }
 ];
-function defaultTempo() { return { bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 2, snap: true, lead: 0 }; }
+function defaultTempo() { return { bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 2, snap: true, lead: 0, click: false }; }
 
 /* ================= helpers ================= */
 const $ = id => document.getElementById(id);
@@ -2234,6 +2235,7 @@ function stopCue(keepPosition) {
     try { if (cue.src) { cue.src.onended = null; cue.src.stop(); } } catch (e) {}
     (cue.clicks || []).forEach(n => { try { n.stop(); } catch (e) {} });
     (cue.timers || []).forEach(clearTimeout);
+    stopClickPump();
     cue = null;
     if (keepPosition) pausePos = pos >= trackDuration() - 0.05 ? 0 : pos;
   }
@@ -2281,12 +2283,12 @@ async function readyEngine() {
   if (await clockRunning(c)) return c;
   return null;
 }
-function scheduleClick(c, time, accent) {
+function scheduleClick(c, time, accent, vol) {
   const osc = c.createOscillator(), gain = c.createGain();
   osc.type = "square";
   osc.frequency.value = accent ? 1600 : 1050;
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.exponentialRampToValueAtTime(accent ? 0.55 : 0.32, time + 0.004);
+  gain.gain.exponentialRampToValueAtTime((accent ? 0.55 : 0.32) * (vol || 1), time + 0.004);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
   osc.connect(gain).connect(c.destination);
   osc.start(time); osc.stop(time + 0.07);
@@ -2331,9 +2333,41 @@ async function playFrom(target, withCountIn) {
   src.connect(c.destination);
   src.start(songAt, offset);
   cue = { src, ctxStart: songAt, offset, clicks, timers };
+  startClickPump();
   src.onended = () => { if (cue && cue.src === src) { cue = null; pausePos = playStartPos; updateTransportUI(); drawWaveform(); } };
   startRaf();
   updateTransportUI();
+}
+/* click along with the song, on the detected beat grid; scheduled a few seconds ahead so it stays tight */
+function stopClickPump() {
+  if (!cue) return;
+  if (cue.pump) { clearInterval(cue.pump); cue.pump = null; }
+  (cue.songClicks || []).forEach(n => { try { n.stop(); } catch (e) {} });
+  cue.songClicks = [];
+}
+function startClickPump() {
+  const tp = curTempo(), c = audioCtx;
+  if (!cue || !c || !tp.click || !(tp.bpm > 0) || tp.offset == null) return;
+  stopClickPump();
+  const k0 = cue, beat = 60 / tp.bpm;
+  let k = Math.ceil((k0.offset - tp.offset) / beat - 1e-6);
+  k0.songClicks = [];
+  const pump = () => {
+    if (cue !== k0) { clearInterval(k0.pump); return; }
+    const horizon = c.currentTime + 2.5;
+    for (;;) {
+      const songT = tp.offset + k * beat, when = k0.ctxStart + (songT - k0.offset);
+      if (when > horizon) break;
+      if (songT > audioBuffer.duration) { clearInterval(k0.pump); break; }
+      if (when >= c.currentTime - 0.01 && songT >= 0) {
+        k0.songClicks.push(scheduleClick(c, Math.max(when, c.currentTime), (((k % 4) + 4) % 4) === 0, 0.55));
+        if (k0.songClicks.length > 40) k0.songClicks.shift();
+      }
+      k++;
+    }
+  };
+  pump();
+  k0.pump = setInterval(pump, 800);
 }
 function playCue(ts) {
   const t = parseTC(ts);
@@ -2570,6 +2604,9 @@ function syncTempoInputs() {
   const tp = curTempo();
   if (document.activeElement !== $("bpmInput")) $("bpmInput").value = tp.bpm || "";
   $("countInToggle").checked = !!tp.countIn;
+  $("clickToggle").classList.toggle("primary", !!tp.click);
+  $("clickToggle").setAttribute("aria-pressed", String(!!tp.click));
+  $("clickToggle").disabled = !(tp.bpm && tp.offset != null);
   $("countInBars").value = String(tp.bars || 2);
   $("snapToggle").checked = !!tp.snap;
   $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
@@ -2974,6 +3011,11 @@ $("songStartInput").addEventListener("change", e => {
 $("tempoManualBtn").addEventListener("click", () => { syncTempoInputs(); $("tempoModal").classList.remove("hidden"); });
 $("tempoDone").addEventListener("click", () => $("tempoModal").classList.add("hidden"));
 $("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) $("tempoModal").classList.add("hidden"); });
+$("clickToggle").addEventListener("click", () => {
+  const tp = curTempo(); if (!project) return;
+  tp.click = !tp.click; scheduleSave(); syncTempoInputs();
+  if (cue && !cueCountingIn()) { if (tp.click) startClickPump(); else stopClickPump(); }
+});
 $("countInToggle").addEventListener("change", e => { curTempo().countIn = e.target.checked; scheduleSave(); });
 $("countInBars").addEventListener("change", e => { curTempo().bars = parseInt(e.target.value, 10) || 2; scheduleSave(); });
 $("snapToggle").addEventListener("change", e => { curTempo().snap = e.target.checked; scheduleSave(); });
