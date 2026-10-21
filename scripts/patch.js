@@ -121,7 +121,8 @@ h = h.replace(clearRe, m => m + "\n" + cloud + "\n");
 const lib = fs.readFileSync("scripts/supabase.bundle.js", "utf8");
 must("bundle has no script end tag", !/<\/script/i.test(lib));
 replaceOnce("supabase lib", "</head>", "<script id=\"supabase-lib\">" + lib + "</script>\n</head>");
-replaceOnce("account button", '<button id="themeToggle" class="btn small">Dark mode</button>', '<span id="cloudStatus" class="small"></span><button id="accountBtn" class="btn small">Sign in</button><button id="themeToggle" class="btn small">Dark mode</button>');
+replaceOnce("account button", '<button id="settingsBtn" class="btn small">Settings</button>', '<span id="cloudStatus" class="small"></span><button id="accountBtn" class="btn small">Sign in</button><button id="settingsBtn" class="btn small hidden">Settings</button>');
+replaceOnce("home copy", "Everything is saved in this browser.", "Sign in to keep them in your account on every device.");
 replaceOnce("account modal", "</header>", "</header>\n" + fs.readFileSync("scripts/account.html", "utf8"));
 
 // 7. Sanity: every inline script still parses

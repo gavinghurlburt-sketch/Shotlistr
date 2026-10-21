@@ -1,6 +1,6 @@
 <div id="accountModal" class="modal hidden">
   <div class="modal-inner">
-    <h3>Account</h3>
+    <h3>Account &amp; settings</h3>
     <div id="acctSignedOut">
       <p class="modal-hint">Sign in to keep your projects and tracks in your account and open them on any device.</p>
       <div style="display:flex;gap:8px;margin-bottom:10px"><button type="button" id="acctTabIn" class="btn small primary">Sign in</button><button type="button" id="acctTabUp" class="btn small">Create account</button></div>
@@ -24,6 +24,8 @@
       <div class="modal-actions"><button type="button" id="acctSyncNow" class="btn small">Sync now</button><button type="button" id="acctSignOut" class="btn small">Sign out</button></div>
       <div class="modal-actions"><button type="button" id="acctDelete" class="btn small">Delete account</button><button type="button" id="acctDone" class="btn">Done</button></div>
     </div>
+    <p class="modal-hint" style="margin:14px 0 8px">Appearance</p>
+    <div class="theme-seg"><button type="button" class="btn small" data-theme-pref="system">Device</button><button type="button" class="btn small" data-theme-pref="light">Light</button><button type="button" class="btn small" data-theme-pref="dark">Dark</button></div>
     <p id="acctMsg" class="muted small" style="margin:10px 0 0;min-height:1em"></p>
     <div class="modal-actions" style="margin-top:6px"><span></span><button type="button" id="acctClose" class="btn small">Close</button></div>
   </div>

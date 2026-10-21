@@ -16,7 +16,7 @@
 <script>
 (function(){
   var t = null;
-  try { t = localStorage.getItem("producrr_theme"); } catch (e) {}
+  try { t = localStorage.getItem("producrr_theme_pref"); } catch (e) {}
   if (t !== "light" && t !== "dark") {
     t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
   }
@@ -286,7 +286,6 @@ main { padding: 16px; max-width: 1600px; margin: 0 auto; }
 .waveform { display: block; width: 100%; height: 88px; border-radius: 7px; margin-top: 10px; cursor: pointer; background-color: var(--wave-bg); }
 .tempo-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 .tempo-row label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-#tempoStatus { flex-basis: 100%; }
 
 /* ---------- vision board ---------- */
 .vision-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
@@ -699,7 +698,7 @@ table.sched tr.done-row td { background-color: var(--done); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
-  .draft-top, .callsheet-layout, .shoot-layout { grid-template-columns: 1fr; }
+  .draft-top, .callsheet-layout, .shoot-layout { grid-template-columns: minmax(0, 1fr); }
   .cut-card { grid-template-columns: 1fr; }
   .time-grid { height: 46vh; min-height: 300px; }
   .shoot-side { order: -1; }
@@ -755,9 +754,8 @@ button:disabled { opacity: .4; }
 .appbar input.doc-title:focus { background-color: var(--input-bg); border-color: var(--accent); }
 #saveStatus { color: var(--muted); font-size: 11px; white-space: nowrap; }
 #cloudStatus { display: none; }
-#backToProjectsBtn, #themeToggle { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; font-size: 0; flex: none; }
+#backToProjectsBtn { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; font-size: 0; flex: none; }
 #backToProjectsBtn::before { content: "\2039"; font-size: 28px; line-height: 1; font-weight: 400; padding-bottom: 3px; }
-#themeToggle::before { content: "\25D0"; font-size: 17px; line-height: 1; }
 #accountBtn { flex: none; max-width: 120px; white-space: nowrap; }
 #accountBtn.signed { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; background-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
 #accountBtn.signed:hover { background-color: var(--accent); opacity: .9; }
@@ -866,11 +864,53 @@ table.sched th { background-color: transparent; color: var(--muted); font-weight
 .section, .cut-card { box-shadow: none; background: linear-gradient(var(--sec, transparent), var(--sec, transparent)) 0 50% / 4px 56% no-repeat, var(--surface); }
 .part-row, .board-card { box-shadow: none; background: linear-gradient(var(--sec, transparent), var(--sec, transparent)) 0 50% / 3px 56% no-repeat, var(--surface-2); }
 .board-col { box-shadow: none; }
-#themeToggle::before { font-size: 21px; }
 @media (max-width: 480px) { #saveStatus { display: none; } }
 table button, table .btn { min-height: 0; }
 .take-btn { min-height: 0; padding: 5px 11px; font-size: 12px; }
 .icon-btn, .swatch { min-height: 0; }
+/* v2.1: quieter draft page */
+.playsq { width: 46px; height: 46px; min-height: 0; padding: 0; border-radius: 15px; background-color: var(--primary-bg); position: relative; flex: none; }
+.playsq:hover { background-color: var(--primary-bg); opacity: .9; }
+.playsq::before { content: ""; position: absolute; inset: 0; margin: auto; width: 22px; height: 22px; background-color: var(--primary-fg);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5.2v13.6l11-6.8z' fill='black' stroke='black' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5.2v13.6l11-6.8z' fill='black' stroke='black' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+.playsq.on::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='5' width='4.2' height='14' rx='1.6'/%3E%3Crect x='13.8' y='5' width='4.2' height='14' rx='1.6'/%3E%3C/svg%3E");
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='5' width='4.2' height='14' rx='1.6'/%3E%3Crect x='13.8' y='5' width='4.2' height='14' rx='1.6'/%3E%3C/svg%3E"); }
+.audio-bar { gap: 14px; }
+.audio-bar .tc-display { font-size: 17px; }
+.tempo-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.tempo-status { font-size: 13px; font-weight: 600; }
+.tempo-status.bad { color: var(--danger); }
+.tempo-status.good { color: var(--good); }
+details.more { margin-top: 12px; }
+details.more > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; font-weight: 600; list-style: none; padding: 4px 0; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: " \203A"; }
+details.more[open] > summary::after { content: " \2304"; }
+details.more > :not(summary) { margin-top: 8px; }
+.tempo-form { display: flex; flex-wrap: wrap; gap: 14px 16px; align-items: center; margin: 12px 0 4px; }
+.tempo-form label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.tempo-form .field.num { width: 92px; }
+.song-tab-edit { font: inherit; font-weight: 600; width: 190px; max-width: 100%; border-radius: 999px; background-color: var(--surface-3); color: var(--text); border: 1px solid var(--accent); padding: 8px 14px; }
+.suggest { background-color: var(--surface-2); border-radius: 18px; padding: 12px; margin-bottom: 12px; }
+.suggest-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.suggest-list .btn .dot { margin-right: 2px; }
+.suggest-row { display: flex; gap: 8px; }
+.part-row .part-name { background-color: transparent; border-color: transparent; padding-left: 4px; }
+.part-row .part-name:focus { background-color: var(--input-bg); }
+.part-row .pdot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.part-row .part-more { display: none; gap: 8px; width: 100%; }
+.part-row.open .part-more { display: flex; }
+.part-row { flex-wrap: wrap; }
+/* v2.2 */
+.theme-seg { display: flex; gap: 6px; }
+.theme-seg .btn { flex: 1; }
+.banner { position: relative; height: 150px; border-radius: 26px; overflow: hidden; margin: 2px 0 14px; background-color: var(--surface); }
+.banner-img { position: absolute; inset: 0; background: linear-gradient(145deg, var(--c1, #888), var(--c2, #555)) center / cover no-repeat; }
+.banner.has-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.35), transparent 55%); pointer-events: none; }
+.banner > .btn { position: absolute; right: 12px; bottom: 12px; z-index: 2; background-color: var(--pill); color: var(--text); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.cover.img { background: center / cover no-repeat; }
 /* sheets, toast */
 .modal { background-color: rgba(0,0,0,.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 .modal-inner { background-color: var(--surface); border-radius: 28px; padding: 24px; }
@@ -904,12 +944,12 @@ table button, table .btn { min-height: 0; }
 
 <header class="appbar">
   <div class="appbar-top">
-    <span class="brand">Producrr</span>
+    <span class="brand">creatrr</span>
     <button id="backToProjectsBtn" class="btn small hidden">← Projects</button>
     <input type="text" id="docTitleInput" class="doc-title hidden" placeholder="Untitled project" aria-label="Project title">
     <span class="spacer"></span>
     <span id="saveStatus" class="small"></span>
-    <button id="themeToggle" class="btn small">Dark mode</button>
+    <button id="settingsBtn" class="btn small">Settings</button>
   </div>
   <nav id="wsTabs" class="ws-tabs hidden" aria-label="Workspaces">
     <button class="ws-tab" data-ws="draft"><span class="ws-num">1</span> Draft</button>
@@ -920,6 +960,11 @@ table button, table .btn { min-height: 0; }
 </header>
 
 <main>
+<div id="projectBanner" class="banner hidden">
+  <div class="banner-img" id="bannerImg"></div>
+  <button type="button" id="bannerBtn" class="btn small">Add photo</button>
+  <input type="file" id="bannerFile" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden>
+</div>
   <!-- ===== projects ===== -->
   <section id="projectsView">
     <div class="projects-wrap">
@@ -935,35 +980,51 @@ table button, table .btn { min-height: 0; }
     </div>
   </section>
 
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-inner">
+      <h3>Settings</h3>
+      <p class="modal-hint" style="margin-bottom:10px">Appearance</p>
+      <div class="theme-seg"><button type="button" class="btn small" data-theme-pref="system">Device</button><button type="button" class="btn small" data-theme-pref="light">Light</button><button type="button" class="btn small" data-theme-pref="dark">Dark</button></div>
+      <div class="modal-actions"><span></span><button id="settingsDone" class="btn primary">Done</button></div>
+    </div>
+  </div>
+  <div id="tempoModal" class="modal hidden">
+    <div class="modal-inner">
+      <h3>Tempo &amp; song start</h3>
+      <p class="modal-hint">Found automatically. If the beat lines on the waveform look off (often double or half time), fix it here.</p>
+      <div class="tempo-form">
+        <label>BPM <input type="number" id="bpmInput" class="field num" min="30" max="300" step="0.1" placeholder="—"></label>
+        <label>Song starts at <input type="text" id="songStartInput" class="field num" inputmode="decimal" placeholder="0:00.0"></label>
+        <label class="check"><input type="checkbox" id="countInToggle"> Count-in</label>
+        <select id="countInBars" class="field" aria-label="Count-in length"><option value="1">1 bar</option><option value="2">2 bars</option></select>
+        <label class="check" title="Scrubbing and cues land on measure starts and markers"><input type="checkbox" id="snapToggle"> Snap cues to the beat</label>
+      </div>
+      <div class="modal-actions"><button id="detectTempoBtn" class="btn small" disabled>Detect again</button><button id="tempoDone" class="btn primary">Done</button></div>
+    </div>
+  </div>
+
   <!-- ===== draft ===== -->
   <section id="draftView" class="ws-view hidden">
     <p class="ws-intro">Get the idea down: references, the track, the shots and where they land in the song. Setup and shoot times are hidden here — you'll estimate those in Plan.</p>
     <div class="draft-top">
       <div class="track-slot">
       <div class="panel" id="trackPanel">
-        <div class="panel-head"><h2>Track &amp; tempo</h2></div>
         <div class="audio-bar">
-          <button id="uploadTrackBtn" class="btn">Upload track</button>
+          <button id="uploadTrackBtn" class="btn primary">Upload track</button>
           <input type="file" id="trackFileInput" accept="audio/*,.mp3,.m4a,.wav,.aac,.aiff,.caf,.flac,.ogg" hidden>
-          <span id="trackName" class="track-name muted">No track loaded</span>
+          <span id="trackName" class="track-name muted hidden">No track loaded</span>
           <audio id="player" preload="auto" class="hidden"></audio>
-          <button id="draftPlayBtn" class="btn small" disabled>Play</button>
+          <button id="draftPlayBtn" class="playsq" aria-label="Play" disabled></button>
           <span class="tc-display">0:00.0</span>
-          <span class="spacer"></span>
-          <button id="removeTrackBtn" class="btn small danger-text hidden">Remove track</button>
         </div>
-        <canvas id="waveformCanvas" class="waveform hidden" aria-label="Waveform — click to seek"></canvas>
-        <div class="tempo-row">
-          <label>BPM <input type="number" id="bpmInput" class="field num" min="30" max="300" step="0.1" placeholder="—"></label>
-          <button id="detectTempoBtn" class="btn small" disabled>Detect tempo &amp; song start</button>
-          <label class="check"><input type="checkbox" id="countInToggle"> Count-in</label>
-          <select id="countInBars" class="field" aria-label="Count-in length">
-            <option value="1">1 bar</option>
-            <option value="2">2 bars</option>
-          </select>
-          <label class="check" title="Moves each cue to the nearest beat so the count-in lines up with the song"><input type="checkbox" id="snapToggle"> Snap cues to the beat</label>
-          <span id="tempoStatus" class="muted small"></span>
+        <canvas id="waveformCanvas" class="waveform hidden" aria-label="Waveform: drag to scrub"></canvas>
+        <div class="tempo-line">
+          <span id="tempoStatus" class="tempo-status"></span>
+          <button id="tempoManualBtn" class="btn small hidden">Manually set tempo and song start</button>
         </div>
+        <details id="trackMore" class="more hidden"><summary>Track options</summary>
+          <button id="removeTrackBtn" class="btn small danger-text">Remove track</button>
+        </details>
       </div>
       </div>
       <div class="draft-top-stack">
@@ -1069,7 +1130,7 @@ table button, table .btn { min-height: 0; }
         <div class="transport-slot">
         <div class="panel" id="shootTransport">
           <div class="shoot-transport">
-            <button id="shootPlayBtn" class="btn small">Play</button>
+            <button id="shootPlayBtn" class="playsq" aria-label="Play"></button>
             <span class="tc-display">0:00.0</span>
             <span id="shootTrackInfo" class="muted small"></span>
             <span class="spacer"></span>
@@ -1104,19 +1165,17 @@ table button, table .btn { min-height: 0; }
     </div>
     <div id="draftSongBody" class="draft-top">
       <div class="stack">
-        <div class="panel">
-          <div class="panel-head" style="margin-bottom:0">
-            <input type="text" id="songNameInput" class="field song-name-input" aria-label="Song name" placeholder="Song name">
-            <button type="button" class="btn small danger-text" data-c="delete-song">Delete song</button>
-          </div>
-        </div>
         <div class="track-slot"></div>
-        <div class="panel">
-          <div class="panel-head"><h2>Parts to shoot</h2></div>
-          <div id="partPresets" class="preset-row"></div>
+        <div class="panel" id="sectionsPanel">
+          <div class="panel-head"><h2>Song sections</h2><span class="spacer"></span><button type="button" id="suggestBtn" class="btn small hidden" data-c="suggest">Suggest sections</button></div>
+          <div id="suggestBox"></div>
           <div id="partsList"></div>
-          <p class="muted small" style="margin-bottom:0">Play the track, then click a part's time to drop in the playhead position.</p>
+          <p class="muted small" style="margin:8px 0 0">Play or scrub the track, then tap a section's time to drop in the playhead.</p>
+          <details class="more"><summary>Add a section yourself</summary><div id="partPresets" class="preset-row"></div></details>
         </div>
+        <details class="more song-opts"><summary>Song options</summary>
+          <button type="button" class="btn small danger-text" data-c="delete-song">Delete song</button>
+        </details>
       </div>
       <div class="draft-top-stack">
         <div class="panel">
@@ -1188,7 +1247,7 @@ table button, table .btn { min-height: 0; }
     <div id="cutSongTabs" class="song-tabs hidden"></div>
     <div class="panel">
       <div class="shoot-transport">
-        <button id="cutPlayBtn" class="btn small">Play</button>
+        <button id="cutPlayBtn" class="playsq" aria-label="Play"></button>
         <span class="tc-display">0:00.0</span>
         <span id="cutInfo" class="muted small"></span>
       </div>
@@ -1450,6 +1509,7 @@ function normalizeColumnConfigs(cfgs, legacy) {
 function normalizeRecord(rec) {
   const p = Object.assign({}, rec);
   p.docTitle = p.docTitle || "Untitled project";
+  p.cover = typeof p.cover === "string" ? p.cover : "";
   p.type = p.type === "content" ? "content" : "production";
   const secs = Array.isArray(p.sections) && p.sections.length ? p.sections : (p.type === "content" ? [] : [defaultSection("Unsorted", 0)]);
   p.sections = secs.map((s, i) => ({
@@ -2306,10 +2366,12 @@ function updateTimecodes() {
 function updateTransportUI() {
   ["draftPlayBtn", "shootPlayBtn", "cutPlayBtn"].forEach(id => {
     const btn = $(id);
-    btn.textContent = isPlaying() ? "Stop" : "Play";
+    btn.classList.toggle("on", isPlaying());
+    btn.setAttribute("aria-label", isPlaying() ? "Stop" : "Play");
     btn.title = isPlaying() ? "Stop and return to where playback started" : "Play from the playhead";
     btn.disabled = !player.src;
   });
+  paintTrackUI(); paintTempo();
   updateTimecodes();
 }
 let rafOn = false;
@@ -2372,7 +2434,7 @@ async function decodeTrack(blob, autoDetect) {
     if (autoDetect) runTempoDetect();
   } catch (e) {
     console.error(e);
-    if (token === decodeToken) setTempoStatus("This file plays, but it couldn't be analyzed for a waveform or tempo. An MP3 or WAV usually works.");
+    if (token === decodeToken) setTempoStatus("This file plays, but it couldn't be analyzed. An MP3 or WAV usually works.", "fail");
   }
 }
 function computePeaks(buf) {
@@ -2465,18 +2527,36 @@ function analyzeTempo(buf) {
   const songStart = Math.max(0, (startF * hop) / sr + bias);
   return { bpm, offset: Math.round(offset * 1000) / 1000, songStart: Math.round(songStart * 1000) / 1000 };
 }
-function setTempoStatus(t) { $("tempoStatus").textContent = t; }
+var tempoMsg = "", tempoKind = "";
+function setTempoStatus(t, kind) { tempoMsg = t || ""; tempoKind = kind || ""; paintTempo(); }
+function paintTrackUI() {
+  const has = !!player.src;
+  $("uploadTrackBtn").classList.toggle("hidden", has);
+  $("trackMore").classList.toggle("hidden", !has);
+}
+function paintTempo() {
+  const el = $("tempoStatus"), mb = $("tempoManualBtn"), tp = project ? curTempo() : defaultTempo();
+  let txt = "", cls = "", btn = false;
+  if (!player.src) { /* nothing to say yet */ }
+  else if (tempoKind === "busy") { txt = "Detecting tempo and song start…"; cls = "bad"; }
+  else if (tp.bpm && tp.offset != null) { txt = "Tempo and song start set"; cls = "good"; btn = true; }
+  else { txt = tempoMsg || "Tempo not set yet"; cls = "bad"; btn = true; }
+  el.textContent = txt; el.className = "tempo-status " + cls;
+  mb.classList.toggle("hidden", !btn);
+  const sb = $("suggestBtn"); if (sb) sb.classList.toggle("hidden", !(isContent() && audioBuffer && tp.bpm && tp.offset != null));
+}
 function runTempoDetect() {
   if (!audioBuffer) return;
-  setTempoStatus("Listening for the beat…");
+  setTempoStatus("", "busy");
   setTimeout(() => {
     const r = analyzeTempo(audioBuffer);
-    if (!r) { setTempoStatus("Couldn't find a steady beat. Type the BPM in instead."); return; }
+    if (!r) { setTempoStatus("Couldn't find a steady beat. Set it by hand.", "fail"); return; }
     Object.assign(curTempo(), { bpm: r.bpm, offset: r.offset, songStart: r.songStart, detected: true });
     syncTempoInputs();
-    setTempoStatus(`Detected about ${r.bpm} BPM; the music starts at ${fmtTC(r.songStart)}. The beat grid is drawn on the waveform — if it's off by double or half, fix the BPM by hand.`);
+    setTempoStatus("", "");
     scheduleSave();
     drawWaveform();
+    if (isContent() && activeSong() && !songParts(activeSong().id).length) runSuggest(true);
   }, 30);
 }
 function syncTempoInputs() {
@@ -2487,6 +2567,127 @@ function syncTempoInputs() {
   $("snapToggle").checked = !!tp.snap;
   $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
   $("leadSelect").value = String(tp.lead || 0);
+  if (document.activeElement !== $("songStartInput")) $("songStartInput").value = tp.songStart != null ? fmtTC(tp.songStart) : "";
+  paintTempo();
+}
+
+/* ---------- song section suggestions (intro / verse / chorus / bridge) ---------- */
+function fftInPlace(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2;
+        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+        const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t;
+      }
+    }
+  }
+}
+function suggestSections(buf, tp) {
+  const sr = buf.sampleRate, dur = buf.duration, B = 240 / tp.bpm;
+  const c0 = buf.getChannelData(0), c1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
+  const N = 2048, SUB = 6, NB = 16, binHz = sr / N;
+  const edges = []; for (let i = 0; i <= NB; i++) edges.push(Math.max(1, Math.round(60 * Math.pow(Math.min(9000, sr / 2.2) / 60, i / NB) / binHz)));
+  const hann = new Float32Array(N); for (let i = 0; i < N; i++) hann[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+  const re = new Float32Array(N), im = new Float32Array(N);
+  // bar grid anchored on the detected downbeat, starting where the music starts
+  const start = Math.max(tp.songStart || 0, 0);
+  let k = Math.round((start - tp.offset) / B);
+  const times = [];
+  for (; tp.offset + (k + 1) * B <= dur + 0.2 * B; k++) { const t = tp.offset + k * B; if (t >= -0.25 * B) times.push(Math.max(0, t)); }
+  const nBars = times.length;
+  if (nBars < 12) return [];
+  const feats = [], loud = [];
+  for (const t0 of times) {
+    const f = new Float32Array(NB); let rmsSum = 0, cnt = 0;
+    for (let j = 0; j < SUB; j++) {
+      const s = Math.floor((t0 + j * B / SUB) * sr);
+      if (s + N > c0.length) continue;
+      let e = 0;
+      for (let i = 0; i < N; i++) { const v = c1 ? (c0[s + i] + c1[s + i]) * 0.5 : c0[s + i]; re[i] = v * hann[i]; im[i] = 0; e += v * v; }
+      rmsSum += Math.sqrt(e / N); cnt++;
+      fftInPlace(re, im);
+      for (let b = 0; b < NB; b++) {
+        let m = 0; const lo = edges[b], hi = Math.max(edges[b] + 1, edges[b + 1]);
+        for (let q = lo; q < hi; q++) m += Math.hypot(re[q], im[q]);
+        f[b] += Math.log10(1e-5 + m / (hi - lo));
+      }
+    }
+    if (!cnt) { feats.push(f); loud.push(0); continue; }
+    for (let b = 0; b < NB; b++) f[b] /= cnt;
+    feats.push(f); loud.push(rmsSum / cnt);
+  }
+  // z-score every dimension, add loudness as one more (weighted) dimension
+  const D = NB + 1, X = feats.map((f, i) => { const v = new Float32Array(D); v.set(f); v[NB] = Math.log10(1e-5 + loud[i]); return v; });
+  for (let d = 0; d < D; d++) {
+    let m = 0; for (const v of X) m += v[d]; m /= nBars;
+    let s = 0; for (const v of X) s += (v[d] - m) * (v[d] - m); s = Math.sqrt(s / nBars) || 1;
+    const w = d === NB ? 2.2 : 1;
+    for (const v of X) v[d] = ((v[d] - m) / s) * w;
+  }
+  const mean = (a, b) => { const o = new Float32Array(D); for (let i = a; i < b; i++) for (let d = 0; d < D; d++) o[d] += X[i][d]; for (let d = 0; d < D; d++) o[d] /= Math.max(1, b - a); return o; };
+  const dist = (u, v) => { let s = 0; for (let d = 0; d < D; d++) s += (u[d] - v[d]) * (u[d] - v[d]); return Math.sqrt(s); };
+  const W = nBars >= 32 ? 4 : 2, nov = new Float32Array(nBars + 1);
+  for (let i = W; i <= nBars - W; i++) {
+    let nv = dist(mean(i - W, i), mean(i, i + W));
+    nv *= (i % 8 === 0) ? 1.25 : (i % 4 === 0 ? 1.12 : 1);
+    nov[i] = nv;
+  }
+  let nm = 0, ns = 0, nc = 0; for (let i = W; i <= nBars - W; i++) { nm += nov[i]; nc++; } nm /= nc;
+  for (let i = W; i <= nBars - W; i++) ns += (nov[i] - nm) * (nov[i] - nm); ns = Math.sqrt(ns / nc);
+  const thr = nm + 0.55 * ns, MINB = 4;
+  const cand = []; for (let i = W; i <= nBars - W; i++) if (nov[i] >= thr && nov[i] >= nov[i - 1] && nov[i] >= nov[i + 1]) cand.push(i);
+  cand.sort((a, b) => nov[b] - nov[a]);
+  const bounds = [0];
+  for (const c of cand) { if (bounds.length >= 14) break; if (bounds.every(b => Math.abs(b - c) >= MINB) && nBars - c >= 3) bounds.push(c); }
+  bounds.sort((a, b) => a - b); bounds.push(nBars);
+  const segs = [];
+  for (let i = 0; i < bounds.length - 1; i++) segs.push({ a: bounds[i], b: bounds[i + 1] });
+  segs.forEach(s => { s.len = s.b - s.a; s.vec = mean(s.a, s.b); s.loud = s.vec[NB]; });
+  // cluster similar segments (the same section type coming back)
+  const cos = (u, v) => { let d = 0, a = 0, b = 0; for (let i = 0; i < D; i++) { d += u[i] * v[i]; a += u[i] * u[i]; b += v[i] * v[i]; } return d / (Math.sqrt(a * b) || 1); };
+  const clusters = [];
+  segs.forEach((s, i) => {
+    let best = null, bs = 0.72;
+    for (const c of clusters) { const sim = cos(s.vec, c.vec); if (sim > bs) { bs = sim; best = c; } }
+    if (!best) { best = { members: [], vec: new Float32Array(D) }; clusters.push(best); }
+    best.members.push(i); s.cluster = best;
+    best.vec = new Float32Array(D); best.members.forEach(m => { for (let d = 0; d < D; d++) best.vec[d] += segs[m].vec[d] / best.members.length; });
+  });
+  clusters.forEach(c => { c.loud = c.members.reduce((n, m) => n + segs[m].loud, 0) / c.members.length; });
+  const repeated = clusters.filter(c => c.members.length >= 2);
+  const chorusC = (repeated.length ? repeated : clusters).reduce((a, b) => (b.loud > a.loud ? b : a));
+  const verseC = repeated.filter(c => c !== chorusC).sort((a, b) => b.members.reduce((n, m) => n + segs[m].len, 0) - a.members.reduce((n, m) => n + segs[m].len, 0))[0] || null;
+  const names = new Array(segs.length).fill(null);
+  segs.forEach((s, i) => { if (s.cluster === chorusC) names[i] = "Chorus"; });
+  const firstChorus = names.indexOf("Chorus");
+  if (!names[0] && segs[0].len <= 8 && segs[0].cluster !== verseC) names[0] = "Intro";
+  const last = segs.length - 1;
+  if (!names[last] && segs[last].len <= 10 && segs[last].cluster !== verseC && last > 0) names[last] = "Outro";
+  segs.forEach((s, i) => {
+    if (names[i]) return;
+    if (s.cluster === verseC) names[i] = "Verse";
+    else if (names[i + 1] === "Chorus" && s.len <= 6 && i > 0) names[i] = "Pre-chorus";
+    else if (firstChorus >= 0 && i > firstChorus) names[i] = "Bridge";
+    else names[i] = "Verse";
+  });
+  const tally = {}; names.forEach(n => { tally[n] = (tally[n] || 0) + 1; });
+  const seen = {};
+  return segs.map((s, i) => {
+    const base = names[i]; seen[base] = (seen[base] || 0) + 1;
+    const preset = PART_PRESETS.find(x => x.name === base);
+    return { name: tally[base] > 1 ? `${base} ${seen[base]}` : base, t: times[s.a], color: preset ? preset.color : "#888888" };
+  });
 }
 
 /* ---------- waveform ---------- */
@@ -2744,6 +2945,7 @@ $("removeTrackBtn").addEventListener("click", () => {
   if (!project || !confirm("Remove the track from this project?")) return;
   resetPlayer();
   clearTrack(trackKey());
+  $("trackMore").open = false;
   setTempoStatus("");
   if (isContent()) renderCurrent();
 });
@@ -2753,13 +2955,49 @@ $("bpmInput").addEventListener("input", e => {
   curTempo().bpm = isFinite(v) && v >= 30 && v <= 300 ? v : null;
   if (curTempo().bpm && curTempo().offset == null) curTempo().offset = curTempo().songStart || 0;
   $("snapToggle").disabled = !(curTempo().bpm && curTempo().offset != null);
-  scheduleSave(); drawWaveform();
+  scheduleSave(); drawWaveform(); paintTempo();
 });
+$("songStartInput").addEventListener("change", e => {
+  const v = parseTC(e.target.value);
+  if (v == null || !project) return;
+  const tp = curTempo(); tp.songStart = v; tp.offset = v;
+  $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
+  scheduleSave(); drawWaveform(); paintTempo();
+});
+$("tempoManualBtn").addEventListener("click", () => { syncTempoInputs(); $("tempoModal").classList.remove("hidden"); });
+$("tempoDone").addEventListener("click", () => $("tempoModal").classList.add("hidden"));
+$("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) $("tempoModal").classList.add("hidden"); });
 $("countInToggle").addEventListener("change", e => { curTempo().countIn = e.target.checked; scheduleSave(); });
 $("countInBars").addEventListener("change", e => { curTempo().bars = parseInt(e.target.value, 10) || 2; scheduleSave(); });
 $("snapToggle").addEventListener("change", e => { curTempo().snap = e.target.checked; scheduleSave(); });
 $("shootPlayBtn").addEventListener("click", togglePlay);
 $("cutPlayBtn").addEventListener("click", togglePlay);
+/* swipe left / right to move between Draft, Plan, Shoot and Cut */
+(function () {
+  const order = ["draft", "plan", "shoot", "cut"];
+  let sx = 0, sy = 0, st = 0, ok = false;
+  function blocked(el) {
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      if (!n.classList) return true; if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.draggable) return true;
+      const cs = getComputedStyle(n);
+      if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && n.scrollWidth > n.clientWidth + 2) return true;
+    }
+    return false;
+  }
+  document.addEventListener("touchstart", e => {
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now();
+    ok = e.touches.length === 1 && !!project && $("projectsView").classList.contains("hidden") && !blocked(e.target);
+  }, { passive: true });
+  document.addEventListener("touchend", e => {
+    if (!ok) return; ok = false;
+    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st > 700) return;
+    const i = order.indexOf(currentWs), j = i + (dx < 0 ? 1 : -1);
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const tab = document.querySelector(`.ws-tab[data-ws="${order[j]}"]`);
+    if (tab && !tab.classList.contains("hidden")) { tab.click(); try { window.nativeHaptic && window.nativeHaptic("light"); } catch (x) {} window.scrollTo(0, 0); }
+  }, { passive: true });
+})();
 $("draftPlayBtn").addEventListener("click", togglePlay);
 
 /* ================= plan inputs ================= */
@@ -2982,7 +3220,7 @@ async function renderProjectsList() {
     const kind = p.type === "content" ? `Content shoot · ${(p.songs || []).length} song${(p.songs || []).length === 1 ? "" : "s"}` : "Video production";
     return `<div class="project-card">
       <div class="project-card-main" data-open-id="${p.id}" role="button" tabindex="0">
-        <div class="cover" style="${coverStyle(p.id)}"></div>
+        <div class="cover ${p.cover ? "img" : ""}" style="${coverStyle(p.id)}${p.cover ? `;background-image:url(${p.cover})` : ""}"></div>
         <div class="pc-text">
           <div class="project-card-name">${esc(p.docTitle || "Untitled project")}</div>
           <div class="muted small">${kind} · ${n} shot${n === 1 ? "" : "s"} · in ${WS_LABEL[p.workspace] || "Draft"} · edited ${relativeTime(p.updatedAt)}</div>
@@ -3069,7 +3307,7 @@ async function openProject(id) {
 async function goToProjects() {
   await persistNow();
   resetPlayer();
-  project = null;
+  project = null; renderBanner();
   document.title = "Producrr";
   document.querySelectorAll(".ws-view").forEach(v => v.classList.add("hidden"));
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.add("hidden"));
@@ -3098,6 +3336,7 @@ function switchWs(ws, initial) {
 }
 document.querySelectorAll(".ws-tab").forEach(t => t.addEventListener("click", () => { if (project) switchWs(t.dataset.ws); }));
 function renderCurrent() {
+  renderBanner();
   if (!project) return;
   if (currentWs === "cut") { renderCut(); return; }
   if (isContent()) {
@@ -3119,16 +3358,28 @@ setInterval(() => {
 }, 10000);
 
 /* ================= theme ================= */
-function applyTheme(t) {
+var themePref = "system";
+try { var _tp = localStorage.getItem("producrr_theme_pref"); if (_tp === "light" || _tp === "dark") themePref = _tp; } catch (e) {}
+function resolveTheme() { return themePref === "system" ? ((window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light") : themePref; }
+function applyTheme() {
+  const t = resolveTheme();
   document.documentElement.setAttribute("data-theme", t);
   $("colorSchemeMeta").setAttribute("content", t);
   $("themeColorMeta").setAttribute("content", t === "dark" ? "#121212" : "#f5f3ef");
-  $("themeToggle").textContent = t === "dark" ? "Light mode" : "Dark mode";
-  try { localStorage.setItem("producrr_theme", t); } catch (e) {}
+  document.querySelectorAll("[data-theme-pref]").forEach(b => b.classList.toggle("primary", b.dataset.themePref === themePref));
   waveColorCache = null;
   drawWaveform();
 }
-$("themeToggle").addEventListener("click", () => applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"));
+function setThemePref(v) {
+  themePref = v === "light" || v === "dark" ? v : "system";
+  try { localStorage.setItem("producrr_theme_pref", themePref); } catch (e) {}
+  applyTheme();
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-theme-pref]"); if (b) setThemePref(b.dataset.themePref); });
+if (window.matchMedia) { const mq = matchMedia("(prefers-color-scheme: dark)"); const f = () => { if (themePref === "system") applyTheme(); }; if (mq.addEventListener) mq.addEventListener("change", f); else if (mq.addListener) mq.addListener(f); }
+$("settingsBtn").addEventListener("click", () => $("settingsModal").classList.remove("hidden"));
+$("settingsDone").addEventListener("click", () => $("settingsModal").classList.add("hidden"));
+$("settingsModal").addEventListener("click", e => { if (e.target === $("settingsModal")) $("settingsModal").classList.add("hidden"); });
 
 /* ================= content shoot: model helpers ================= */
 let cPlanSub = "templates";
@@ -3162,6 +3413,45 @@ function addPart(sg, preset) {
   project.sections.push(sec);
   return sec;
 }
+var editingSongId = null, lastTapSong = null, lastTapAt = 0;
+function startSongEdit(id) {
+  if (!id) return;
+  editingSongId = id;
+  $("draftSongTabs").innerHTML = songTabsHTML(true);
+  const i = document.querySelector("#draftSongTabs [data-edit-song]");
+  if (i) { i.focus(); i.select(); }
+}
+function endSongEdit(commit) {
+  const i = document.querySelector("#draftSongTabs [data-edit-song]");
+  if (!i || editingSongId == null) return;
+  const sg = project.songs.find(x => x.id === editingSongId);
+  editingSongId = null;
+  if (commit && sg && i.value.trim()) { sg.name = i.value.trim(); scheduleSave(); }
+  renderCurrent();
+}
+$("draftSongTabs").addEventListener("keydown", e => {
+  if (!e.target.hasAttribute("data-edit-song")) return;
+  if (e.key === "Enter") { e.preventDefault(); endSongEdit(true); }
+  else if (e.key === "Escape") { endSongEdit(false); }
+});
+$("draftSongTabs").addEventListener("focusout", e => { if (e.target.hasAttribute && e.target.hasAttribute("data-edit-song")) endSongEdit(true); });
+function renderBanner() {
+  const b = $("projectBanner");
+  const show = !!project && (currentWs === "draft" || currentWs === "plan");
+  b.classList.toggle("hidden", !show);
+  if (!show) return;
+  b.classList.toggle("has-img", !!project.cover);
+  b.setAttribute("style", coverStyle(project.id));
+  $("bannerImg").style.backgroundImage = project.cover ? `url(${project.cover})` : "";
+  $("bannerBtn").textContent = project.cover ? "Change photo" : "Add photo";
+}
+$("bannerBtn").addEventListener("click", () => $("bannerFile").click());
+$("bannerFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f || !project) return;
+  try { project.cover = await fileToDataURL(f, 1000); scheduleSave(); renderBanner(); }
+  catch (err) { alert("That image couldn't be read. Try a JPG or PNG."); }
+});
 function setActiveSong(id) {
   if (!id || id === activeSongId) return;
   activeSongId = id;
@@ -3171,6 +3461,7 @@ function setActiveSong(id) {
 }
 function songTabsHTML(withAdd) {
   return project.songs.map(sg => {
+    if (withAdd && editingSongId === sg.id) return `<input type="text" class="song-tab-edit" data-edit-song="${sg.id}" value="${esc(sg.name)}" aria-label="Song name" autocapitalize="words">`;
     const parts = songParts(sg.id);
     const total = parts.reduce((n, p) => n + p.rows.length, 0), done = parts.reduce((n, p) => n + p.rows.filter(r => r.checked).length, 0);
     return `<button type="button" class="song-tab ${sg.id === activeSongId ? "active" : ""}" data-song-id="${sg.id}">${esc(sg.name)} <span class="song-tab-meta">${total ? `${done}/${total}` : "no shots"}</span></button>`;
@@ -3189,7 +3480,6 @@ function renderDraftContent() {
   if (!sg) return;
   const slot = document.querySelector("#draftCView .track-slot");
   if ($("trackPanel").parentElement !== slot) slot.appendChild($("trackPanel"));
-  if (document.activeElement !== $("songNameInput")) $("songNameInput").value = sg.name;
   if (document.activeElement !== $("songNotes")) $("songNotes").value = sg.notes;
   syncTempoInputs();
   renderPartsList();
@@ -3200,15 +3490,50 @@ function renderDraftContent() {
 function renderPartsList() {
   const sg = activeSong();
   const parts = songParts(sg.id);
-  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row" data-section-id="${pt.id}" style="--sec:${pt.color}">
-      <button type="button" class="swatch" data-c="part-color" style="background-color:${pt.color}" aria-label="Change color" title="Change color"></button>
+  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row ${openPartId === pt.id ? "open" : ""}" data-section-id="${pt.id}" style="--sec:${pt.color}">
+      <span class="pdot" style="background-color:${pt.color}"></span>
       <input type="text" class="field part-name" data-part-name value="${esc(pt.name)}" aria-label="Part name">
-      <button type="button" class="tc-paste ${pt.time ? "has" : ""}" data-c="part-paste" title="Fills in the player's current position">${pt.time ? esc(pt.time) : "Click to paste"}</button>
+      <button type="button" class="tc-paste ${pt.time ? "has" : ""}" data-c="part-paste" title="Fills in the player's current position">${pt.time ? esc(pt.time) : "Set time"}</button>
       ${pt.time ? `<button type="button" class="icon-btn" data-c="part-cue" title="Play from here" aria-label="Play from here">▶</button>` : ""}
-      <span class="muted small">${pt.rows.length} shot${pt.rows.length === 1 ? "" : "s"}</span>
-      <button type="button" class="icon-btn" data-c="part-delete" aria-label="Delete part" title="Delete part">×</button>
+      <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color and delete">⋯</button>
+      <div class="part-more">
+        <button type="button" class="btn small" data-c="part-color">Change color</button>
+        <button type="button" class="btn small danger-text" data-c="part-delete">Delete section</button>
+      </div>
     </div>`).join("")
-    : `<p class="muted small" style="margin:0 0 6px">No parts yet. Add the moments in this song you want to shoot.</p>`;
+    : `<p class="muted small" style="margin:0 0 6px">No sections yet. ${audioBuffer ? "Tap Suggest sections, or add them yourself." : "Upload the track and they'll be suggested for you."}</p>`;
+  renderSuggest();
+}
+var openPartId = null;
+var suggestMap = {};
+function renderSuggest() {
+  const sg = activeSong(), box = $("suggestBox");
+  const list = sg && suggestMap[sg.id];
+  if (!list) { box.innerHTML = ""; return; }
+  box.innerHTML = list.busy ? `<p class="muted small" style="margin:0 0 10px">Listening for sections…</p>`
+    : list.items.length ? `<div class="suggest"><div class="muted small">Suggested from the track. Tap one to add it, or add them all.</div>
+      <div class="suggest-list">${list.items.map((s, i) => `<button type="button" class="btn small preset-btn" data-c="sug-add" data-i="${i}" style="--sec:${s.color}"><span class="dot"></span>${esc(s.name)} <span class="muted">${fmtTC(s.t)}</span></button>`).join("")}</div>
+      <div class="suggest-row"><button type="button" class="btn small primary" data-c="sug-all">Add all</button><button type="button" class="btn small" data-c="sug-dismiss">Dismiss</button></div></div>`
+      : `<p class="muted small" style="margin:0 0 10px">Couldn't find clear sections in this track. Add them yourself below.</p>`;
+}
+function runSuggest(auto) {
+  const sg = activeSong(), tp = curTempo();
+  if (!sg || !audioBuffer || !(tp.bpm && tp.offset != null)) return;
+  suggestMap[sg.id] = { busy: true, items: [] }; renderSuggest();
+  setTimeout(() => {
+    let items = [];
+    try { items = suggestSections(audioBuffer, tp); } catch (e) { console.error(e); }
+    suggestMap[sg.id] = { busy: false, items };
+    if (activeSong() === sg) renderSuggest();
+  }, 40);
+}
+function addSuggested(sg, s) {
+  const base = s.name.replace(/\s+\d+$/, "");
+  const preset = PART_PRESETS.find(x => x.name === base) || null;
+  const t = fmtTC(s.t);
+  if (songParts(sg.id).some(x => x.time === t)) return null;
+  const sec = addPart(sg, preset); sec.name = s.name; sec.time = t;
+  return sec;
 }
 function renderSongRefs() {
   const sg = activeSong();
@@ -3224,11 +3549,6 @@ function renderSongLinks() {
 }
 $("partPresets").innerHTML = PART_PRESETS.map((p, i) => `<button type="button" class="btn small preset-btn" data-c="add-part" data-preset="${i}" style="--sec:${p.color}"><span class="dot"></span>${p.name}</button>`).join("")
   + `<button type="button" class="btn small" data-c="add-part" data-preset="-1">+ Custom</button>`;
-$("songNameInput").addEventListener("input", e => {
-  const sg = activeSong(); if (!sg) return;
-  sg.name = e.target.value; scheduleSave();
-  $("draftSongTabs").innerHTML = songTabsHTML(true);
-});
 $("songNotes").addEventListener("input", e => { const sg = activeSong(); if (sg) { sg.notes = e.target.value; scheduleSave(); } });
 $("partsList").addEventListener("input", e => {
   if (!e.target.hasAttribute("data-part-name")) return;
@@ -3418,7 +3738,12 @@ function renderShootContent() {
 document.addEventListener("click", e => {
   if (!project) return;
   const tab = e.target.closest(".song-tab[data-song-id]");
-  if (tab) { setActiveSong(tab.dataset.songId); return; }
+  if (tab) {
+    const id = tab.dataset.songId, now = Date.now();
+    if (currentWs === "draft" && tab.closest("#draftSongTabs") && id === lastTapSong && now - lastTapAt < 450) { lastTapSong = null; startSongEdit(id); return; }
+    lastTapSong = id; lastTapAt = now;
+    setActiveSong(id); return;
+  }
   const b = e.target.closest("[data-c]");
   if (!b) return;
   const secEl = b.closest("[data-section-id]");
@@ -3428,7 +3753,7 @@ document.addEventListener("click", e => {
   switch (b.dataset.c) {
     case "add-song": {
       addSong(); scheduleSave(); renderCurrent(); loadActiveTrack();
-      setTimeout(() => { const i = $("songNameInput"); if (i && i.offsetParent) { i.focus(); i.select(); } }, 30);
+      if (currentWs === "draft") startSongEdit(activeSongId);
       break;
     }
     case "delete-song": {
@@ -3450,6 +3775,21 @@ document.addEventListener("click", e => {
       if (i < 0) { const inp = document.querySelector(`#partsList [data-section-id="${p.id}"] [data-part-name]`); if (inp) { inp.focus(); inp.select(); } }
       break;
     }
+    case "suggest": runSuggest(false); break;
+    case "sug-add": {
+      const sg = activeSong(), l = sg && suggestMap[sg.id]; if (!l) return;
+      const s = l.items[+b.dataset.i]; if (!s) return;
+      addSuggested(sg, s); l.items.splice(+b.dataset.i, 1);
+      if (!l.items.length) delete suggestMap[sg.id];
+      scheduleSave(); renderDraftContent(); break;
+    }
+    case "sug-all": {
+      const sg = activeSong(), l = sg && suggestMap[sg.id]; if (!l) return;
+      l.items.forEach(s => addSuggested(sg, s)); delete suggestMap[sg.id];
+      scheduleSave(); renderDraftContent(); drawWaveform(); break;
+    }
+    case "sug-dismiss": { const sg = activeSong(); if (sg) delete suggestMap[sg.id]; renderSuggest(); break; }
+    case "part-more": { if (!sec) return; openPartId = openPartId === sec.id ? null : sec.id; renderPartsList(); break; }
     case "part-color": { if (!sec) return; sec.color = PALETTE[(PALETTE.indexOf(sec.color) + 1) % PALETTE.length]; scheduleSave(); renderDraftContent(); break; }
     case "part-paste": { const tc = pastePlayhead(); if (tc && sec) { sec.time = tc; scheduleSave(); renderDraftContent(); } break; }
     case "part-cue": if (sec) playCue(sec.time); break;
@@ -3843,7 +4183,7 @@ async function firstRunSetup() {
 document.querySelectorAll(".sections-container").forEach(wireTableContainer);
 wireShoot();
 wireCut();
-applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+applyTheme();
 updateTransportUI();
 window.addEventListener("pagehide", () => { if (project) persistNow(); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && project) persistNow(); });
