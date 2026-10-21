@@ -1319,7 +1319,7 @@ const DEFAULT_TEMPLATES = [
   { name: "Handheld", detail: "Moving with the energy" },
   { name: "Slow-mo", detail: "60–120 fps" }
 ];
-function defaultTempo() { return { bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 2, snap: false, lead: 0 }; }
+function defaultTempo() { return { bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 2, snap: true, lead: 0 }; }
 
 /* ================= helpers ================= */
 const $ = id => document.getElementById(id);
@@ -2599,13 +2599,24 @@ function detentBetween(d, t0, t1, dur, w) {
     const pxBar = (d.bar / dur) * w;
     let stride = 1; while (pxBar * stride < 9 && stride < 16) stride *= 2;   // thin the ticks out when the song is squeezed small
     const span = d.bar * stride;
-    if (Math.floor((t0 - d.offset) / span) !== Math.floor((t1 - d.offset) / span)) return "measure";
+    if (Math.floor((t0 - d.offset) / span + 1e-6) !== Math.floor((t1 - d.offset) / span + 1e-6)) return "measure";
   }
   return null;
 }
 function wireScrub(canvas, seek, getDur) {
   let down = false, resume = false, lastT = 0, lastSeek = -1, lastFeel = 0, pendingX = null, raf = 0, det = null;
-  const timeAt = x => { const r = canvas.getBoundingClientRect(); return Math.max(0, Math.min(1, (x - r.left) / r.width)) * getDur(); };
+  // with "Snap cues to the beat" on, the playhead only rests on a measure start or a marker
+  const snapT = t => {
+    const tp = curTempo(), dur = getDur();
+    if (!(tp && tp.snap && tp.bpm > 0 && tp.offset != null)) return t;
+    const bar = (60 / tp.bpm) * 4;
+    let best = tp.offset + Math.round((t - tp.offset) / bar) * bar;
+    if (best < 0) best += bar * Math.ceil(-best / bar);
+    if (best > dur) best = Math.max(0, best - bar);
+    for (const m of waveMarkers().map(x => x.t)) if (m != null && m <= dur && Math.abs(m - t) < Math.abs(best - t)) best = m;
+    return best;
+  };
+  const timeAt = x => { const r = canvas.getBoundingClientRect(); return snapT(Math.max(0, Math.min(1, (x - r.left) / r.width)) * getDur()); };
   function apply() {
     raf = 0;
     if (pendingX == null) return;
@@ -2614,7 +2625,7 @@ function wireScrub(canvas, seek, getDur) {
     const kind = detentBetween(det, lastT, t, dur, w);
     if (kind) { const now = performance.now(); if (now - lastFeel > 28) { feel(kind); lastFeel = now; } }
     lastT = t;
-    if (Math.abs(t - lastSeek) * w / dur >= 1) { lastSeek = t; seek(t); }
+    if (t !== lastSeek) { lastSeek = t; seek(t); }
   }
   canvas.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
