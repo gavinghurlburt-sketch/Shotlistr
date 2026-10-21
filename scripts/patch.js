@@ -91,6 +91,22 @@ const js = `<script id="ios-bridge">
 </script>`;
 replaceOnce("bridge", "</head>", js + "\n</head>");
 
+// 6b. Cloud accounts + sync: rename the local storage functions, then layer the cloud versions on top
+const SB_URL = "https://anuybnbilfjthbhsxhdk.supabase.co";
+const SB_KEY = "sb_publishable_xVAAW9qGTzEXDptnhK83SA_NTnbC3oj"; // public (publishable) key, safe to ship
+const renames = { listProjects: "_localListProjects", getProjectRecord: "_localGetProjectRecord", putProjectRecord: "_localPutProjectRecord", deleteProjectRecord: "_localDeleteProjectRecord", saveTrack: "_localSaveTrack", loadTrack: "_localLoadTrack", clearTrack: "_localClearTrack" };
+Object.keys(renames).forEach(k => replaceOnce("rename " + k, "async function " + k + "(", "async function " + renames[k] + "("));
+const clearRe = /async function _localClearTrack\(projectId\) \{[\s\S]*?\n\}\n/;
+must("clearTrack end", clearRe.test(h));
+const cloud = fs.readFileSync("scripts/cloud.js", "utf8").replace("__SB_URL__", SB_URL).replace("__SB_KEY__", SB_KEY);
+must("cloud.js has no script end tag", !/<\/script/i.test(cloud));
+h = h.replace(clearRe, m => m + "\n" + cloud + "\n");
+const lib = fs.readFileSync("scripts/supabase.bundle.js", "utf8");
+must("bundle has no script end tag", !/<\/script/i.test(lib));
+replaceOnce("supabase lib", "</head>", "<script id=\"supabase-lib\">" + lib + "</script>\n</head>");
+replaceOnce("account button", '<button id="themeToggle" class="btn small">Dark mode</button>', '<span id="cloudStatus" class="small"></span><button id="accountBtn" class="btn small">Sign in</button><button id="themeToggle" class="btn small">Dark mode</button>');
+replaceOnce("account modal", "</header>", "</header>\n" + fs.readFileSync("scripts/account.html", "utf8"));
+
 // 7. Sanity: every inline script still parses
 const re = /<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g; let m, n = 0;
 while ((m = re.exec(h))) { try { new Function(m[1]); n++; } catch (e) { console.error("SCRIPT SYNTAX ERROR in block " + n + ": " + e.message); process.exit(1); } }

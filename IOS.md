@@ -15,12 +15,24 @@ Xcode: App target > Signing & Capabilities > pick your team. Run on a device or 
 1. In Xcode set the version and build number, then Product > Archive > Distribute App > App Store Connect.
 2. App Store Connect: create the app with bundle ID `art.gavingeddes.producrr`.
 3. Needed before submitting: screenshots (iPhone 6.9" and iPad 13", since the app supports iPad), description, support URL, privacy policy URL, age rating.
-4. App Privacy: all project data stays on the device (IndexedDB), no accounts, no network calls, so answer "Data Not Collected".
+4. App Privacy: the app now has optional accounts. Answer "Data Linked to You" for Contact Info (email) and User Content (projects, images, audio), used for App Functionality only, no tracking.
 5. Export compliance is already answered in Info.plist (no non-exempt encryption).
-6. Review notes: say it works offline and no login is needed; include a sample project or tell the reviewer to tap the example project so they see real content (Apple rejects thin-looking wrappers).
+6. Review notes: say accounts are optional (Account button, top right) and the app works fully without one; give Apple a demo login (make a test account first); the example projects show real content (Apple rejects thin-looking wrappers).
+7. Apple also requires a privacy policy URL that mentions the account email and stored projects/tracks, and in-app account deletion (done: Account > Delete account).
 
 ## Not testable without a device
 Share sheet export (CSV, backup JSON), native print of schedule/call sheet, haptics, and click-track audio with the ring switch on silent.
 
 ## Heads up
 Data in the app lives in the app's own storage, separate from Safari/PWA data. Use Backup (export JSON) in the web version and Import in the app to move a project over.
+
+## Accounts and sync (Supabase project "Creatrr", ref anuybnbilfjthbhsxhdk)
+Optional email + password accounts. Data stays local-first (IndexedDB) and syncs to Supabase when signed in: projects in `producrr_projects`, audio in the private `tracks` bucket (50 MB per file limit), every row locked to its owner by row-level security. Setup SQL: `supabase/producrr_cloud_sync.sql` (already applied). Local projects are adopted into the account on first sign-in; signing out clears this device's copy.
+
+Do these in the Supabase dashboard (Authentication) before launch:
+1. **Email templates**: add the 6-digit code to the Confirm signup and Reset password emails with `{{ .Token }}`, since the app asks for the code (links would open a web page, not the app).
+2. **SMTP**: the built-in email sender allows only a few emails per hour. Set up custom SMTP (Resend, Postmark) or signups will fail once you have users.
+3. For quick testing you can turn **Confirm email** off under Providers > Email.
+4. Turn on **Leaked password protection** if your plan allows.
+
+Not synced yet: deleting an audio track on one device does not remove it on another; files over 50 MB stay on the device only.

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "mkdir -p www && cp index.html www/index.html && node scripts/patch.js",
+    "build": "mkdir -p www && cp index.html www/index.html && esbuild scripts/supabase-entry.js --bundle --minify --format=iife --outfile=scripts/supabase.bundle.js --log-level=warning && node scripts/patch.js",
     "sync": "npm run build && npx cap sync ios"
   },
   "dependencies": {
@@ -13,6 +13,10 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.3",
     "@capacitor/share": "^8.0.3",
-    "@capgo/capacitor-printer": "^8.1.8"
+    "@capgo/capacitor-printer": "^8.1.8",
+    "@supabase/supabase-js": "^2.118.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

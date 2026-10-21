@@ -1,0 +1,30 @@
+<div id="accountModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>Account</h3>
+    <div id="acctSignedOut">
+      <p class="modal-hint">Sign in to keep your projects and tracks in your account and open them on any device.</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px"><button type="button" id="acctTabIn" class="btn small primary">Sign in</button><button type="button" id="acctTabUp" class="btn small">Create account</button></div>
+      <input type="email" id="acctEmail" class="field" style="width:100%;margin-bottom:8px" placeholder="Email" autocomplete="email" autocapitalize="none" autocorrect="off">
+      <input type="password" id="acctPass" class="field" style="width:100%" placeholder="Password" autocomplete="current-password">
+      <div class="modal-actions"><button type="button" id="acctForgot" class="btn small">Forgot password</button><button type="button" id="acctSubmit" class="btn primary">Sign in</button></div>
+      <div class="modal-actions"><button type="button" id="acctSkip" class="btn small">Keep using without an account</button><span></span></div>
+    </div>
+    <div id="acctCode" class="hidden">
+      <p class="modal-hint">Enter the 6-digit code from the email.</p>
+      <input type="text" id="acctCodeInput" class="field" style="width:100%" inputmode="numeric" maxlength="8" placeholder="123456" autocomplete="one-time-code">
+      <div class="modal-actions"><span></span><button type="button" id="acctCodeGo" class="btn primary">Continue</button></div>
+    </div>
+    <div id="acctReset" class="hidden">
+      <input type="password" id="acctNewPass" class="field" style="width:100%" placeholder="New password" autocomplete="new-password">
+      <div class="modal-actions"><span></span><button type="button" id="acctNewPassGo" class="btn primary">Save password</button></div>
+    </div>
+    <div id="acctSignedIn" class="hidden">
+      <p id="acctEmailLine" style="margin:0 0 4px;font-weight:600"></p>
+      <p id="acctSyncLine" class="modal-hint"></p>
+      <div class="modal-actions"><button type="button" id="acctSyncNow" class="btn small">Sync now</button><button type="button" id="acctSignOut" class="btn small">Sign out</button></div>
+      <div class="modal-actions"><button type="button" id="acctDelete" class="btn small">Delete account</button><button type="button" id="acctDone" class="btn">Done</button></div>
+    </div>
+    <p id="acctMsg" class="muted small" style="margin:10px 0 0;min-height:1em"></p>
+    <div class="modal-actions" style="margin-top:6px"><span></span><button type="button" id="acctClose" class="btn small">Close</button></div>
+  </div>
+</div>
