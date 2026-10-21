@@ -167,7 +167,9 @@ async function wipeLocal() {
 /* ---- account UI ---- */
 function paintCloud() {
   const btn = $("accountBtn"); if (!btn) return;
-  btn.textContent = cloudUser ? (cloudUser.email || "Account") : "Sign in";
+  btn.textContent = cloudUser ? String(cloudUser.email || "A").trim().charAt(0).toUpperCase() : "Sign in";
+  btn.classList.toggle("signed", !!cloudUser);
+  btn.title = cloudUser ? (cloudUser.email || "Account") : "Sign in";
   const pending = qLoad().length;
   const st = $("cloudStatus");
   if (st) st.textContent = !cloudUser ? "" : (cloudMsg || (pending ? pending + " change" + (pending === 1 ? "" : "s") + " waiting to sync" : "Synced"));

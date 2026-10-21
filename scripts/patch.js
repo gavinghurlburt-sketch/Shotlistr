@@ -42,9 +42,6 @@ html{-webkit-text-size-adjust:100%;touch-action:manipulation;}
 input,select,textarea{font-size:16px;}
 button,.btn{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
 button:active,.btn:active{transform:scale(.97);opacity:.85;}
-.btn{min-height:40px;}
-.modal{padding-top:max(20px,env(safe-area-inset-top));padding-bottom:max(20px,env(safe-area-inset-bottom));padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right));}
-main{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));}
 @media (hover:none){button:hover,.btn:hover{filter:none;}}
 </style>`;
 replaceOnce("css", "</head>", css + "\n</head>");
@@ -59,10 +56,30 @@ const js = `<script id="ios-bridge">
   document.addEventListener("touchend", function(e){ var n = Date.now(); if (n - last < 300) e.preventDefault(); last = n; }, {passive:false});
   // click track / cue player must sound with the ring switch on silent
   try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch(e){}
-  // haptics on buttons
+  // haptics
+  var H = P("Haptics");
+  function hap(kind){
+    try { if (!H) return;
+      if (kind === "marker") H.impact({style:"HEAVY"});
+      else if (kind === "measure") H.impact({style:"LIGHT"});
+      else if (kind === "primary") H.impact({style:"MEDIUM"});
+      else if (kind === "success") H.notification({type:"SUCCESS"});
+      else if (kind === "select") H.selectionChanged();
+      else H.impact({style:"LIGHT"}); } catch(err){}
+  }
+  window.nativeHaptic = hap;
+  var TAP = "button,.btn,[role=button],.project-card-main,.loc-chip,.tg-block,.tile,.part-chip,.song-tab,.take-pill,.take-btn,.swatch,.board-card,.type-choice,.ws-tab,.vb-item,.ref-thumb,.subtab,summary,label.chk";
   document.addEventListener("pointerdown", function(e){
-    try { var b = e.target.closest && e.target.closest("button,.btn"); if (!b) return;
-      var H = P("Haptics"); if (H) H.impact({style: b.classList.contains("primary") ? "MEDIUM" : "LIGHT"}); } catch(err){}
+    try { var b = e.target.closest && e.target.closest(TAP); if (!b || b.disabled) return;
+      if (b.closest("canvas")) return;
+      if (b.getAttribute && b.getAttribute("data-action") === "toggle-done") return;   // gets its own success buzz on click
+      hap(b.classList.contains("primary") ? "primary" : "light"); } catch(err){}
+  }, true);
+  document.addEventListener("click", function(e){
+    try { var d = e.target.closest && e.target.closest('[data-action="toggle-done"]'); if (d) hap("success"); } catch(err){}
+  }, true);
+  document.addEventListener("change", function(e){
+    try { var t = e.target; if (t && (t.tagName === "SELECT" || (t.tagName === "INPUT" && (t.type === "checkbox" || t.type === "radio")))) hap("select"); } catch(err){}
   }, true);
   // save / share a generated file
   window.nativeSaveBlob = function(blob, name){

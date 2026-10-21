@@ -49,8 +49,8 @@ class ViewController: CAPBridgeViewController {
         webView?.scrollView.bounces = true
         webView?.scrollView.alwaysBounceVertical = true
         let bg = UIColor { t in t.userInterfaceStyle == .dark
-            ? UIColor(red: 0x0E/255.0, green: 0x10/255.0, blue: 0x14/255.0, alpha: 1)
-            : UIColor(red: 0xF3/255.0, green: 0xF4/255.0, blue: 0xF6/255.0, alpha: 1) }
+            ? UIColor(red: 0x12/255.0, green: 0x12/255.0, blue: 0x12/255.0, alpha: 1)
+            : UIColor(red: 0xF5/255.0, green: 0xF3/255.0, blue: 0xEF/255.0, alpha: 1) }
         view.backgroundColor = bg
         webView?.isOpaque = false
         webView?.backgroundColor = bg
