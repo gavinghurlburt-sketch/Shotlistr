@@ -909,6 +909,27 @@ details.more > :not(summary) { margin-top: 8px; }
 .banner-img { position: absolute; inset: 0; background: linear-gradient(145deg, var(--c1, #888), var(--c2, #555)) center / cover no-repeat; }
 .banner.has-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.35), transparent 55%); pointer-events: none; }
 .banner > .btn { position: absolute; right: 12px; bottom: 12px; z-index: 2; background-color: var(--pill); color: var(--text); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.banner > #bannerInfo { right: auto; left: 12px; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 4px; }
+.detail-grid label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.detail-grid .field { width: 100%; min-width: 0; font-weight: 400; color: var(--text); }
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
+.chip-row:empty { display: none; }
+.cal { background-color: var(--surface); border-radius: 24px; padding: 12px 12px 8px; margin: 12px 0 10px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-head b { font-size: 16px; letter-spacing: -0.02em; }
+.cal-head button { width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; font-size: 18px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.cal-dow { font-size: 11px; color: var(--muted); font-weight: 600; padding: 2px 0 4px; }
+.cal-day { position: relative; min-height: 0; height: 34px; padding: 0; border-radius: 12px; background-color: transparent; font-size: 14px; font-weight: 500; color: var(--text); }
+.cal-day:hover { background-color: var(--surface-2); }
+.cal-day.today { box-shadow: inset 0 0 0 1.5px var(--muted); }
+.cal-day.sel { background-color: var(--primary-bg); color: var(--primary-fg); }
+.cal-day.has::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background-color: var(--accent); }
+.cal-day.sel.has::after { background-color: var(--accent-fg); }
+.cal-day.empty { visibility: hidden; }
+.pl-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 4px 2px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pl-head .btn { text-transform: none; letter-spacing: 0; }
 .cover.img { background: center / cover no-repeat; }
 /* swipe to delete */
 .projects-list { gap: 10px; }
@@ -917,6 +938,8 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-wrap .project-card.dragging { transition: none; }
 .pc-del { position: absolute; top: 0; right: 0; bottom: 0; width: 96px; min-height: 0; border-radius: 0; background-color: var(--danger); color: #fff; font-weight: 700; font-size: 15px; z-index: 0; }
 .pc-del:hover { background-color: var(--danger); }
+.pc-del { opacity: 0; }
+.pc-wrap.rv .pc-del { opacity: 1; }
 /* sheets, toast */
 .modal { background-color: rgba(0,0,0,.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 .modal-inner { background-color: var(--surface); border-radius: 28px; padding: 24px; }
@@ -951,7 +974,7 @@ details.more > :not(summary) { margin-top: 8px; }
 <header class="appbar">
   <div class="appbar-top">
     <span class="brand">creatrr</span>
-    <button id="backToProjectsBtn" class="btn small hidden">← Artists</button>
+    <button id="backToProjectsBtn" class="btn small hidden">← Projects</button>
     <input type="text" id="docTitleInput" class="doc-title hidden" placeholder="Untitled project" aria-label="Project title">
     <span class="spacer"></span>
     <span id="saveStatus" class="small"></span>
@@ -968,18 +991,21 @@ details.more > :not(summary) { margin-top: 8px; }
 <main>
 <div id="projectBanner" class="banner hidden">
   <div class="banner-img" id="bannerImg"></div>
+  <button type="button" id="bannerInfo" class="btn small">Add artist and date</button>
   <button type="button" id="bannerBtn" class="btn small">Add photo</button>
   <input type="file" id="bannerFile" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden>
 </div>
   <!-- ===== projects ===== -->
   <section id="projectsView">
     <div class="projects-wrap">
-      <h1 class="projects-title">Artists</h1>
-      <p class="muted">Each artist keeps their own shots, references, tracks, schedule and takes. Everything is saved in this browser.</p>
+      <h1 class="projects-title">Projects</h1>
+      <p class="muted">Each project keeps its own shots, references, tracks, schedule and takes. Everything is saved in this browser.</p>
       <div class="row-flex">
         <button id="newBtn" class="btn primary">New…</button>
       </div>
       <input type="file" id="importProjectInput" accept=".json,application/json" hidden>
+      <div id="calCard" class="cal"></div>
+      <div id="artistChips" class="chip-row"></div>
       <div id="projectsStatus" class="muted small" style="margin-top:8px"></div>
       <div id="projectsList" class="projects-list"></div>
     </div>
@@ -1165,7 +1191,7 @@ details.more > :not(summary) { margin-top: 8px; }
 
   <!-- ===== content shoot: draft ===== -->
   <section id="draftCView" class="ws-view hidden">
-    <p class="ws-intro">Add each song, mark the parts you want to shoot, and collect reference shots and links. Every shot in a part starts from that part's time. Shot templates live in Plan.</p>
+    <p class="ws-intro">You can upload and store all your artist songs here. Mark the sections you want to shoot, and collect reference shots and links. Shot templates live in Plan.</p>
     <div id="draftSongTabs" class="song-tabs"></div>
     <div id="draftSongEmpty" class="panel hidden">
       <p style="margin-top:0">Start with the first song — you'll upload its track right after.</p>
@@ -1283,11 +1309,26 @@ details.more > :not(summary) { margin-top: 8px; }
     <h3>New</h3>
     <p class="modal-hint">Name it (you can change this later), then pick what kind of shoot it is.</p>
     <input type="text" id="newProjectName" class="field" style="width:100%" placeholder="e.g. Smalljoy fall campaign">
+    <div class="detail-grid">
+      <label>Artist <input type="text" id="newArtist" class="field" list="artistList" placeholder="Who is it for?" autocapitalize="words"></label>
+      <label>Shoot date <input type="date" id="newShootDate" class="field"></label>
+    </div>
+    <datalist id="artistList"></datalist>
     <div class="type-choices">
       <button type="button" class="type-choice" data-type="production"><strong>Video production</strong><span>One song. Locations and setups, a timed schedule, a call sheet, and a live on-set tracker.</span></button>
       <button type="button" class="type-choice" data-type="content"><strong>Content shoot</strong><span>Several songs. Mark the parts you want, stamp shot templates on every part, and get lots of coverage fast.</span></button>
     </div>
     <div class="modal-actions"><span></span><button type="button" id="closeNewBtn" class="btn">Cancel</button></div>
+  </div>
+</div>
+<div id="detailsModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>Project details</h3>
+    <div class="detail-grid">
+      <label>Artist <input type="text" id="detArtist" class="field" list="artistList" placeholder="Who is it for?" autocapitalize="words"></label>
+      <label>Shoot date <input type="date" id="detDate" class="field"></label>
+    </div>
+    <div class="modal-actions"><button type="button" id="detClear" class="btn small">Clear date</button><button type="button" id="detDone" class="btn primary">Done</button></div>
   </div>
 </div>
 <div id="columnsModal" class="modal hidden">
@@ -1518,6 +1559,8 @@ function normalizeRecord(rec) {
   const p = Object.assign({}, rec);
   p.docTitle = p.docTitle || "Untitled project";
   p.cover = typeof p.cover === "string" ? p.cover : "";
+  p.artist = typeof p.artist === "string" ? p.artist.trim() : "";
+  p.shootDate = /^\d{4}-\d{2}-\d{2}$/.test(p.shootDate || "") ? p.shootDate : "";
   p.type = p.type === "content" ? "content" : "production";
   const secs = Array.isArray(p.sections) && p.sections.length ? p.sections : (p.type === "content" ? [] : [defaultSection("Unsorted", 0)]);
   p.sections = secs.map((s, i) => ({
@@ -3297,35 +3340,83 @@ function coverStyle(id) {
   const a = h % 360;
   return `--c1:hsl(${a} 70% 76%);--c2:hsl(${(a + 42) % 360} 60% 52%)`;
 }
-async function renderProjectsList() {
-  const list = $("projectsList");
-  let projects = [];
-  try { projects = await listProjects(); }
-  catch (e) { list.innerHTML = ""; $("projectsStatus").textContent = "This browser is blocking the storage Producrr needs. Private browsing modes often do this."; return; }
-  projects.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  if (!projects.length) { list.innerHTML = `<div class="projects-empty">No artists yet. Start one with New…</div>`; return; }
-  list.innerHTML = projects.map(p => {
-    const n = countShots(p);
-    const kind = p.type === "content" ? `Content shoot · ${(p.songs || []).length} song${(p.songs || []).length === 1 ? "" : "s"}` : "Video production";
-    return `<div class="pc-wrap">
+var calMonth = (function () { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
+var calSel = null, artistFilter = null;
+function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function dayLabel(s, weekday) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, weekday ? { weekday: "short", month: "short", day: "numeric" } : { month: "short", day: "numeric" }); }
+function renderCalendar(projects) {
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), lead = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate(), today = ymd(new Date());
+  const has = new Set(projects.map(p => p.shootDate).filter(Boolean));
+  let cells = "";
+  for (let i = 0; i < lead; i++) cells += `<span class="cal-day empty"></span>`;
+  for (let d = 1; d <= days; d++) {
+    const s = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    cells += `<button type="button" class="cal-day ${has.has(s) ? "has" : ""} ${s === today ? "today" : ""} ${s === calSel ? "sel" : ""}" data-day="${s}">${d}</button>`;
+  }
+  $("calCard").innerHTML = `<div class="cal-head"><button type="button" data-cal="-1" aria-label="Previous month">‹</button><b>${calMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</b><button type="button" data-cal="1" aria-label="Next month">›</button></div>
+    <div class="cal-grid">${["S", "M", "T", "W", "T", "F", "S"].map(x => `<span class="cal-dow">${x}</span>`).join("")}${cells}</div>`;
+}
+function projectCardHTML(p) {
+  const n = countShots(p);
+  const kind = p.type === "content" ? `Content shoot · ${(p.songs || []).length} song${(p.songs || []).length === 1 ? "" : "s"}` : "Video production";
+  const bits = [p.shootDate ? dayLabel(p.shootDate, true) : "", p.artist, kind, `${n} shot${n === 1 ? "" : "s"}`].filter(Boolean).map(esc).join(" · ");
+  return `<div class="pc-wrap">
       <button type="button" class="pc-del" data-delete-id="${p.id}">Delete</button>
       <div class="project-card">
       <div class="project-card-main" data-open-id="${p.id}" role="button" tabindex="0">
         <div class="cover ${p.cover ? "img" : ""}" style="${coverStyle(p.id)}${p.cover ? `;background-image:url(${p.cover})` : ""}"></div>
         <div class="pc-text">
           <div class="project-card-name">${esc(p.docTitle || "Untitled project")}</div>
-          <div class="muted small">${kind} · ${n} shot${n === 1 ? "" : "s"} · in ${WS_LABEL[p.workspace] || "Draft"} · edited ${relativeTime(p.updatedAt)}</div>
+          <div class="muted small">${bits}</div>
         </div>
       </div>
       </div>
     </div>`;
-  }).join("");
 }
+async function renderProjectsList() {
+  const list = $("projectsList");
+  let all = [];
+  try { all = await listProjects(); }
+  catch (e) { list.innerHTML = ""; $("projectsStatus").textContent = "This browser is blocking the storage Producrr needs. Private browsing modes often do this."; return; }
+  const artists = Array.from(new Set(all.map(p => p.artist).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  if (artistFilter && !artists.includes(artistFilter)) artistFilter = null;
+  $("artistList").innerHTML = artists.map(a => `<option value="${esc(a)}"></option>`).join("");
+  $("artistChips").innerHTML = artists.length ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
+  const projects = all.filter(p => !artistFilter || p.artist === artistFilter);
+  renderCalendar(projects);
+  if (!all.length) { list.innerHTML = `<div class="projects-empty">No projects yet. Start one with New…</div>`; return; }
+  const today = ymd(new Date());
+  const byDate = (a, b) => (a.shootDate || "").localeCompare(b.shootDate || "") || new Date(b.updatedAt) - new Date(a.updatedAt);
+  let html = "";
+  if (calSel) {
+    const day = projects.filter(p => p.shootDate === calSel);
+    html += `<div class="pl-head"><span>${esc(dayLabel(calSel, true))}</span><button type="button" class="btn small" data-day-clear="1">Show all</button></div>`;
+    html += day.length ? day.map(projectCardHTML).join("") : `<div class="projects-empty">Nothing shooting that day.</div>`;
+  } else {
+    const upcoming = projects.filter(p => p.shootDate && p.shootDate >= today).sort(byDate);
+    const none = projects.filter(p => !p.shootDate).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const past = projects.filter(p => p.shootDate && p.shootDate < today).sort((a, b) => byDate(b, a));
+    if (upcoming.length) html += `<div class="pl-head"><span>Upcoming</span></div>` + upcoming.map(projectCardHTML).join("");
+    if (none.length) html += `<div class="pl-head"><span>${upcoming.length || past.length ? "No shoot date yet" : "Projects"}</span></div>` + none.map(projectCardHTML).join("");
+    if (past.length) html += `<div class="pl-head"><span>Past</span></div>` + past.map(projectCardHTML).join("");
+    if (!projects.length) html = `<div class="projects-empty">No projects for ${esc(artistFilter || "this filter")}.</div>`;
+  }
+  list.innerHTML = html;
+}
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-cal]");
+  if (c) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (+c.dataset.cal), 1); renderProjectsList(); return; }
+  const d = e.target.closest("[data-day]");
+  if (d) { calSel = calSel === d.dataset.day ? null : d.dataset.day; renderProjectsList(); return; }
+  if (e.target.closest("[data-day-clear]")) { calSel = null; renderProjectsList(); return; }
+  const a = e.target.closest("[data-artist]");
+  if (a) { artistFilter = a.dataset.artist || null; renderProjectsList(); }
+});
 /* swipe a project card left to reveal a red Delete, like Mail */
 var swipeMoved = false;
 const DEL_W = 96;
 function closeSwipedCards(except) {
-  document.querySelectorAll("#projectsList .project-card.open").forEach(c => { if (c !== except) { c.classList.remove("open"); c.style.transform = ""; } });
+  document.querySelectorAll("#projectsList .project-card.open").forEach(c => { if (c !== except) { c.classList.remove("open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
 }
 (function () {
   const list = $("projectsList");
@@ -3343,7 +3434,7 @@ function closeSwipedCards(except) {
     if (!live) {
       if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { card = null; return; }
       if (Math.abs(mx) < 8) return;
-      live = true; swipeMoved = true; card.classList.add("dragging");
+      live = true; swipeMoved = true; card.classList.add("dragging"); card.parentElement.classList.add("rv");
       try { card.setPointerCapture(id); } catch (x) {}
     }
     dx = Math.max(-(window.innerWidth), Math.min(0, base + mx));
@@ -3358,6 +3449,7 @@ function closeSwipedCards(except) {
     const v = Math.abs(dx - base) / Math.max(1, Date.now() - t0);
     const open = !cancelled && (dx < -DEL_W / 2 || (v > 0.5 && dx < base));
     c.classList.toggle("open", open);
+    if (!open) setTimeout(() => { if (!c.classList.contains("open")) c.parentElement.classList.remove("rv"); }, 260);
     c.style.transform = open ? `translate3d(${-DEL_W}px,0,0)` : "";
     if (open) { try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {} }
     setTimeout(() => { swipeMoved = false; }, 60);
@@ -3382,22 +3474,22 @@ $("projectsList").addEventListener("click", async e => {
   }
 });
 $("projectsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.openId) openProject(e.target.dataset.openId); });
-async function createProject(name, type) {
+async function createProject(name, type, artist, date) {
   const now = new Date().toISOString();
-  const base = { id: uid(), type, docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
+  const base = { id: uid(), type, artist: artist || "", shootDate: date || "", docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
   if (type === "production") base.sections = [defaultSection("Unsorted", 0)];
   const rec = normalizeRecord(base);
   await putProjectRecord(rec);
   await openProject(rec.id);
 }
-$("newBtn").addEventListener("click", () => { $("newProjectName").value = ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); });
+$("newBtn").addEventListener("click", () => { $("newProjectName").value = ""; $("newArtist").value = artistFilter || ""; $("newShootDate").value = calSel || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
 $("newModal").addEventListener("click", e => {
   if (e.target.id === "newModal") { $("newModal").classList.add("hidden"); return; }
   const b = e.target.closest("[data-type]");
   if (!b) return;
   $("newModal").classList.add("hidden");
-  createProject($("newProjectName").value.trim(), b.dataset.type);
+  createProject($("newProjectName").value.trim(), b.dataset.type, $("newArtist").value.trim(), $("newShootDate").value);
 });
 $("importProjectInput").addEventListener("change", async e => {
   const f = e.target.files[0];
@@ -3408,7 +3500,7 @@ $("importProjectInput").addEventListener("change", async e => {
     const now = new Date().toISOString();
     await putProjectRecord(normalizeRecord(Object.assign({}, rec, { id: uid(), createdAt: now, updatedAt: now, docTitle: rec.docTitle || "Imported project" })));
     await renderProjectsList();
-    $("projectsStatus").textContent = "Imported as a new artist."; ["settingsModal", "accountModal"].forEach(m => { const el = $(m); if (el) el.classList.add("hidden"); });
+    $("projectsStatus").textContent = "Imported as a new project."; ["settingsModal", "accountModal"].forEach(m => { const el = $(m); if (el) el.classList.add("hidden"); });
   } catch (err) { $("projectsStatus").textContent = "That file isn't a Producrr backup."; }
 });
 async function loadActiveTrack() {
@@ -3584,8 +3676,20 @@ function renderBanner() {
   b.setAttribute("style", coverStyle(project.id));
   $("bannerImg").style.backgroundImage = project.cover ? `url(${project.cover})` : "";
   $("bannerBtn").textContent = project.cover ? "Change photo" : "Add photo";
+  const info = [project.artist, project.shootDate ? dayLabel(project.shootDate, true) : ""].filter(Boolean).join(" · ");
+  $("bannerInfo").textContent = info || "Add artist and date";
 }
 $("bannerBtn").addEventListener("click", () => $("bannerFile").click());
+$("bannerInfo").addEventListener("click", () => {
+  if (!project) return;
+  $("detArtist").value = project.artist || ""; $("detDate").value = project.shootDate || "";
+  $("detailsModal").classList.remove("hidden");
+});
+$("detArtist").addEventListener("input", e => { if (project) { project.artist = e.target.value.trim(); scheduleSave(); renderBanner(); } });
+$("detDate").addEventListener("change", e => { if (project) { project.shootDate = e.target.value; scheduleSave(); renderBanner(); } });
+$("detClear").addEventListener("click", () => { if (project) { project.shootDate = ""; $("detDate").value = ""; scheduleSave(); renderBanner(); } });
+$("detDone").addEventListener("click", () => $("detailsModal").classList.add("hidden"));
+$("detailsModal").addEventListener("click", e => { if (e.target === $("detailsModal")) $("detailsModal").classList.add("hidden"); });
 $("bannerFile").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f || !project) return;
