@@ -638,7 +638,7 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-meta { margin-left: auto; font-size: 12px; color: var(--muted); }
 .pc-chev { width: 9px; height: 9px; margin: 0 4px 0 4px; border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted); transform: rotate(-45deg); transition: transform .2s ease; flex: 0 0 auto; }
 .part-card.open .pc-chev { transform: rotate(45deg) translate(-2px, -2px); }
-.song-titles { display: flex; align-items: baseline; gap: 18px; overflow: hidden; touch-action: pan-y; -webkit-user-select: none; user-select: none; white-space: nowrap; margin: 6px 0 4px; perspective: 520px; }
+.song-titles { display: flex; align-items: baseline; gap: 0; overflow: hidden; touch-action: pan-y; -webkit-user-select: none; user-select: none; white-space: nowrap; margin: 6px 0 4px; perspective: 520px; }
 .song-titles::before, .song-titles::after { content: ""; flex: 0 0 38%; }
 @keyframes cardDrop { from { opacity: 0; transform: translateY(-22px); } to { opacity: 1; transform: none; } }
 .part-card.drop { animation: cardDrop .65s cubic-bezier(.2,.8,.2,1) both; }
@@ -647,6 +647,10 @@ table.sched tr.done-row td { background-color: var(--done); }
 .song-titles .st.before { transform: translateZ(-60px) rotateY(32deg); transform-origin: right center; -webkit-mask-image: linear-gradient(to right, #000 15%, transparent 100%); mask-image: linear-gradient(to right, #000 15%, transparent 100%); }
 .song-titles .st.after { transform: translateZ(-60px) rotateY(-32deg); transform-origin: left center; -webkit-mask-image: linear-gradient(to left, #000 15%, transparent 100%); mask-image: linear-gradient(to left, #000 15%, transparent 100%); }
 .song-titles .st:active { transform: none; }
+.song-titles .st.before, .song-titles .st.after { font-size: calc(24px - (var(--d, 1) - 1) * 4px); opacity: max(.1, calc(.62 - (var(--d, 1) - 1) * .2)); }
+.song-titles .st.before { margin-right: -30px; padding-right: 0; }
+.song-titles .st.after { margin-left: -30px; }
+.song-titles .st.on { position: relative; z-index: 3; padding: 0 4px; }
 .song-titles .st:hover { background: none; }
 .song-titles .st.on { color: var(--text); opacity: 1; -webkit-mask-image: none; mask-image: none; font-size: 36px; letter-spacing: -0.045em; transform: none; }
 .shoot-date { font-size: 14px; margin: 0 0 12px; }
@@ -790,9 +794,13 @@ button:disabled { opacity: .4; }
 .ws-tabs { position: relative; }
 .appbar .ws-tabs .ws-tab, .appbar .ws-tabs .ws-tab:hover, .appbar .ws-tabs .ws-tab:active { background-color: transparent; }
 .ws-tab { position: relative; z-index: 1; -webkit-tap-highlight-color: transparent; transition: color .3s ease; }
-.ws-ind { position: absolute; top: 5px; bottom: 5px; left: 0; width: 0; border-radius: 999px; background-color: var(--primary-bg); z-index: 0; pointer-events: none; will-change: transform, width; }
+.ws-ind { position: absolute; top: 5px; bottom: 5px; left: 0; width: 0; border-radius: 999px; z-index: 0; pointer-events: none; will-change: transform, width;
+  background: rgba(150,150,155,.34); background: color-mix(in srgb, var(--text) 17%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.9) brightness(1.12); backdrop-filter: blur(10px) saturate(1.9) brightness(1.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(255,255,255,.12), inset 0 0 0 1px rgba(255,255,255,.18), 0 3px 12px rgba(0,0,0,.22);
+  background-image: linear-gradient(to bottom, rgba(255,255,255,.28), rgba(255,255,255,0) 55%); }
 .ws-ind.anim { transition: transform .38s cubic-bezier(.2,.8,.2,1), width .38s cubic-bezier(.2,.8,.2,1); }
-.ws-tabs .ws-tab.active, .ws-tabs .ws-tab.active:hover { background-color: transparent; color: var(--primary-fg); }
+.ws-tabs .ws-tab.active, .ws-tabs .ws-tab.active:hover { background-color: transparent; color: var(--text); }
 .ws-num { display: none; }
 
 /* layout + cards */
@@ -4728,7 +4736,7 @@ function paintSongTitles() {
   const box = $("shootSongTabs"), songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
   const same = box.children.length === songs.length && songs.every((x, i) => box.children[i].dataset.songId === x.id && box.children[i].textContent === x.name);
   if (!same) box.innerHTML = songs.map(sg => `<button type="button" class="st" data-song-id="${sg.id}">${esc(sg.name)}</button>`).join("");
-  [...box.children].forEach((el, i) => { el.classList.toggle("on", i === ai); el.classList.toggle("before", i < ai); el.classList.toggle("after", i > ai); });
+  [...box.children].forEach((el, i) => { el.classList.toggle("on", i === ai); el.classList.toggle("before", i < ai); el.classList.toggle("after", i > ai); el.style.setProperty("--d", Math.abs(i - ai)); });
   const center = () => { const el = box.children[ai]; if (el) box.scrollLeft = el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2; };
   cancelAnimationFrame(stFollow);
   const t0 = performance.now();
