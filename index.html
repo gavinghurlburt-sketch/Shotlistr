@@ -646,22 +646,15 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-meta { margin-left: auto; font-size: 12px; color: var(--muted); }
 .pc-chev { width: 9px; height: 9px; margin: 0 4px 0 4px; border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted); transform: rotate(-45deg); transition: transform .2s ease; flex: 0 0 auto; }
 .part-card.open .pc-chev { transform: rotate(45deg) translate(-2px, -2px); }
-.song-titles { display: flex; align-items: center; height: 54px; gap: 0; overflow: hidden; touch-action: pan-y; -webkit-user-select: none; user-select: none; white-space: nowrap; margin: 6px 0 4px; perspective: 520px; }
-.song-titles::before, .song-titles::after { content: ""; flex: 0 0 38%; }
+.song-titles { position: relative; height: 54px; overflow: hidden; touch-action: pan-y; -webkit-user-select: none; user-select: none; margin: 6px 0 4px; perspective: 520px; }
+.song-titles .st { position: absolute; left: 50%; top: 50%; white-space: nowrap; background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; font-size: 36px; line-height: 1.1; font-weight: 800; letter-spacing: -0.045em; color: var(--muted); opacity: .5; transition: transform .42s cubic-bezier(.2,.8,.2,1), opacity .42s ease, color .3s ease; will-change: transform, opacity; backface-visibility: hidden; }
+.song-titles.drag .st, .song-titles.noanim .st { transition: none; }
+.song-titles .st:hover, .song-titles .st:active { background: none; }
+.song-titles .st.before { -webkit-mask-image: linear-gradient(to right, #000 15%, transparent 100%); mask-image: linear-gradient(to right, #000 15%, transparent 100%); }
+.song-titles .st.after { -webkit-mask-image: linear-gradient(to left, #000 15%, transparent 100%); mask-image: linear-gradient(to left, #000 15%, transparent 100%); }
+.song-titles .st.on { color: var(--text); -webkit-mask-image: none; mask-image: none; }
 @keyframes cardDrop { from { opacity: 0; transform: translateY(-22px); } to { opacity: 1; transform: none; } }
 .part-card.drop { animation: cardDrop .65s cubic-bezier(.2,.8,.2,1) both; }
-.song-titles::-webkit-scrollbar { display: none; }
-.song-titles .st { flex: 0 0 auto; background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; font-size: 22px; font-weight: 800; letter-spacing: -0.04em; color: var(--muted); opacity: .5; transform-origin: center; transition: font-size .35s cubic-bezier(.2,.8,.2,1), color .3s ease, opacity .3s ease, transform .35s cubic-bezier(.2,.8,.2,1); }
-.song-titles .st.before { transform: translateZ(-60px) rotateY(32deg); transform-origin: right center; -webkit-mask-image: linear-gradient(to right, #000 15%, transparent 100%); mask-image: linear-gradient(to right, #000 15%, transparent 100%); }
-.song-titles .st.after { transform: translateZ(-60px) rotateY(-32deg); transform-origin: left center; -webkit-mask-image: linear-gradient(to left, #000 15%, transparent 100%); mask-image: linear-gradient(to left, #000 15%, transparent 100%); }
-.song-titles .st:active { transform: none; }
-.song-titles .st { line-height: 1.1; }
-.song-titles .st.before, .song-titles .st.after { font-size: calc(24px - (var(--d, 1) - 1) * 4px); opacity: max(.1, calc(.62 - (var(--d, 1) - 1) * .2)); }
-.song-titles .st.before { margin-right: -30px; padding-right: 0; }
-.song-titles .st.after { margin-left: -30px; }
-.song-titles .st.on { position: relative; z-index: 3; padding: 0 4px; }
-.song-titles .st:hover { background: none; }
-.song-titles .st.on { color: var(--text); opacity: 1; -webkit-mask-image: none; mask-image: none; font-size: 36px; letter-spacing: -0.045em; transform: none; }
 .shoot-date { font-size: 14px; margin: 0 0 12px; }
 .pc-body { padding: 0 18px 18px; }
 .part-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -4764,43 +4757,60 @@ function currentShootPart() {
   const parts = songParts(sg.id);
   return parts.find(p => p.id === shootPartId) || parts.find(p => p.rows.some(r => !r.checked)) || parts[0] || null;
 }
-var lastShootSong = null, stFollow = 0, dropT0 = 0;
-/* the title row is a wheel fixed on the centre: dragging it follows the finger, release snaps to the nearest song */
+var lastShootSong = null, dropT0 = 0;
+/* The title row is a wheel fixed on the centre. Every title is placed with transforms only (no scrolling, no font-size
+   animation), so moving between songs stays smooth and never nudges the page. */
+var stX = [];
+function stLayout(dragDx, animate) {
+  const box = $("shootSongTabs"), els = [...box.children], songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
+  if (!els.length || ai < 0) return;
+  const sc = d => d === 0 ? 1 : Math.max(.34, .64 - (Math.abs(d) - 1) * .1);
+  const w = els.map((el, i) => el.offsetWidth * sc(i - ai));
+  const c = new Array(els.length).fill(0), gap = -16;
+  for (let i = ai + 1; i < els.length; i++) c[i] = c[i - 1] + (w[i - 1] + w[i]) / 2 + gap;
+  for (let i = ai - 1; i >= 0; i--) c[i] = c[i + 1] - (w[i + 1] + w[i]) / 2 - gap;
+  stX = c;
+  box.classList.toggle("noanim", !animate);
+  els.forEach((el, i) => {
+    const d = i - ai, a = Math.abs(d), rot = d === 0 ? 0 : (d < 0 ? 28 : -28);
+    el.style.transform = `translate3d(calc(-50% + ${(c[i] + (dragDx || 0)).toFixed(2)}px), -50%, ${d === 0 ? 0 : -50 * Math.min(a, 2)}px) rotateY(${rot}deg) scale(${sc(d)})`;
+    el.style.opacity = d === 0 ? 1 : Math.max(.1, .62 - (a - 1) * .2);
+    el.style.zIndex = 10 - a;
+  });
+}
 (function () {
   const box = $("shootSongTabs");
-  let x0 = 0, y0 = 0, s0 = 0, mode = "", t0 = 0;
-  const centerOf = el => el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2;
-  box.addEventListener("touchstart", e => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; s0 = box.scrollLeft; mode = ""; t0 = Date.now(); cancelAnimationFrame(stFollow); }, { passive: true });
+  let x0 = 0, y0 = 0, mode = "", t0 = 0;
+  box.addEventListener("touchstart", e => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; mode = ""; t0 = Date.now(); }, { passive: true });
   box.addEventListener("touchmove", e => {
     const t = e.touches[0], dx = t.clientX - x0, dy = t.clientY - y0;
-    if (!mode) { if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; mode = Math.abs(dx) > Math.abs(dy) ? "x" : "y"; }
+    if (!mode) { if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; mode = Math.abs(dx) > Math.abs(dy) ? "x" : "y"; if (mode === "x") box.classList.add("drag"); }
     if (mode !== "x") return;
     if (e.cancelable) e.preventDefault();
-    box.scrollLeft = s0 - dx;
+    stLayout(dx, false); box.classList.add("drag");
   }, { passive: false });
   const end = e => {
-    if (mode !== "x") { paintSongTitles(); return; }
+    box.classList.remove("drag");
+    if (mode !== "x") { mode = ""; return; }
     const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
-    const dx = (e.changedTouches[0] || {}).clientX - x0, fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.4;
-    let best = 0, bd = Infinity;
-    [...box.children].forEach((el, i) => { if (!el.dataset.songId) return; const d = Math.abs(centerOf(el) - box.scrollLeft); if (d < bd) { bd = d; best = i; } });
+    const dx = ((e.changedTouches && e.changedTouches[0]) || {}).clientX - x0, fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.4;
+    let best = ai, bd = Infinity;
+    stX.forEach((cx, i) => { const d = Math.abs(cx + dx); if (d < bd) { bd = d; best = i; } });
     if (fast && best === ai) best = Math.max(0, Math.min(songs.length - 1, ai + (dx < 0 ? 1 : -1)));
     mode = "";
-    if (best !== ai && songs[best]) { feel("select"); setActiveSong(songs[best].id); } else paintSongTitles();
+    if (best !== ai && songs[best]) { feel("select"); setActiveSong(songs[best].id); } else stLayout(0, true);
   };
   box.addEventListener("touchend", end);
-  box.addEventListener("touchcancel", () => { mode = ""; paintSongTitles(); });
+  box.addEventListener("touchcancel", () => { mode = ""; box.classList.remove("drag"); stLayout(0, true); });
+  window.addEventListener("resize", () => { if (project) stLayout(0, false); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (project) stLayout(0, false); });
 })();
 function paintSongTitles() {
   const box = $("shootSongTabs"), songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
   const same = box.children.length === songs.length && songs.every((x, i) => box.children[i].dataset.songId === x.id && box.children[i].textContent === x.name);
   if (!same) box.innerHTML = songs.map(sg => `<button type="button" class="st" data-song-id="${sg.id}">${esc(sg.name)}</button>`).join("");
-  [...box.children].forEach((el, i) => { el.classList.toggle("on", i === ai); el.classList.toggle("before", i < ai); el.classList.toggle("after", i > ai); el.style.setProperty("--d", Math.abs(i - ai)); });
-  const center = () => { const el = box.children[ai]; if (el) box.scrollLeft = el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2; };
-  cancelAnimationFrame(stFollow);
-  const t0 = performance.now();
-  const tick = () => { center(); if (performance.now() - t0 < 450) stFollow = requestAnimationFrame(tick); };
-  tick();
+  [...box.children].forEach((el, i) => { el.classList.toggle("on", i === ai); el.classList.toggle("before", i < ai); el.classList.toggle("after", i > ai); });
+  stLayout(0, same && box.offsetParent !== null);
 }
 function renderShootContent() {
   mountTransport("#shootCView .transport-slot");
