@@ -3956,7 +3956,7 @@ function primaryDate(p, today) {
 }
 function renderCalendar(projects) {
   const y = calMonth.getFullYear(), m = calMonth.getMonth(), today = ymd(new Date());
-  const lead = (new Date(y, m, 1).getDay() + 6) % 7, rows = Math.ceil((lead + new Date(y, m + 1, 0).getDate()) / 7);
+  const lead = new Date(y, m, 1).getDay(), rows = Math.ceil((lead + new Date(y, m + 1, 0).getDate()) / 7);
   const byDay = {};
   projects.forEach(p => projectDates(p).forEach(d => { (byDay[d] = byDay[d] || []).push(p); }));
   let cells = "";
@@ -3966,7 +3966,7 @@ function renderCalendar(projects) {
     cells += `<button type="button" class="cal-day ${dt.getMonth() === m ? "" : "out"} ${pr ? "shoot" + (pr.shownCover ? " img" : "") : ""} ${s === today ? "today" : ""} ${s === calSel ? "sel" : ""}" data-day="${s}"${st}><span>${dt.getDate()}</span></button>`;
   }
   $("calCard").innerHTML = `<div class="cal-head"><button type="button" data-cal="-1" aria-label="Previous month">‹</button><b>${calMonth.toLocaleDateString(undefined, { month: "short", year: "numeric" })}</b><button type="button" data-cal="1" aria-label="Next month">›</button></div>
-    <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(x => `<span class="cal-dow">${x}</span>`).join("")}${cells}</div>`;
+    <div class="cal-grid">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(x => `<span class="cal-dow">${x}</span>`).join("")}${cells}</div>`;
 }
 function projectCardHTML(p) {
   const n = countShots(p);
