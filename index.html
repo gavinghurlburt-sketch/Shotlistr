@@ -984,6 +984,7 @@ details.more > :not(summary) { margin-top: 8px; }
 .cp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .move-row { display: flex; gap: 8px; margin: 0 0 10px; }
 .move-row .btn { flex: 1; }
+.field.need { outline: 2px solid var(--bad, #ef4444); }
 .tempo-ctl { display: flex; gap: 8px; margin: 10px 0 12px; }
 .tempo-ctl .btn { flex: 1; }
 .tap-readout { font-size: 44px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 10px 0 2px; }
@@ -1548,10 +1549,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <p class="modal-hint">Name it (you can change this later), then pick what kind of shoot it is.</p>
     <input type="text" id="newProjectName" class="field" style="width:100%" placeholder="e.g. Smalljoy fall campaign">
     <div class="detail-grid">
-      <label id="newArtistLabel">Artist <input type="text" id="newArtist" class="field" list="artistList" placeholder="Who is it for?" autocapitalize="words"></label>
+      <label id="newArtistLabel">Artist <select id="newArtist" class="field" aria-label="Artist"></select></label>
       <label>Shoot date <input type="date" id="newShootDate" class="field"></label>
     </div>
-    <datalist id="artistList"></datalist>
     <div class="type-choices" id="newTypeChoices">
       <button type="button" class="type-choice" data-type="production"><strong>Video production</strong><span>One song. Locations and setups, a timed schedule, a call sheet, and a live on-set tracker.</span></button>
       <button type="button" class="type-choice" data-type="content"><strong>Content shoot</strong><span>Several songs. Mark the parts you want, stamp shot templates on every part, and get lots of coverage fast.</span></button>
@@ -4148,7 +4148,6 @@ async function renderProjectsList() {
   const artists = artistRecs.map(a => a.docTitle);
   renderArtists(artistRecs, all);
   if (artistFilter && !artists.includes(artistFilter)) artistFilter = null;
-  $("artistList").innerHTML = artists.map(a => `<option value="${esc(a)}"></option>`).join("");
   if (isArtistTier()) artistFilter = null;
   $("artistChips").innerHTML = (artists.length && !isArtistTier()) ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
   const projects = all.filter(p => !artistFilter || p.artist === artistFilter);
@@ -4279,15 +4278,17 @@ function openArtistModal(forWhat) { artistModalFor = forWhat || "home"; $("artis
 async function addArtist() {
   const n = $("artistNameInput").value.trim(); if (!n) return;
   $("artistModal").classList.add("hidden");
-  if (!(await artistRoom(n))) return;
+  if (!(await artistRoom(n))) { if (artistModalFor === "new") $("newModal").classList.remove("hidden"); return; }
   const a = await ensureArtist(n);
+  if (artistModalFor === "new") { await fillNewArtist(a.docTitle); $("newModal").classList.remove("hidden"); return; }      // back to the new-shoot sheet with them picked
   if (artistModalFor === "plan" && project && project.type === "content") { await linkArtist(a); return; }
   await openProject(a.id);
 }
 $("artistAdd").addEventListener("click", addArtist);
-$("artistCancel").addEventListener("click", () => $("artistModal").classList.add("hidden"));
+function closeArtistModal() { $("artistModal").classList.add("hidden"); if (artistModalFor === "new") $("newModal").classList.remove("hidden"); }
+$("artistCancel").addEventListener("click", closeArtistModal);
 $("artistNameInput").addEventListener("keydown", e => { if (e.key === "Enter") addArtist(); });
-$("artistModal").addEventListener("click", e => { if (e.target.id === "artistModal") $("artistModal").classList.add("hidden"); });
+$("artistModal").addEventListener("click", e => { if (e.target.id === "artistModal") closeArtistModal(); });
 async function createProject(name, type, artist, date) {
   await persistNow();
   const art = await ensureArtist(artist);
@@ -4298,19 +4299,33 @@ async function createProject(name, type, artist, date) {
   await putProjectRecord(rec);
   await openProject(rec.id);
 }
+async function fillNewArtist(pick) {
+  let arts = []; try { arts = (await listProjects()).filter(isArtistRec).map(normalizeRecord).sort(byArtistName).map(a => a.docTitle); } catch (e) {}
+  const sel = $("newArtist"), want = arts.includes(pick) ? pick : (arts.length === 1 ? arts[0] : "");
+  sel.innerHTML = `<option value="">Choose an artist…</option>` + arts.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("") + `<option value="__new">+ New artist…</option>`;
+  sel.value = want; sel.classList.remove("need");
+}
+$("newArtist").addEventListener("change", async e => {
+  e.target.classList.remove("need");
+  if (e.target.value !== "__new") return;
+  e.target.value = "";
+  if (!(await artistRoom(""))) return;
+  $("newModal").classList.add("hidden"); openArtistModal("new");
+});
 function openNewModal(artistName, date) {
   const solo = isArtistTier();
   $("newArtistLabel").classList.toggle("hidden", solo); $("newTypeChoices").classList.toggle("hidden", solo); $("newCreateBtn").classList.toggle("hidden", !solo);
   document.querySelector("#newModal h3").textContent = solo ? "New content shoot" : "New";
   document.querySelector("#newModal .modal-hint").textContent = solo ? "Name it and pick the date. You can change both later." : "Name it (you can change this later), then pick what kind of shoot it is.";
-  $("newProjectName").value = ""; $("newArtist").value = artistName || ""; $("newShootDate").value = date || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); }
+  $("newProjectName").value = ""; $("newShootDate").value = date || ""; fillNewArtist(artistName || ""); $("newModal").classList.remove("hidden"); $("newProjectName").focus(); }
 $("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal("home"); return; } openNewModal(artistFilter || "", calSel || ""); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
 $("newModal").addEventListener("click", async e => {
   if (e.target.id === "newModal") { $("newModal").classList.add("hidden"); return; }
   const b = e.target.closest("[data-type], #newCreateBtn");
   if (!b) return;
-  let type = b.dataset.type, artist = $("newArtist").value.trim();
+  let type = b.dataset.type, artist = $("newArtist").value === "__new" ? "" : $("newArtist").value;
+  if (!isArtistTier() && type === "content" && !artist) { $("newArtist").classList.add("need"); $("newArtist").focus(); showNotice("Choose an artist for this shoot first."); return; }
   if (isArtistTier()) {
     type = "content";
     const mine = (await listProjects()).filter(isArtistRec).map(normalizeRecord).sort(byArtistName)[0];
