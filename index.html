@@ -1546,8 +1546,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 <div id="newModal" class="modal hidden">
   <div class="modal-inner wide">
     <h3>New</h3>
-    <p class="modal-hint">Name it (you can change this later), then pick what kind of shoot it is.</p>
-    <input type="text" id="newProjectName" class="field" style="width:100%" placeholder="e.g. Smalljoy fall campaign">
+    <p class="modal-hint">Pick the artist and the date, then what kind of shoot it is.</p>
     <div class="detail-grid">
       <label id="newArtistLabel">Artist <select id="newArtist" class="field" aria-label="Artist"></select></label>
       <label>Shoot date <input type="date" id="newShootDate" class="field"></label>
@@ -4289,7 +4288,12 @@ function closeArtistModal() { $("artistModal").classList.add("hidden"); if (arti
 $("artistCancel").addEventListener("click", closeArtistModal);
 $("artistNameInput").addEventListener("keydown", e => { if (e.key === "Enter") addArtist(); });
 $("artistModal").addEventListener("click", e => { if (e.target.id === "artistModal") closeArtistModal(); });
+function autoShootName(artist, date) {                 // shoots are named for you: "Artist · Oct 22"
+  let d = ""; if (date) { const [y, m, dd] = date.split("-").map(Number); d = new Date(y, m - 1, dd).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+  return [artist, d].filter(Boolean).join(" · ") || "New shoot";
+}
 async function createProject(name, type, artist, date) {
+  name = (name || "").trim() || autoShootName(artist, date);
   await persistNow();
   const art = await ensureArtist(artist);
   const now = new Date().toISOString();
@@ -4316,8 +4320,8 @@ function openNewModal(artistName, date) {
   const solo = isArtistTier();
   $("newArtistLabel").classList.toggle("hidden", solo); $("newTypeChoices").classList.toggle("hidden", solo); $("newCreateBtn").classList.toggle("hidden", !solo);
   document.querySelector("#newModal h3").textContent = solo ? "New content shoot" : "New";
-  document.querySelector("#newModal .modal-hint").textContent = solo ? "Name it and pick the date. You can change both later." : "Name it (you can change this later), then pick what kind of shoot it is.";
-  $("newProjectName").value = ""; $("newShootDate").value = date || ""; fillNewArtist(artistName || ""); $("newModal").classList.remove("hidden"); $("newProjectName").focus(); }
+  document.querySelector("#newModal .modal-hint").textContent = solo ? "Pick the date. You can change it later." : "Pick the artist and the date, then what kind of shoot it is.";
+  $("newShootDate").value = date || ""; fillNewArtist(artistName || ""); $("newModal").classList.remove("hidden"); }
 $("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal("home"); return; } openNewModal(artistFilter || "", calSel || ""); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
 $("newModal").addEventListener("click", async e => {
@@ -4333,7 +4337,7 @@ $("newModal").addEventListener("click", async e => {
     artist = mine.docTitle;
   } else if (!(await artistRoom(artist))) return;
   $("newModal").classList.add("hidden");
-  createProject($("newProjectName").value.trim(), type, artist, $("newShootDate").value);
+  createProject("", type, artist, $("newShootDate").value);
 });
 $("importProjectInput").addEventListener("change", async e => {
   const f = e.target.files[0];
