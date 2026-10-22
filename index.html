@@ -984,8 +984,13 @@ details.more > :not(summary) { margin-top: 8px; }
 .cp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .move-row { display: flex; gap: 8px; margin: 0 0 10px; }
 .move-row .btn { flex: 1; }
-.tempo-ctl { display: flex; gap: 8px; margin: 0 0 8px; }
+.tempo-ctl { display: flex; gap: 8px; margin: 10px 0 12px; }
 .tempo-ctl .btn { flex: 1; }
+.tap-readout { font-size: 44px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 10px 0 2px; }
+.tap-big { width: 100%; min-height: 104px; border-radius: 28px; font-size: 24px; font-weight: 800; touch-action: manipulation; }
+.btn.primary.tap-big.tapping { background-color: var(--accent); color: #111; }
+.tap-big:active { transform: scale(.985); }
+.tempo-more { margin-top: 4px; }
 .tempo-wave { display: block; width: 100%; height: 132px; border-radius: 14px; background-color: var(--surface-2); margin-top: 12px; touch-action: none; cursor: ew-resize; }
 .part-time { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--muted); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; white-space: nowrap; padding: 0 4px; }
 .part-row { cursor: pointer; }
@@ -1248,12 +1253,14 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   </div>
   <div id="tempoModal" class="modal hidden">
     <div class="modal-inner">
-      <h3>Tempo &amp; song start</h3>
-      <p class="modal-hint">Found automatically. If the beat lines on the waveform look off (often double or half time), fix it here.</p>
-      <canvas id="tempoWave" class="tempo-wave hidden" aria-label="Drag to set where the song starts. Hold to zoom in."></canvas>
-      <p class="muted small" id="tempoWaveHint" style="margin:6px 0 8px"></p>
-      <div class="tempo-ctl"><button type="button" id="tempoNudgeL" class="btn small" aria-label="Nudge the start earlier">‹ Nudge</button><button type="button" id="tempoNudgeR" class="btn small" aria-label="Nudge the start later">Nudge ›</button></div>
-      <div class="tempo-ctl"><button type="button" id="tempoPlayBtn" class="btn small">▶ Play from song start</button><button type="button" id="tempoClickBtn" class="btn small" aria-pressed="false">Click</button></div>
+      <h3>Tap the tempo</h3>
+      <p class="modal-hint">Press play, then tap along to the beat. Start on the 1 of a measure. It rounds to a whole BPM and locks onto the track's beat.</p>
+      <canvas id="tempoWave" class="tempo-wave hidden" aria-hidden="true"></canvas>
+      <div class="tap-readout" id="tapReadout" aria-live="polite">—</div>
+      <p class="muted small" id="tapHint" style="margin:0 0 10px"></p>
+      <button type="button" id="tapBtn" class="btn primary tap-big">▶ Play the song</button>
+      <div class="tempo-ctl"><button type="button" id="tapStop" class="btn small">■ Stop</button><button type="button" id="tapReset" class="btn small">Start over</button><button type="button" id="tempoClickBtn" class="btn small" aria-pressed="false">Click</button></div>
+      <details class="more tempo-more"><summary>Type it in or change settings</summary>
       <div class="tempo-form">
         <label>BPM <input type="number" id="bpmInput" class="field num" min="30" max="300" step="0.1" placeholder="—"></label>
         <label>Song starts at <input type="text" id="songStartInput" class="field num" inputmode="decimal" placeholder="0:00.0"></label>
@@ -1261,6 +1268,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
         <select id="countInBars" class="field" aria-label="Count-in length"><option value="1">1 bar</option><option value="2">2 bars</option></select>
         <label class="check" title="Scrubbing and cues land on measure starts and markers"><input type="checkbox" id="snapToggle"> Snap cues to the beat</label>
       </div>
+      </details>
       <div class="modal-actions"><button id="detectTempoBtn" class="btn small" disabled>Detect again</button><button id="tempoDone" class="btn primary">Done</button></div>
     </div>
   </div>
@@ -1282,7 +1290,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
         <canvas id="waveformCanvas" class="waveform hidden" aria-label="Waveform: drag to scrub"></canvas>
         <div class="tempo-line">
           <span id="tempoStatus" class="tempo-status"></span>
-          <button id="tempoManualBtn" class="btn small hidden">Manually set tempo and song start</button>
+          <button id="tempoManualBtn" class="btn small hidden">Set tempo by tapping</button>
         </div>
         <details id="trackMore" class="more hidden"><summary>Track options</summary>
           <button id="removeTrackBtn" class="btn small danger-text">Remove track</button>
@@ -2782,6 +2790,7 @@ function updateTransportUI() {
     b.setAttribute("aria-label", on ? "Stop" : "Play " + b.dataset.label.replace(/^Play /, ""));
   });
   paintTrackUI(); paintTempo();
+  paintTapUI();
   paintRate();
   updateTimecodes();
 }
@@ -2861,7 +2870,12 @@ function computePeaks(buf) {
 }
 
 /* ---------- tempo & song-start detection ---------- */
-function analyzeTempo(buf) {
+const onsetCache = new WeakMap();
+function onsetInfo(buf) {
+  if (onsetCache.has(buf)) return onsetCache.get(buf);
+  const r = onsetInfoCalc(buf); onsetCache.set(buf, r); return r;
+}
+function onsetInfoCalc(buf) {
   const sr = buf.sampleRate, n = buf.length;
   const c0 = buf.getChannelData(0), c1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
   const hop = 512, win = 1024;
@@ -2893,7 +2907,13 @@ function analyzeTempo(buf) {
     const v = flux[f] - (pre[b] - pre[a]) / (b - a);
     env[f] = v > 0 ? v : 0;
   }
-  const fps = sr / hop;
+  const envW = new Float32Array(frames);
+  for (let f = 1; f < frames - 1; f++) envW[f] = Math.max(env[f - 1], env[f], env[f + 1]);
+  return { sr, hop, win, frames, startF, env, envW, fps: sr / hop, bias: (win - hop / 2) / sr };
+}
+function analyzeTempo(buf) {
+  const info = onsetInfo(buf); if (!info) return null;
+  const { sr, hop, win, frames, startF, env, envW, fps } = info;
   const minL = Math.max(2, Math.floor(fps * 60 / 200)), maxL = Math.ceil(fps * 60 / 60);
   const ac = L => { let s = 0; for (let f = startF; f + L < frames; f++) s += env[f] * env[f + L]; return s; };
   const scores = [];
@@ -2910,8 +2930,6 @@ function analyzeTempo(buf) {
   while (bpm < 70) bpm *= 2;
   while (bpm > 180) bpm /= 2;
   // fine search around the estimate, scoring how well a beat grid lands on onsets
-  const envW = new Float32Array(frames);
-  for (let f = 1; f < frames - 1; f++) envW[f] = Math.max(env[f - 1], env[f], env[f + 1]);
   const gridScore = b => {
     const P = 60 * fps / b;
     let best = -1;
@@ -3209,6 +3227,7 @@ function drawWaveOn(canvas) {
   g.fillStyle = waveColors().head; g.fillRect(Math.round((transportTime() / dur) * w) - 1, top, 2, h - top);
 }
 function drawWaveform() {
+  drawTempoWave();
   drawWaveOn($("waveformCanvas"));
   drawWaveOn($("shootWave"));
   if (currentWs === "cut" && project) drawCutTimeline();
@@ -3448,156 +3467,133 @@ $("songStartInput").addEventListener("change", e => {
   $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
   scheduleSave(); drawWaveform(); paintTempo();
 });
-/* tempo sheet waveform: drag to place the song start, hold to zoom in for precision */
-const tw = { zoom: false, win: 6, p: 0, p0: 0, goal: 0, t0: 0, raf: 0 };
-const easeOut = x => 1 - Math.pow(1 - x, 3);
-function twProgress() {
-  const k = Math.min(1, (performance.now() - tw.t0) / 320);
-  return tw.p0 + (tw.goal - tw.p0) * easeOut(k);
+/* tap tempo: play the track, tap the beat; taps give the rough tempo and the "1", the track's onsets lock it in */
+var tap = { taps: [], snap: null, startedAt: 0 };
+function outLatency() { try { return (audioCtx && (audioCtx.outputLatency || audioCtx.baseLatency)) || 0; } catch (e) { return 0; } }
+function quantizeTaps(taps) {
+  if (taps.length < 4) return null;
+  const d = []; for (let i = 1; i < taps.length; i++) d.push(taps[i] - taps[i - 1]);
+  const sorted = d.slice().sort((a, b) => a - b), m = sorted[sorted.length >> 1];
+  const good = d.filter(x => x > m * 0.7 && x < m * 1.4);
+  if (good.length < 3) return { uneven: true };
+  const mean = good.reduce((a, b) => a + b, 0) / good.length;
+  const cv = Math.sqrt(good.reduce((a, b) => a + (b - mean) * (b - mean), 0) / good.length) / mean;
+  let rough = 60 / mean; while (rough < 60) rough *= 2; while (rough > 200) rough /= 2;
+  const info = audioBuffer ? onsetInfo(audioBuffer) : null;
+  let bpm = Math.round(rough);
+  const gridAt = (b2, o) => {                              // onset strength under a beat grid with phase o (in frames)
+    const P = 60 * info.fps / b2; let sc = 0;
+    for (let f = o + Math.ceil((info.startF - o) / P) * P; f < info.frames; f += P) sc += info.envW[Math.round(f)] || 0;
+    return sc;
+  };
+  const bestGrid = b2 => { const P = 60 * info.fps / b2; let best = -1; for (let o = 0; o < P; o += 1) { const sc = gridAt(b2, o); if (sc > best) best = sc; } return best; };
+  if (info) {
+    let fine = rough, fs = -1;
+    for (let b2 = rough * 0.96; b2 <= rough * 1.04; b2 += 0.05) { const sc = bestGrid(b2); if (sc > fs) { fs = sc; fine = b2; } }
+    const lo = Math.floor(fine), hi = Math.ceil(fine);
+    bpm = lo === hi ? lo : (bestGrid(lo) >= bestGrid(hi) ? lo : hi);   // nearest whole BPM that the track's beat agrees with
+  }
+  const beat = 60 / bpm, bar = beat * 4, lat = outLatency();
+  const t = taps.map(x => x - lat);
+  let sx = 0, sy = 0; t.forEach(x => { const a = 2 * Math.PI * ((x % beat) / beat); sx += Math.cos(a); sy += Math.sin(a); });
+  let phase = Math.atan2(sy, sx) / (2 * Math.PI) * beat; if (phase < 0) phase += beat;     // where the user's taps sit inside a beat
+  let offsetSec = phase;
+  if (info) {                                                                              // slide onto the nearest real onset
+    const P = 60 * info.fps / bpm, c = (phase - info.bias) * info.fps;
+    let bestO = c, bestS = 0;
+    for (let o = c - P / 4; o <= c + P / 4; o += 0.25) { const sc = gridAt(bpm, o); if (sc > bestS) { bestS = sc; bestO = o; } }
+    offsetSec = bestO / info.fps + info.bias;
+  }
+  const k0 = Math.round((t[0] - offsetSec) / beat);                                        // the beat the first tap was on is the 1
+  let anchor = offsetSec + k0 * beat; anchor -= Math.floor(anchor / bar) * bar;
+  return { bpm, offset: Math.round(anchor * 1000) / 1000, cv };
 }
-function twLinger() {                                // stay zoomed for a few seconds after letting go, then ease back out
-  clearTimeout(tw.lingerT);
-  tw.lingerT = setTimeout(() => { if (tw.goal === 1 && !tw.zoom) twGo(0); }, 2800);
+function tapReadout() {
+  const n = tap.taps.length, q = quantizeTaps(tap.taps), tp = curTempo();
+  $("tapReadout").textContent = q && q.bpm ? q.bpm + " BPM" : (tp.bpm ? Math.round(tp.bpm * 10) / 10 + " BPM" : "—");
+  $("tapHint").textContent = !player.src ? "Upload a track first."
+    : !n ? (isPlaying() ? "Tap the big button on every beat." : "Press play, then tap on every beat. Start on the 1.")
+    : n < 4 ? "Keep tapping. A few more beats." 
+    : q && q.uneven ? "Those taps were uneven. Keep going, or tap Start over."
+    : q && q.cv > 0.12 ? "Pretty uneven, but it's still locking on. A few more taps will help."
+    : "Locked in. Listen with Click on, or tap Done.";
 }
-function twReset() { clearTimeout(tw.lingerT); tw.zoom = false; tw.p = tw.goal = 0; }
-function twGo(goal) { tw.p0 = tw.p; tw.goal = goal; tw.t0 = performance.now(); twTick(); }
-function twTick() {
-  tw.p = twProgress(); drawTempoWave();
-  if (Math.abs(tw.p - tw.goal) > 0.002 && !tw.raf) { tw.raf = requestAnimationFrame(() => { tw.raf = 0; twTick(); }); }
-  else if (Math.abs(tw.p - tw.goal) <= 0.002) tw.p = tw.goal;
+function paintTapUI() {
+  const b = $("tapBtn"); if (!b) return;
+  const playing = isPlaying();
+  b.textContent = playing ? "TAP" : "▶ Play the song";
+  b.classList.toggle("tapping", playing); b.disabled = !player.src;
+  $("tapStop").disabled = !playing;
+  $("tapReset").disabled = !tap.taps.length && !tap.snap;
+  const tp = curTempo();
+  $("tempoClickBtn").classList.toggle("primary", !!tp.click); $("tempoClickBtn").setAttribute("aria-pressed", String(!!tp.click));
+  $("tempoClickBtn").disabled = !(tp.bpm && tp.offset != null);
+  if (!$("tempoModal").classList.contains("hidden")) tapReadout();
 }
-function twView(dur, tp) {                       // eased between the whole song and a window centred on the song start
-  const win = Math.min(dur, tw.win), c0 = dur / 2, c1 = tp.songStart != null ? tp.songStart : c0;
-  const span = Math.exp(Math.log(dur) + (Math.log(win) - Math.log(dur)) * tw.p), c = c0 + (c1 - c0) * tw.p;
-  return [c - span / 2, c + span / 2];
+function applyTaps() {
+  const q = quantizeTaps(tap.taps); if (!q || !q.bpm) return;
+  const tp = curTempo();
+  tp.bpm = q.bpm; tp.offset = q.offset; tp.detected = true; if (tp.songStart == null) tp.songStart = q.offset;
+  scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo();
 }
 function drawTempoWave() {
   const c = $("tempoWave"); if (!c || $("tempoModal").classList.contains("hidden")) return;
   const dur = trackDuration(), has = !!(dur && peaks);
   c.classList.toggle("hidden", !has);
-  $("tempoWaveHint").textContent = has ? "Drag to set where the song starts. Press and hold to zoom in; it stays zoomed for a few seconds. Use the nudge buttons for tiny steps." : "Upload a track to set the tempo by eye.";
   if (!has) return;
-  const h = c.clientHeight || 132, { g, w } = drawWaveBase(c, h), C = waveColors(), tp = curTempo();
-  const [v0, v1] = twView(dur, tp), span = v1 - v0;
+  const h = c.clientHeight || 96, { g, w } = drawWaveBase(c, h), C = waveColors(), tp = curTempo();
   if (tp.bpm && tp.offset != null) {
-    const beat = 60 / tp.bpm, pxBeat = beat / span * w;
-    for (let k = Math.ceil((v0 - tp.offset) / beat); ; k++) {
-      const t = tp.offset + k * beat; if (t > v1) break; if (t < 0) continue;
+    const beat = 60 / tp.bpm, pxBeat = beat / dur * w;
+    for (let k = -Math.floor(tp.offset / beat); ; k++) {
+      const t = tp.offset + k * beat; if (t > dur) break; if (t < 0) continue;
       const bar = (((k % 4) + 4) % 4 === 0);
-      if (!bar && pxBeat < 7) continue; if (bar && pxBeat * 4 < 5) continue;
-      g.fillStyle = bar ? C.beatBar : C.beat; g.fillRect(Math.round((t - v0) / span * w), 0, 1, h);
+      if (!bar && pxBeat < 6) continue; if (bar && pxBeat * 4 < 5) continue;
+      g.fillStyle = bar ? C.beatBar : C.beat; g.fillRect(Math.round(t / dur * w), 0, 1, h);
     }
   }
   if (peaks._norm == null) { let mx = 0.0001; for (let i = 0; i < peaks.length; i++) mx = Math.max(mx, -peaks[i][0], peaks[i][1]); peaks._norm = mx; }
-  const P = peaks.length, n = Math.max(8, Math.floor(w / 3.5)), step = w / n, mid = h / 2;
-  g.fillStyle = C.bar;
+  const P = peaks.length, n = Math.max(8, Math.floor(w / 3.5)), step = w / n, mid = h / 2, playX = transportTime() / dur * w;
   for (let i = 0; i < n; i++) {
-    const ta = v0 + (i / n) * span, tb = v0 + ((i + 1) / n) * span;
-    if (tb < 0 || ta > dur) continue;
-    const a0 = Math.max(0, Math.floor(ta / dur * P)), a1 = Math.min(P, Math.max(a0 + 1, Math.ceil(tb / dur * P)));
-    let mxv = 0; for (let j = a0; j < a1; j++) mxv = Math.max(mxv, -peaks[j][0], peaks[j][1]);
-    const a = Math.pow(Math.min(1, mxv / peaks._norm), 0.8), bh = Math.max(2, a * h * 0.88);
-    g.fillRect(i * step + (step - 2) / 2, mid - bh / 2, 2, bh);
+    const a0 = Math.floor(i / n * P), a1 = Math.max(a0 + 1, Math.floor((i + 1) / n * P));
+    let mxv = 0; for (let j = a0; j < a1 && j < P; j++) mxv = Math.max(mxv, -peaks[j][0], peaks[j][1]);
+    const a = Math.pow(Math.min(1, mxv / peaks._norm), 0.8), bh = Math.max(2, a * h * 0.8), x = i * step + (step - 2) / 2;
+    g.fillStyle = x <= playX ? C.played : C.bar; g.fillRect(x, mid - bh / 2, 2, bh);
   }
-  if (tp.songStart != null) {
-    const x = (tp.songStart - v0) / span * w, col = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ffd60a";
-    if (x >= -10 && x <= w + 10) {
-      g.fillStyle = col; g.fillRect(x - 1.5, 0, 3, h);
-      g.beginPath(); g.moveTo(x - 7, 0); g.lineTo(x + 7, 0); g.lineTo(x, 11); g.closePath(); g.fill();
-      g.font = "700 12px -apple-system, sans-serif";
-      const label = "Starts " + fmtTC(tp.songStart), tw2 = g.measureText(label).width;
-      g.fillText(label, Math.max(4, Math.min(w - tw2 - 4, x + 10)), h - 8);
-    }
-  }
-  $("tempoPlayBtn").textContent = isPlaying() ? "■ Stop" : "▶ Play from song start";
-  $("tempoClickBtn").classList.toggle("primary", !!tp.click); $("tempoClickBtn").setAttribute("aria-pressed", String(!!tp.click));
-  $("tempoClickBtn").disabled = !(tp.bpm && tp.offset != null);
-  if (tw.p > 0.6) { g.font = "700 11px -apple-system, sans-serif"; g.fillStyle = C.muted; g.fillText("Zoomed in", 8, 16); }
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ffd60a";
+  g.fillStyle = accent;
+  tap.taps.forEach(t => { const x = t / dur * w; g.beginPath(); g.arc(x, 6, 3, 0, 7); g.fill(); });
+  g.fillStyle = C.head; g.fillRect(Math.round(playX) - 1, 0, 2, h);
 }
-(function wireTempoWave() {
-  const c = $("tempoWave"); let down = false, holdT = 0, sx = 0, anchorT = 0, anchorX = 0, lastBeat = null, lastFeel = 0, moved = 0;
-  c.style.touchAction = "none";
-  const dur = () => trackDuration();
-  const tOf = x => {
-    const r = c.getBoundingClientRect(), px = Math.max(0, Math.min(r.width, x - r.left));
-    if (!tw.zoom) return { t: px / r.width * dur(), px };
-    const span = Math.min(dur(), tw.win);              // zoomed: the waveform slides under a fixed centre marker
-    return { t: Math.max(0, Math.min(dur(), anchorT - (px - anchorX) * span / r.width)), px };
-  };
-  let audTimer = 0, stopTimer = 0;
-  const audition = (t, force) => {                // pause for a moment while dragging and you hear a short bit from that spot
-    clearTimeout(audTimer); clearTimeout(stopTimer);
-    audTimer = setTimeout(() => {
-      if (!down && !force) return;
-      playFrom(Math.max(0, t), false, 1);
-      stopTimer = setTimeout(() => { if (down || force) stopAndReturn(); }, 750);
-    }, force ? 20 : 130);
-  };
-  tw.nudge = dir => {                             // small step for when it's almost right: 0.05s, about a frame and a half
-    const tp = curTempo(), d = dur(); if (!d || !project) return;
-    const v = Math.max(0, Math.min(d, Math.round(((tp.songStart != null ? tp.songStart : 0) + dir * 0.05) * 100) / 100));
-    tp.songStart = v; tp.offset = v; feel("measure");
-    if (isPlaying()) stopAndReturn();
-    audition(v, true); scheduleSave(); syncTempoInputs(); drawTempoWave(); drawWaveform(); paintTempo();
-    if (tw.goal === 1) twLinger();
-  };
-  const set = (x) => {
-    const { t, px } = tOf(x), tp = curTempo(), r = c.getBoundingClientRect();
-    const v = Math.round(t * 100) / 100;
-    if (tp.bpm > 0) {
-      const b = Math.floor((v - (tp.offset || 0)) / (60 / tp.bpm));
-      if (lastBeat != null && b !== lastBeat) { const now = performance.now(); if (now - lastFeel > 28) { feel(b % 4 === 0 || lastBeat % 4 === 0 ? "measure" : "marker"); lastFeel = now; } }
-      lastBeat = b;
-    }
-    tp.songStart = v; tp.offset = v;
-    if (isPlaying()) stopAndReturn();
-    audition(v);
-    syncTempoInputs(); drawTempoWave(); drawWaveform();
-  };
-  c.addEventListener("pointerdown", e => {
-    if (!dur()) return;
-    down = true; moved = 0; sx = e.clientX; tw.zoom = false; lastBeat = null; clearTimeout(tw.lingerT);
-    try { c.setPointerCapture(e.pointerId); } catch (x) {}
-    clearTimeout(holdT);
-    if (tw.goal === 1) {                           // still zoomed from a moment ago: drag slides straight away
-      const tp = curTempo(), r = c.getBoundingClientRect();
-      tw.win = Math.min(dur(), 6); anchorT = tp.songStart != null ? tp.songStart : 0; anchorX = Math.max(0, Math.min(r.width, e.clientX - r.left)); tw.zoom = true;
-      return;
-    }
-    set(e.clientX);
-    holdT = setTimeout(() => {
-      if (!down || moved > 10) return;
-      const tp = curTempo(), r = c.getBoundingClientRect(), px = Math.max(0, Math.min(r.width, sx - r.left));
-      tw.win = Math.min(dur(), 6); anchorT = tp.songStart != null ? tp.songStart : 0; anchorX = px;
-      tw.zoom = true; feel("marker"); twGo(1);
-    }, 380);
-  });
-  c.addEventListener("pointermove", e => {
-    if (!down) return; moved = Math.max(moved, Math.abs(e.clientX - sx));
-    if (!tw.zoom && moved > 10) clearTimeout(holdT);
-    set(e.clientX);
-  });
-  const end = () => {
-    if (!down) return; down = false; clearTimeout(holdT); clearTimeout(audTimer); clearTimeout(stopTimer); const wasZoom = tw.zoom; tw.zoom = false;
-    scheduleSave(); paintTempo(); if (wasZoom) twLinger(); else drawTempoWave();
-    const tp = curTempo(); if (tp.songStart != null) { playFrom(tp.songStart, false, 1); setTimeout(drawTempoWave, 300); }   // let go and it keeps playing from the start so you can judge the beat
-  };
-  c.addEventListener("pointerup", end); c.addEventListener("pointercancel", end);
-})();
-$("tempoPlayBtn").addEventListener("click", () => {
-  if (isPlaying()) { stopAndReturn(); } else { const tp = curTempo(); playFrom(tp.songStart != null ? tp.songStart : 0, false, 1); }
-  setTimeout(drawTempoWave, 250);
+function tapStopPlay() { if (isPlaying()) stopAndReturn(); paintTapUI(); drawTempoWave(); }
+$("tapBtn").addEventListener("pointerdown", e => {
+  if (!player.src) return;
+  e.preventDefault();
+  if (!isPlaying()) {                                       // first press just starts the song, so there's something to tap along to
+    const tp = curTempo(); tap.taps = []; tap.snap = tap.snap || { bpm: tp.bpm, offset: tp.offset, songStart: tp.songStart };
+    playFrom(tp.songStart != null ? Math.max(0, tp.songStart) : 0, false, 1); setTimeout(() => { paintTapUI(); drawTempoWave(); }, 250);
+    return;
+  }
+  const t = transportTime(), last = tap.taps[tap.taps.length - 1];
+  if (last != null && t - last < 0.12) return;              // ignore a bounce
+  if (!tap.snap) { const tp = curTempo(); tap.snap = { bpm: tp.bpm, offset: tp.offset, songStart: tp.songStart }; }
+  tap.taps.push(t); feel("light");
+  applyTaps(); paintTapUI(); drawTempoWave();
 });
-$("tempoClickBtn").addEventListener("click", () => { $("clickToggle").click(); drawTempoWave(); });
-$("tempoNudgeL").addEventListener("click", () => tw.nudge(-1));
-$("tempoNudgeR").addEventListener("click", () => tw.nudge(1));
-player.addEventListener("pause", () => setTimeout(drawTempoWave, 50));
-$("tempoModal").addEventListener("input", () => requestAnimationFrame(drawTempoWave));
-$("tempoModal").addEventListener("change", () => requestAnimationFrame(drawTempoWave));
+$("tapStop").addEventListener("click", tapStopPlay);
+$("tapReset").addEventListener("click", () => {
+  tapStopPlay();
+  if (tap.snap) { const tp = curTempo(); tp.bpm = tap.snap.bpm; tp.offset = tap.snap.offset; tp.songStart = tap.snap.songStart; scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo(); }
+  tap.taps = []; tap.snap = null; paintTapUI(); drawTempoWave();
+});
+$("tempoClickBtn").addEventListener("click", () => { $("clickToggle").click(); paintTapUI(); });
+function tapClose() { tapStopPlay(); tap.taps = []; tap.snap = null; $("tempoModal").classList.add("hidden"); }
+player.addEventListener("pause", () => setTimeout(() => { paintTapUI(); drawTempoWave(); }, 50));
+$("tempoModal").addEventListener("input", () => requestAnimationFrame(() => { paintTapUI(); drawTempoWave(); }));
+$("tempoModal").addEventListener("change", () => requestAnimationFrame(() => { paintTapUI(); drawTempoWave(); }));
 window.addEventListener("resize", () => drawTempoWave());
-$("tempoManualBtn").addEventListener("click", () => { syncTempoInputs(); $("tempoModal").classList.remove("hidden"); twReset(); requestAnimationFrame(drawTempoWave); });
-$("tempoDone").addEventListener("click", () => { twReset(); $("tempoModal").classList.add("hidden"); if (isPlaying()) stopAndReturn(); });
-$("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) { twReset(); $("tempoModal").classList.add("hidden"); if (isPlaying()) stopAndReturn(); } });
+$("tempoManualBtn").addEventListener("click", () => { syncTempoInputs(); $("tempoModal").classList.remove("hidden"); tap.taps = []; tap.snap = null; requestAnimationFrame(() => { paintTapUI(); drawTempoWave(); }); });
+$("tempoDone").addEventListener("click", tapClose);
+$("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) tapClose(); });
 $("clickToggle").addEventListener("click", () => {
   const tp = curTempo(); if (!project) return;
   tp.click = !tp.click; scheduleSave(); syncTempoInputs();
