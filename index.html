@@ -781,6 +781,7 @@ button:disabled { opacity: .4; }
 /* header */
 .appbar { background-color: var(--bg); color: var(--text); }
 .appbar-top { flex-wrap: nowrap; gap: 8px; padding: 12px 16px 6px; }
+.brand-tier { color: var(--accent); text-transform: capitalize; }
 .brand { font-weight: 700; font-size: 19px; letter-spacing: -0.04em; text-transform: lowercase; margin-right: auto; }
 .appbar-top:has(#backToProjectsBtn:not(.hidden)) .brand { display: none; }
 .appbar .btn, .appbar button { background-color: var(--surface-2); color: var(--text); border: 0; }
@@ -1117,7 +1118,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 
 <header class="appbar">
   <div class="appbar-top">
-    <span class="brand">creatrr</span>
+    <span class="brand">creatrr<span id="brandTier" class="brand-tier"></span></span>
     <button id="backToProjectsBtn" class="btn small hidden">← Projects</button>
     <input type="text" id="docTitleInput" class="doc-title hidden" placeholder="Untitled project" aria-label="Project title">
     <span class="spacer"></span>
@@ -3744,6 +3745,7 @@ function renderArtists(recs, projects) {
 var homeMode = "projects", artistTotal = 0;
 function paintHomeMode() {
   document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === homeMode));
+  $("brandTier").textContent = " " + TIER;
   document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Artist" : "Artists";
   $("artistsHint").textContent = isArtistTier() ? "Your photo, songs and sections. Tap to open your artist page." : "Everyone you shoot for. Tap an artist to see their projects.";
   $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
