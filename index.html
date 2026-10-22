@@ -1021,6 +1021,9 @@ details.more > :not(summary) { margin-top: 8px; }
 .banner-date:hover { background: none; }
 .banner-sub { font-size: 13px; font-weight: 600; opacity: .95; }
 .banner-sub:empty { display: none; }
+.banner-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.banner-artist { background-color: rgba(255,255,255,.24); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.35); color: #fff; font: inherit; font-weight: 800; border-radius: 999px; padding: 5px 12px; min-height: 0; box-shadow: none; }
+.banner-artist:active { transform: scale(.97); }
 .banner:not(.has-img)::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.28), transparent 60%); pointer-events: none; }
 .banner.compact { height: 104px; cursor: default; }
 .banner.compact #bannerBtn { display: none; }
@@ -4587,10 +4590,17 @@ function renderBanner() {
     const d = projectDay(false), dt = project.shootDate;
     bd.textContent = dt ? bigDate(dt) : "Add a date";
     const wk = dt ? (() => { const [y, m, dd] = dt.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: "long" }); })() : "";
-    $("bannerSub").textContent = [isArtistTier() ? "" : project.artist, wk, d && fmt12(d.start), d && d.location].filter(Boolean).join(" · ");
+    const rest = [wk, d && fmt12(d.start), d && d.location].filter(Boolean).join(" · ");
+    const canOpen = !isArtistTier() && project.artist && project.artistId;       // Plus / Pro: tap the artist to jump to their page
+    $("bannerSub").innerHTML = (canOpen ? `<button type="button" class="banner-artist" data-open-artist="1" aria-label="Open ${esc(project.artist)}'s page">${esc(project.artist)} ›</button>` : "")
+      + (rest ? `<span>${esc(rest)}</span>` : "");
   } else $("bannerSub").textContent = "";
 }
 $("bannerBtn").addEventListener("click", () => $("bannerFile").click());
+$("bannerSub").addEventListener("click", async e => {
+  if (!e.target.closest(".banner-artist") || !project || !project.artistId) return;
+  await persistNow(); await openProject(project.artistId);
+});
 var bannerTimer = null;
 $("projectBanner").addEventListener("click", e => {
   if (e.target.closest("button")) return;
