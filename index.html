@@ -636,7 +636,14 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-head .dot { width: 14px; height: 14px; flex: 0 0 auto; }
 .pc-name { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
 .pc-meta { margin-left: auto; font-size: 12px; color: var(--muted); }
-.pc-chev { color: var(--muted); width: 14px; text-align: center; }
+.pc-chev { width: 9px; height: 9px; margin: 0 4px 0 4px; border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted); transform: rotate(-45deg); transition: transform .2s ease; flex: 0 0 auto; }
+.part-card.open .pc-chev { transform: rotate(45deg) translate(-2px, -2px); }
+.song-titles { display: flex; align-items: baseline; gap: 20px; overflow-x: auto; white-space: nowrap; margin: 6px 0 4px; scrollbar-width: none; }
+.song-titles::-webkit-scrollbar { display: none; }
+.song-titles .st { flex: 0 0 auto; background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; font-size: 36px; font-weight: 800; letter-spacing: -0.045em; color: var(--muted); opacity: .55; transition: color .25s ease, opacity .25s ease; }
+.song-titles .st:hover { background: none; }
+.song-titles .st.on { color: var(--text); opacity: 1; }
+.shoot-date { font-size: 14px; margin: 0 0 12px; }
 .pc-body { padding: 0 18px 18px; }
 .part-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .part-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; }
@@ -1380,7 +1387,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   <!-- ===== content shoot: shoot ===== -->
   <section id="shootCView" class="ws-view hidden">
     <div id="cShootStatus" class="status-banner"></div>
-    <div id="shootSongTabs" class="song-tabs"></div>
+    <div id="shootSongTabs" class="song-titles"></div>
+    <div id="shootDateLine" class="shoot-date muted hidden"></div>
     <div class="transport-slot"></div>
     <div id="partStrip" class="part-strip hidden"></div>
     <div id="partPanel" class="part-list"></div>
@@ -2383,8 +2391,9 @@ function mountTransport(slotSelector) {
 }
 function updateShootTrackInfo() {
   const tp = curTempo();
+  $("shootTrackInfo").classList.toggle("hidden", !!player.src);
   $("shootTrackInfo").textContent = player.src
-    ? `${$("trackName").textContent}${tp.bpm ? ` · ${tp.bpm} BPM` : ""}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}`
+    ? ""
     : (isContent() && !activeSong() ? "No song selected." : (isContent() ? "No track — upload it on the artist page." : "No track — upload it in Draft."));
 }
 /* One engine plays everything — normal playback, seeking, count-ins and cues all run through
@@ -4140,7 +4149,7 @@ function projectDay(create) {
 }
 function renderBanner() {
   const b = $("projectBanner"), t = project && project.type;
-  const view = !project ? "" : t === "artist" ? "artist" : t === "content" ? ((currentWs === "plan" || currentWs === "shoot") ? "content" : "") : ((currentWs === "draft" || currentWs === "plan") ? "prod" : "");
+  const view = !project ? "" : t === "artist" ? "artist" : t === "content" ? (currentWs === "plan" ? "content" : "") : ((currentWs === "draft" || currentWs === "plan") ? "prod" : "");
   b.classList.toggle("hidden", !view);
   if (!view) return;
   const img = project.cover || (view === "content" && artistRec && artistRec.cover) || "";
@@ -4663,7 +4672,10 @@ function currentShootPart() {
 function renderShootContent() {
   mountTransport("#shootCView .transport-slot");
   renderContentStatus();
-  $("shootSongTabs").innerHTML = songTabsHTML(false);
+  $("shootSongTabs").innerHTML = project.songs.map(sg => `<button type="button" class="st ${sg.id === activeSongId ? "on" : ""}" data-song-id="${sg.id}">${esc(sg.name)}</button>`).join("");
+  const dl = $("shootDateLine"), dt = project.shootDate;
+  dl.textContent = dt ? (() => { const [y, m, d] = dt.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); })() : "";
+  dl.classList.toggle("hidden", !dt);
   const sg = activeSong(), panel = $("partPanel"), strip = $("partStrip");
   if (!sg) {
     strip.innerHTML = "";
@@ -4686,7 +4698,7 @@ function renderShootContent() {
   panel.innerHTML = parts.map((p, idx) => {
     const d = p.rows.filter(r => r.checked).length, open = p.id === shootOpenId;
     const complete = p.rows.length && d === p.rows.length;
-    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span><span class="pc-chev">${open ? "▾" : "▸"}</span></button>`;
+    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span><span class="pc-chev"></span></button>`;
     if (!open) return `<div class="part-card ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}</div>`;
     const prev = parts[idx - 1], next = parts[idx + 1];
     const nextSong = project.songs[project.songs.indexOf(sg) + 1];
@@ -4712,7 +4724,7 @@ function renderShootContent() {
 /* ================= content: shared actions ================= */
 document.addEventListener("click", e => {
   if (!project) return;
-  const tab = e.target.closest(".song-tab[data-song-id]");
+  const tab = e.target.closest(".song-tab[data-song-id], .st[data-song-id]");
   if (tab) {
     const id = tab.dataset.songId, now = Date.now();
     if (currentWs === "draft" && tab.closest("#draftSongTabs") && id === lastTapSong && now - lastTapAt < 450) { lastTapSong = null; startSongEdit(id); return; }
