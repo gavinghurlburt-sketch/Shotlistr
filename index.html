@@ -955,6 +955,33 @@ details.more > :not(summary) { margin-top: 8px; }
 .loose-name { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cover.sm { width: 40px; height: 40px; border-radius: 12px; }
 .loose-row .btn { flex: none; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* date / time inputs: never wider than their column, text left */
+input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; box-sizing: border-box; text-align: left; }
+input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; min-height: 1.3em; }
+.detail-grid label { min-width: 0; }
+.detail-grid input[type="date"], .detail-grid input[type="time"] { width: 100%; }
+/* banner: photo button fades in on tap */
+.banner { cursor: pointer; }
+#bannerBtn { opacity: 0; pointer-events: none; transition: opacity .3s ease; }
+.banner.show #bannerBtn, .banner:not(.has-img) #bannerBtn { opacity: 1; pointer-events: auto; }
+/* shoot dates + section picker */
+.sd-head { font-size: 13px; color: var(--muted); margin: 2px 2px 14px; }
+.sd-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; padding: 22px 22px 20px; min-height: 0; border-radius: 28px; background-color: var(--surface); margin-bottom: 12px; }
+.sd-card:hover { background-color: var(--surface-2); }
+.sd-card.past { opacity: .6; }
+.sd-big { font-size: 44px; font-weight: 800; letter-spacing: -0.045em; line-height: 1.05; }
+.sd-sub { font-size: 14px; color: var(--muted); font-weight: 500; }
+.sd-card.all { padding: 16px 22px; }
+.sd-card.all .sd-big { font-size: 20px; letter-spacing: -0.025em; }
+.pp-song { margin: 14px 0 4px; }
+.pp-song-name { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; justify-content: flex-start; font-weight: 700; font-size: 16px; padding: 10px 12px; min-height: 0; border-radius: 14px; background-color: var(--surface-2); }
+.pp-box { width: 22px; height: 22px; flex: none; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: transparent; }
+.on > .pp-box, .pp-box.on { background-color: var(--primary-bg); box-shadow: none; color: var(--primary-fg); }
+.pp-box.some { box-shadow: inset 0 0 0 2px var(--primary-bg); color: var(--primary-bg); }
+.pp-parts { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 2px 0; }
+.pp-part { display: inline-flex; align-items: center; gap: 8px; min-height: 0; padding: 8px 12px; border-radius: 999px; font-size: 14px; }
+.pp-part.on { background-color: var(--primary-bg); color: var(--primary-fg); }
+.pp-part small { opacity: .65; font-size: 12px; }
 /* v2.3 plan */
 .tpl-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; text-align: left; padding: 18px 20px; min-height: 0; border-radius: 26px; background-color: var(--surface); margin: 6px 0 16px; }
 .tpl-card:hover { background-color: var(--surface-2); }
@@ -1325,11 +1352,14 @@ details.more > :not(summary) { margin-top: 8px; }
 
   <!-- ===== content shoot: shoot ===== -->
   <section id="shootCView" class="ws-view hidden">
+    <div id="shootDates" class="hidden"></div>
+    <div id="shootDayBody">
     <div id="cShootStatus" class="status-banner"></div>
     <div id="shootSongTabs" class="song-tabs"></div>
     <div class="transport-slot"></div>
     <div id="partStrip" class="part-strip"></div>
     <div id="partPanel" class="panel"></div>
+    </div>
   </section>
 
   <!-- ===== cut ===== -->
@@ -1406,9 +1436,19 @@ details.more > :not(summary) { margin-top: 8px; }
       <label>Length (hours) <input type="number" id="dayHours" class="field" min="1" max="24" step="0.5"></label>
     </div>
     <div class="detail-grid" style="grid-template-columns:1fr;margin-top:4px"><label>Notes <textarea id="dayNotes" class="field" rows="2" placeholder="Call time, parking, who's coming"></textarea></label></div>
+    <p class="modal-hint" style="margin:14px 0 8px">Songs &amp; sections to shoot</p>
+    <button type="button" id="dayPartsBtn" class="tpl-card compact"></button>
     <p class="modal-hint" style="margin:14px 0 8px">Shot template</p>
     <button type="button" id="dayTplCard" class="tpl-card compact"></button>
     <div class="modal-actions"><button type="button" id="dayDelete" class="btn small danger-text">Delete day</button><span class="spacer"></span><button type="button" id="dayCal" class="btn small">Add to calendar</button><button type="button" id="dayDone" class="btn primary">Done</button></div>
+  </div>
+</div>
+<div id="partsModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>Songs &amp; sections</h3>
+    <p class="modal-hint">Pick just what you are shooting this day. Leave everything unchecked to shoot it all.</p>
+    <div id="partsPick"></div>
+    <div class="modal-actions"><button type="button" id="partsClear" class="btn small">Clear</button><button type="button" id="partsDone" class="btn primary">Done</button></div>
   </div>
 </div>
 <div id="detailsModal" class="modal hidden">
@@ -1650,7 +1690,7 @@ function normalizeRecord(rec) {
   p.docTitle = p.docTitle || "Untitled project";
   p.cover = typeof p.cover === "string" ? p.cover : "";
   p.artist = typeof p.artist === "string" ? p.artist.trim() : "";
-  p.shootDays = (Array.isArray(p.shootDays) ? p.shootDays : []).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date || "")).map(d => ({ id: d.id || uid(), date: d.date, start: d.start || "", location: d.location || "", notes: d.notes || "", hours: Number(d.hours) || 6 }));
+  p.shootDays = (Array.isArray(p.shootDays) ? p.shootDays : []).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date || "")).map(d => ({ id: d.id || uid(), date: d.date, start: d.start || "", location: d.location || "", notes: d.notes || "", hours: Number(d.hours) || 6, parts: Array.isArray(d.parts) ? d.parts.filter(x => typeof x === "string") : [] }));
   p.templateName = typeof p.templateName === "string" && p.templateName ? p.templateName : "Standard Shoot";
   p.templateLibId = typeof p.templateLibId === "string" ? p.templateLibId : "";
   p.shootDate = /^\d{4}-\d{2}-\d{2}$/.test(p.shootDate || "") ? p.shootDate : "";
@@ -3762,7 +3802,7 @@ async function openProject(id) {
   project = normalizeRecord(rec);
   focusedRowId = null; shootGridScrolled = false; planSub = "arrange"; cPlanSub = "shoots";
   activeSongId = project.songs.length ? project.songs[0].id : null;
-  cutTime = 0; shootPartId = null;
+  cutTime = 0; shootPartId = null; shootDayId = null;
   resetPlayer();
   setTempoStatus("");
   $("docTitleInput").value = project.docTitle;
@@ -3776,7 +3816,7 @@ async function openProject(id) {
 async function goToProjects() {
   await persistNow();
   resetPlayer();
-  project = null; renderBanner();
+  project = null; shootDayId = null; renderBanner();
   document.title = "Producrr";
   document.querySelectorAll(".ws-view").forEach(v => v.classList.add("hidden"));
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.add("hidden"));
@@ -3784,7 +3824,11 @@ async function goToProjects() {
   $("projectsView").classList.remove("hidden");
   renderProjectsList();
 }
-$("backToProjectsBtn").addEventListener("click", goToProjects);
+$("backToProjectsBtn").addEventListener("click", () => {
+  /* on a content shoot day, Back returns to the list of dates first */
+  if (project && isContent() && currentWs === "shoot" && shootDayId) { shootDayId = null; renderCurrent(); window.scrollTo(0, 0); return; }
+  goToProjects();
+});
 $("docTitleInput").addEventListener("input", e => {
   project.docTitle = e.target.value;
   document.title = `${e.target.value || "Untitled project"} · Producrr`;
@@ -3917,6 +3961,12 @@ function renderBanner() {
   $("bannerInfo").textContent = info || "Add artist and date";
 }
 $("bannerBtn").addEventListener("click", () => $("bannerFile").click());
+var bannerTimer = null;
+$("projectBanner").addEventListener("click", e => {
+  if (e.target.closest("button")) return;
+  const b = $("projectBanner"); b.classList.add("show");
+  clearTimeout(bannerTimer); bannerTimer = setTimeout(() => b.classList.remove("show"), 3500);
+});
 $("bannerInfo").addEventListener("click", () => {
   if (!project) return;
   $("detArtist").value = project.artist || ""; $("detDate").value = project.shootDate || "";
@@ -3940,10 +3990,10 @@ function setActiveSong(id) {
   renderCurrent();
   loadActiveTrack();
 }
-function songTabsHTML(withAdd) {
-  return project.songs.map(sg => {
+function songTabsHTML(withAdd, songs, partsFn) {
+  return (songs || project.songs).map(sg => {
     if (withAdd && editingSongId === sg.id) return `<input type="text" class="song-tab-edit" data-edit-song="${sg.id}" value="${esc(sg.name)}" aria-label="Song name" autocapitalize="words">`;
-    const parts = songParts(sg.id);
+    const parts = (partsFn || songParts)(sg.id);
     const total = parts.reduce((n, p) => n + p.rows.length, 0), done = parts.reduce((n, p) => n + p.rows.filter(r => r.checked).length, 0);
     return `<button type="button" class="song-tab ${sg.id === activeSongId ? "active" : ""}" data-song-id="${sg.id}">${esc(sg.name)} <span class="song-tab-meta">${total ? `${done}/${total}` : "no shots"}</span></button>`;
   }).join("") + (withAdd ? `<button type="button" class="song-tab song-tab-add" data-c="add-song">+ Add song</button>` : "");
@@ -4116,7 +4166,8 @@ function dayTileHTML(d) {
   return `<span class="day-tile ${project.cover ? "img" : ""}" style="${coverStyle(project.id)}${project.cover ? `;background-image:url(${project.cover})` : ""}"><small>${esc(mon)}</small><b>${dd}</b></span>`;
 }
 function dayCardHTML(d, past) {
-  const bits = [fmt12(d.start) ? fmt12(d.start) + " start" : "", d.location].filter(Boolean).map(esc).join(" · ");
+  const nSel = dayPartIds(d).length;
+  const bits = [fmt12(d.start) ? fmt12(d.start) + " start" : "", d.location, nSel ? `${nSel} section${nSel === 1 ? "" : "s"}` : ""].filter(Boolean).map(esc).join(" · ");
   return `<button type="button" class="day-card ${past ? "past" : ""}" data-day-id="${d.id}">${dayTileHTML(d)}<span class="day-text"><span class="day-title">${esc(dayLabel(d.date, true))}</span><span class="muted small">${bits || "Tap to add a time and location"}</span></span></button>`;
 }
 function renderPlanContent() {
@@ -4137,8 +4188,39 @@ function openDay(id) {
   editingDayId = id;
   $("dayDate").value = d.date; $("dayStart").value = d.start; $("dayLoc").value = d.location; $("dayNotes").value = d.notes; $("dayHours").value = d.hours;
   $("dayTplCard").innerHTML = tplCardHTML();
+  paintDayParts();
   $("dayModal").classList.remove("hidden");
 }
+function paintDayParts() {
+  const d = curDay(); if (!d) return;
+  const sm = daySummary(d);
+  $("dayPartsBtn").innerHTML = `<span class="tpl-card-title">${esc(sm.title)}</span><span class="tpl-card-sub">${esc(sm.sub)}</span>`;
+}
+function paintPartsPick() {
+  const d = curDay(); if (!d) return;
+  const sel = new Set(dayPartIds(d));
+  $("partsPick").innerHTML = project.songs.length ? project.songs.map(sg => {
+    const ps = songParts(sg.id), n = ps.filter(x => sel.has(x.id)).length;
+    const st = ps.length && n === ps.length ? "on" : n ? "some" : "";
+    return `<div class="pp-song"><button type="button" class="pp-song-name ${st === "on" ? "on" : ""}" data-pp-song="${sg.id}"><span class="pp-box ${st}">${st === "on" ? "✓" : st === "some" ? "–" : ""}</span>${esc(sg.name)}</button>
+      <div class="pp-parts">${ps.length ? ps.map(x => `<button type="button" class="pp-part ${sel.has(x.id) ? "on" : ""}" data-pp-part="${x.id}">${esc(x.name)}${x.time ? ` <small>${esc(x.time)}</small>` : ""}</button>`).join("") : `<span class="muted small">No sections marked in Draft yet.</span>`}</div></div>`;
+  }).join("") : `<p class="muted">Add songs in Draft first.</p>`;
+}
+$("dayPartsBtn").addEventListener("click", () => { paintPartsPick(); $("partsModal").classList.remove("hidden"); });
+$("partsPick").addEventListener("click", e => {
+  const d = curDay(); if (!d) return;
+  const sel = new Set(dayPartIds(d));
+  const sb = e.target.closest("[data-pp-song]"), pb = e.target.closest("[data-pp-part]");
+  if (sb) { const ps = songParts(sb.dataset.ppSong); const all = ps.length && ps.every(x => sel.has(x.id)); ps.forEach(x => all ? sel.delete(x.id) : sel.add(x.id)); }
+  else if (pb) { const id = pb.dataset.ppPart; sel.has(id) ? sel.delete(id) : sel.add(id); }
+  else return;
+  d.parts = project.sections.filter(x => sel.has(x.id)).map(x => x.id);
+  scheduleSave(); paintPartsPick(); paintDayParts();
+  try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {}
+});
+$("partsClear").addEventListener("click", () => { const d = curDay(); if (d) { d.parts = []; scheduleSave(); paintPartsPick(); paintDayParts(); } });
+$("partsDone").addEventListener("click", () => $("partsModal").classList.add("hidden"));
+$("partsModal").addEventListener("click", e => { if (e.target === $("partsModal")) $("partsModal").classList.add("hidden"); });
 function closeDay() { $("dayModal").classList.add("hidden"); editingDayId = null; renderPlanContent(); }
 $("newDayBtn").addEventListener("click", () => {
   const last = sortedDays().pop(), today = ymd(new Date());
@@ -4301,7 +4383,8 @@ function renderContentBoard() {
 /* ================= content: shoot ================= */
 function renderContentStatus() {
   let total = 0, done = 0, takes = 0, first = null;
-  project.sections.forEach(p => p.rows.forEach(r => {
+  const f = currentWs === "shoot" ? shootFilter() : null;
+  project.sections.filter(p => !f || f.has(p.id)).forEach(p => p.rows.forEach(r => {
     total++;
     if (r.checked) done++;
     r.takes.forEach(t => { takes++; if (t.at && (!first || t.at < first)) first = t.at; });
@@ -4323,23 +4406,59 @@ function tileHTML(r) {
     ${active ? `<div class="tile-rate"><span class="small muted">Take ${active.n}</span><div class="rating-chips">${RATINGS.map(x => `<button type="button" class="rchip r-${x.id} ${active.rating === x.id ? "on" : ""}" data-c="tile-rate" data-take-id="${active.id}" data-rating="${x.id}">${x.label}</button>`).join("")}</div></div><div class="tile-loc">${locSelectHTML(active)}</div>` : ""}
   </div>`;
 }
+var shootDayId = null;
+function dayPartIds(d) { const ids = new Set(project.sections.filter(x => x.songId).map(x => x.id)); return ((d && d.parts) || []).filter(id => ids.has(id)); }
+function shootDay() { return shootDayId && shootDayId !== "all" ? (project.shootDays || []).find(x => x.id === shootDayId) || null : null; }
+function shootFilter() { const d = shootDay(); if (!d) return null; const sel = dayPartIds(d); return sel.length ? new Set(sel) : null; }
+function shootSongs() { const f = shootFilter(); return f ? project.songs.filter(sg => project.sections.some(x => x.songId === sg.id && f.has(x.id))) : project.songs; }
+function shootParts(songId) { const f = shootFilter(); const p = songParts(songId); return f ? p.filter(x => f.has(x.id)) : p; }
+function ordinal(n) { const v = n % 100; if (v >= 11 && v <= 13) return n + "th"; return n + (["th", "st", "nd", "rd"][n % 10] || "th"); }
+function bigDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short" }) + " " + ordinal(d); }
+function daySummary(d) {
+  const sel = dayPartIds(d);
+  if (!sel.length) return { title: "All songs & sections", sub: project.songs.length ? project.songs.map(x => x.name).join(", ") : "No songs yet" };
+  const songs = project.songs.filter(sg => project.sections.some(x => x.songId === sg.id && sel.includes(x.id)));
+  return { title: `${songs.length} song${songs.length === 1 ? "" : "s"} · ${sel.length} section${sel.length === 1 ? "" : "s"}`, sub: songs.map(x => x.name).join(", ") };
+}
+function renderShootDates() {
+  const today = ymd(new Date()), days = sortedDays();
+  const up = days.filter(d => d.date >= today), past = days.filter(d => d.date < today).reverse();
+  const card = (d, isPast) => {
+    const sm = daySummary(d), when = [dayLabel(d.date, true).split(",")[0], fmt12(d.start), d.location].filter(Boolean).map(esc).join(" · ");
+    return `<button type="button" class="sd-card ${isPast ? "past" : ""}" data-sd="${d.id}"><span class="sd-big">${esc(bigDate(d.date))}</span><span class="sd-sub">${when}</span><span class="sd-sub">${esc(sm.title)}</span></button>`;
+  };
+  $("shootDates").innerHTML = `<p class="sd-head">${days.length ? "Pick a shoot day to see just what you are shooting." : "No shoot days yet. Add one in Plan, then choose its songs and sections."}</p>`
+    + up.map(d => card(d, false)).join("") + past.map(d => card(d, true)).join("")
+    + (project.songs.length ? `<button type="button" class="sd-card all" data-sd="all"><span class="sd-big">All songs &amp; sections</span></button>` : "");
+}
+function selectShootDay(id) {
+  shootDayId = id;
+  const ss = shootSongs();
+  if (ss.length && !ss.some(x => x.id === activeSongId)) { activeSongId = ss[0].id; shootPartId = null; renderCurrent(); loadActiveTrack(); }
+  else renderCurrent();
+  window.scrollTo(0, 0);
+}
+$("shootDates").addEventListener("click", e => { const b = e.target.closest("[data-sd]"); if (b) selectShootDay(b.dataset.sd); });
 function currentShootPart() {
   const sg = activeSong();
   if (!sg) return null;
-  const parts = songParts(sg.id);
+  const parts = shootParts(sg.id);
   return parts.find(p => p.id === shootPartId) || parts.find(p => p.rows.some(r => !r.checked)) || parts[0] || null;
 }
 function renderShootContent() {
+  const dates = !shootDayId;
+  $("shootDates").classList.toggle("hidden", !dates); $("shootDayBody").classList.toggle("hidden", dates);
+  if (dates) { renderShootDates(); return; }
   mountTransport("#shootCView .transport-slot");
   renderContentStatus();
-  $("shootSongTabs").innerHTML = songTabsHTML(false);
+  $("shootSongTabs").innerHTML = songTabsHTML(false, shootSongs(), shootParts);
   const sg = activeSong(), panel = $("partPanel"), strip = $("partStrip");
   if (!sg) {
     strip.innerHTML = "";
     panel.innerHTML = `<p style="margin-top:0">Add songs and the parts you want to shoot in Draft first.</p><button type="button" class="btn primary" data-c="go-draft">Open Draft</button>`;
     return;
   }
-  const parts = songParts(sg.id);
+  const parts = shootParts(sg.id);
   if (!parts.length) {
     strip.innerHTML = "";
     panel.innerHTML = `<p style="margin-top:0">${esc(sg.name)} has no parts yet. Mark them in Draft.</p><button type="button" class="btn primary" data-c="go-draft">Open Draft</button>`;
@@ -4353,7 +4472,7 @@ function renderShootContent() {
   }).join("");
   const tp = curTempo();
   const idx = parts.indexOf(pt), prev = parts[idx - 1], next = parts[idx + 1];
-  const nextSong = project.songs[project.songs.indexOf(sg) + 1];
+  const ss = shootSongs(), nextSong = ss[ss.indexOf(sg) + 1];
   const doneN = pt.rows.filter(r => r.checked).length;
   const allDone = pt.rows.length > 0 && doneN === pt.rows.length;
   panel.innerHTML = `<div class="part-head" style="--sec:${pt.color}">
