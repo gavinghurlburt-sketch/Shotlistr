@@ -2380,6 +2380,8 @@ var playRate = 1;   // 0.5 / 1 / 2: the song plays slower or faster so the artis
 function isContent() { return !!project && (project.type === "content" || project.type === "artist"); }
 function trackOwnerId() { return project.type === "content" && project.artistId ? project.artistId : project.id; }
 let activeSongId = null;
+/* songs that actually have sections picked in Plan; Shoot and Cut only deal with these */
+function shootSongs() { return project.songs.filter(sg => songParts(sg.id).length); }
 function activeSong() { return project && project.songs.find(x => x.id === activeSongId) || null; }
 function curTempo() {
   if (!project) return defaultTempo();
@@ -4032,8 +4034,8 @@ function switchWs(ws, initial) {
   const vid = viewIdFor(ws);
   document.querySelectorAll(".ws-view").forEach(v => v.classList.toggle("hidden", v.id !== vid));
   if (!initial) scheduleSave();
-  if (project.type === "content" && (ws === "shoot" || ws === "cut") && project.songs.length) {
-    if (!activeSong()) { activeSongId = project.songs[0].id; shootPartId = null; shootOpenId = null; }
+  if (project.type === "content" && (ws === "shoot" || ws === "cut") && shootSongs().length) {
+    if (!shootSongs().some(x => x.id === activeSongId)) { activeSongId = shootSongs()[0].id; shootPartId = null; shootOpenId = null; }
     if (trackKey() !== loadedTrackKey) { renderCurrent(); loadActiveTrack(); window.scrollTo(0, 0); return; }
   }
   renderCurrent();
@@ -4692,7 +4694,7 @@ var lastShootSong = null, stFollow = 0;
   }, { passive: false });
   const end = e => {
     if (mode !== "x") { paintSongTitles(); return; }
-    const songs = project.songs, ai = songs.findIndex(x => x.id === activeSongId);
+    const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
     const dx = (e.changedTouches[0] || {}).clientX - x0, fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.4;
     let best = 0, bd = Infinity;
     [...box.children].forEach((el, i) => { if (!el.dataset.songId) return; const d = Math.abs(centerOf(el) - box.scrollLeft); if (d < bd) { bd = d; best = i; } });
@@ -4704,7 +4706,7 @@ var lastShootSong = null, stFollow = 0;
   box.addEventListener("touchcancel", () => { mode = ""; paintSongTitles(); });
 })();
 function paintSongTitles() {
-  const box = $("shootSongTabs"), songs = project.songs, ai = songs.findIndex(x => x.id === activeSongId);
+  const box = $("shootSongTabs"), songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
   const same = box.children.length === songs.length && songs.every((x, i) => box.children[i].dataset.songId === x.id && box.children[i].textContent === x.name);
   if (!same) box.innerHTML = songs.map(sg => `<button type="button" class="st" data-song-id="${sg.id}">${esc(sg.name)}</button>`).join("");
   [...box.children].forEach((el, i) => { el.classList.toggle("on", i === ai); el.classList.toggle("before", i < ai); el.classList.toggle("after", i > ai); });
@@ -4717,6 +4719,7 @@ function paintSongTitles() {
 function renderShootContent() {
   mountTransport("#shootCView .transport-slot");
   renderContentStatus();
+  { const ss = shootSongs(); if (ss.length && !ss.some(x => x.id === activeSongId)) { activeSongId = ss[0].id; shootPartId = null; shootOpenId = null; setTimeout(loadActiveTrack, 0); } }
   paintSongTitles();
   const dl = $("shootDateLine"), dt = project.shootDate;
   dl.textContent = dt ? (() => { const [y, m, d] = dt.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); })() : "";
@@ -4746,7 +4749,7 @@ function renderShootContent() {
     const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span><span class="pc-chev"></span></button>`;
     if (!open) return `<div class="part-card ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}</div>`;
     const prev = parts[idx - 1], next = parts[idx + 1];
-    const nextSong = project.songs[project.songs.indexOf(sg) + 1];
+    const ss = shootSongs(), nextSong = ss[ss.indexOf(sg) + 1];
     const allDone = p.rows.length > 0 && d === p.rows.length;
     return `<div class="part-card open ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}
       <div class="pc-body">
@@ -5008,7 +5011,7 @@ function followCutPlayhead() {
 function renderCut() {
   const content = isContent();
   $("cutSongTabs").classList.toggle("hidden", !content);
-  if (content) $("cutSongTabs").innerHTML = songTabsHTML(false);
+  if (content) $("cutSongTabs").innerHTML = songTabsHTML(false, shootSongs());
   $("cutInfo").textContent = player.src ? $("trackName").textContent : (content && !activeSong() ? "Add a song in Draft." : "No track loaded — upload it in Draft to hear it here.");
   const lanes = cutLanes();
   $("cutLegend").innerHTML = content ? "" : lanes.map(sec => `<span style="--sec:${sec.color}"><span class="dot"></span>${esc(sec.name || "Untitled")}</span>`).join("")
