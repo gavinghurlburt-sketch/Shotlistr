@@ -941,9 +941,10 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-del { opacity: 0; }
 .pc-wrap.rv .pc-del { opacity: 1; }
 /* home: Projects / Artists */
-.projects-title.home-tabs { display: flex; align-items: baseline; gap: 20px; }
+.projects-title.home-tabs { display: flex; align-items: baseline; gap: 20px; justify-content: space-between; }
 .home-tabs .ht { background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; font: inherit; letter-spacing: inherit; color: var(--muted); opacity: .55; cursor: pointer; transition: color .25s ease, opacity .25s ease; box-shadow: none; }
 .home-tabs .ht:hover { background: none; }
+.home-tabs .ht + .ht { margin-left: auto; }
 .home-tabs .ht.on { color: var(--text); opacity: 1; }
 #homeClip { overflow: hidden; margin: 0 -2px; padding: 0 2px; }
 #homeSlider { display: flex; width: 100%; }
