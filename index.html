@@ -878,8 +878,8 @@ main { padding: 6px 16px 24px; padding-left: max(16px, env(safe-area-inset-left)
 .tc-display { font-family: inherit; font-size: 14px; font-weight: 600; background-color: transparent; color: var(--text); padding: 0; min-width: 0; text-align: left; font-variant-numeric: tabular-nums; }
 .tc-display.pulse { background-color: transparent; color: var(--accent); }
 .track-name { font-size: 14px; }
-.waveform { background-color: transparent; border-radius: 0; height: 104px; margin-top: 14px; }
-.small-wave { height: 72px; }
+.waveform { background-color: transparent; border-radius: 0; height: 128px; margin-top: 14px; }
+.small-wave { height: 96px; }
 .cut-canvas { background-color: transparent; border-radius: 0; }
 .vb-item { border: 0; border-radius: 14px; }
 
@@ -979,6 +979,11 @@ details.more > :not(summary) { margin-top: 8px; }
 .cp-dot.on { border-color: var(--text); }
 .cp-custom { background: conic-gradient(#ef4444, #eab308, #22c55e, #14b8a6, #3b82f6, #a855f7, #ef4444); overflow: hidden; display: inline-block; }
 .cp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.part-time { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--muted); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; white-space: nowrap; padding: 0 4px; }
+.part-row { cursor: pointer; }
+.part-row .part-name { cursor: text; }
+.part-row.sel { background: linear-gradient(var(--sec), var(--sec)) 0 50% / 3px 56% no-repeat, color-mix(in srgb, var(--sec) 16%, var(--surface-2)); outline: 2px solid var(--sec); outline-offset: -2px; }
+#sectionModal .preset-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .part-row .pdot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
 .part-row .part-more { display: none; gap: 8px; width: 100%; flex-wrap: wrap; }
 .part-row.open .part-more { display: flex; }
@@ -1203,6 +1208,17 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     </div>
   </section>
 
+  <div id="sectionModal" class="modal hidden">
+    <div class="modal-inner">
+      <h3>New section</h3>
+      <p class="muted small" id="secWhere" style="margin:0 0 10px"></p>
+      <input type="text" id="secNameInput" class="field" style="width:100%" placeholder="Name, like Chorus" autocapitalize="words" maxlength="40">
+      <div id="secPresets" class="preset-row" style="margin-top:10px"></div>
+      <div id="secColors" class="color-pick" style="margin-top:10px" role="group" aria-label="Section color"></div>
+      <div class="modal-actions"><button type="button" id="secCancel" class="btn">Cancel</button><button type="button" id="secAdd" class="btn primary">Add section</button></div>
+    </div>
+  </div>
+
   <div id="artistModal" class="modal hidden">
     <div class="modal-inner">
       <h3>New artist</h3>
@@ -1403,11 +1419,10 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <div class="stack">
         <div class="track-slot"></div>
         <div class="panel" id="sectionsPanel">
-          <div class="panel-head"><h2>Song sections</h2><span class="spacer"></span><button type="button" id="suggestBtn" class="btn small hidden" data-c="suggest">Suggest sections</button></div>
+          <div class="panel-head"><h2>Song sections</h2><span class="spacer"></span><button type="button" id="addSectionBtn" class="btn small primary" data-c="add-section">+ Add section</button><button type="button" id="suggestBtn" class="btn small hidden" data-c="suggest">Suggest sections</button></div>
           <div id="suggestBox"></div>
           <div id="partsList"></div>
-          <p class="muted small" style="margin:8px 0 0">Play or scrub the track, then tap a section's time to drop in the playhead.</p>
-          <details class="more"><summary>Add a section yourself</summary><div id="partPresets" class="preset-row"></div></details>
+          <p class="muted small" id="partsHint" style="margin:8px 0 0"></p>
         </div>
         <details class="more song-opts"><summary>Song options</summary>
           <button type="button" class="btn small danger-text" data-c="delete-song">Delete song</button>
@@ -3080,7 +3095,7 @@ function suggestSections(buf, tp) {
 /* ---------- waveform ---------- */
 function waveMarkers() {
   if (!project) return [];
-  if (isContent()) return project.sections.filter(x => x.songId === activeSongId).map(x => ({ t: parseTC(x.time), color: x.color, label: x.name })).filter(m => m.t != null);
+  if (isContent()) return project.sections.filter(x => x.songId === activeSongId).map(x => ({ id: x.id, t: parseTC(x.time), color: x.color, label: x.name })).filter(m => m.t != null);
   const out = [];
   project.sections.forEach(sec => sec.rows.forEach(r => { const t = parseTC(r.timestamp); if (t != null) out.push({ t, color: sec.color, label: r.shotNum }); }));
   return out;
@@ -3148,18 +3163,38 @@ function drawWaveOn(canvas) {
     if (player.src) g.fillText("Reading the waveform…", 10, h / 2);
     return;
   }
-  drawPeaks(g, w, 0, h, dur);
+  const top = isContent() ? 24 : 0;                // room above the waveform for section names
+  drawPeaks(g, w, top, h - top, dur);
   if (!dur) return;
   g.font = "10px -apple-system, sans-serif";
-  waveMarkers().forEach(m => {
+  const selId = (canvas.id === "waveformCanvas" && isContent()) ? selPartId : null;
+  const marks = waveMarkers();
+  marks.sort((a, b) => (a.id === selId) - (b.id === selId));      // selected one paints last, on top
+  marks.forEach(m => {
     if (m.t > dur) return;
-    const x = (m.t / dur) * w;
+    const x = (m.t / dur) * w, isSel = !!selId && m.id === selId;
+    if (isSel) {
+      g.globalAlpha = 1; g.fillStyle = m.color;
+      g.fillRect(x - 1.5, top - 4, 3, h - top + 4);
+      g.beginPath(); g.arc(x, h - 9, 9, 0, 7); g.fill();                    // grab handle
+      g.fillStyle = "#fff"; g.fillRect(x - 3, h - 10, 6, 1.6); g.fillRect(x - 3, h - 7, 6, 1.6);
+      g.beginPath(); g.moveTo(x - 6, top - 8); g.lineTo(x + 6, top - 8); g.lineTo(x, top + 2); g.closePath(); g.fillStyle = m.color; g.fill();
+      if (m.label) {
+        g.font = "700 14px -apple-system, sans-serif";
+        const tw = g.measureText(m.label).width, lx = Math.max(2, Math.min(w - tw - 2, x - tw / 2));
+        g.fillStyle = m.color; g.fillText(m.label, lx, top - 11);
+        g.font = "10px -apple-system, sans-serif";
+      }
+      return;
+    }
+    g.globalAlpha = selId ? 0.3 : 1;
     g.fillStyle = m.color;
-    if (isContent()) { g.fillRect(x, 0, 2, h); }
-    g.beginPath(); g.moveTo(x - 4, 0); g.lineTo(x + 4, 0); g.lineTo(x, 7); g.closePath(); g.fill();
-    if (m.label) { g.fillStyle = waveColors().text; g.fillText(m.label, x + 5, 10); }
+    if (isContent()) { g.fillRect(x, top - 4, 2, h - top + 4); }
+    g.beginPath(); g.moveTo(x - 4, top - 4); g.lineTo(x + 5, top - 4); g.lineTo(x + 0.5, top + 3); g.closePath(); g.fill();
+    if (m.label) { g.fillStyle = waveColors().text; const tw = g.measureText(m.label).width; g.fillText(m.label, Math.max(2, Math.min(w - tw - 2, x - tw / 2 + 1)), top - 9); }
+    g.globalAlpha = 1;
   });
-  g.fillStyle = waveColors().head; g.fillRect(Math.round((transportTime() / dur) * w) - 1, 0, 2, h);
+  g.fillStyle = waveColors().head; g.fillRect(Math.round((transportTime() / dur) * w) - 1, top, 2, h - top);
 }
 function drawWaveform() {
   drawWaveOn($("waveformCanvas"));
@@ -3237,6 +3272,56 @@ function wireScrub(canvas, seek, getDur) {
   canvas.addEventListener("pointercancel", end);
   canvas.style.touchAction = "pan-y";
 }
+/* drag the highlighted marker anywhere on the track; haptics tick on measures and other markers */
+function wireMarkerDrag(canvas) {
+  let sec = null, det = null, lastT = 0, lastFeel = 0, pid = null, pendingX = null, raf = 0;
+  const dur = () => trackDuration();
+  const timeAt = x => {
+    const r = canvas.getBoundingClientRect();
+    let t = Math.max(0, Math.min(1, (x - r.left) / r.width)) * dur();
+    const tp = curTempo();
+    if (tp && tp.snap && tp.bpm > 0 && tp.offset != null) {
+      const bar = (60 / tp.bpm) * 4;
+      let best = tp.offset + Math.round((t - tp.offset) / bar) * bar;
+      if (best < 0) best += bar * Math.ceil(-best / bar);
+      if (best > dur()) best = Math.max(0, best - bar);
+      t = best;
+    }
+    return t;
+  };
+  const apply = () => {
+    raf = 0; if (pendingX == null || !sec) return;
+    let t = timeAt(pendingX); pendingX = null;
+    if (secClashOther(t, sec)) return;
+    const kind = detentBetween(det, lastT, t, dur(), canvas.clientWidth);
+    if (kind) { const now = performance.now(); if (now - lastFeel > 28) { feel(kind); lastFeel = now; } }
+    if (t !== lastT) {
+      lastT = t; sec.time = fmtTC(t); setPosition(t);
+      const el = document.querySelector(`#partsList [data-section-id="${sec.id}"] .part-time`); if (el) el.textContent = sec.time;
+      drawWaveform();
+    }
+  };
+  canvas.addEventListener("pointerdown", e => {
+    if (!selPartId || !dur()) return;
+    const s0 = getSection(selPartId), t0 = s0 && parseTC(s0.time); if (t0 == null) return;
+    const r = canvas.getBoundingClientRect(), mx = r.left + (t0 / dur()) * r.width;
+    if (Math.abs(e.clientX - mx) > 28) return;                    // not on the marker: normal scrubbing
+    e.stopImmediatePropagation(); e.preventDefault();
+    sec = s0; pid = e.pointerId; lastT = t0; det = waveDetents(); det.marks = det.marks.filter(m => Math.abs(m - t0) > 1e-6);
+    if (isPlaying() && audioBuffer) { stopCue(true); }
+    try { canvas.setPointerCapture(pid); } catch (x) {}
+    feel("measure");
+  }, true);
+  canvas.addEventListener("pointermove", e => { if (!sec || e.pointerId !== pid) return; pendingX = e.clientX; if (!raf) raf = requestAnimationFrame(apply); });
+  const end = e => {
+    if (!sec || (e && e.pointerId !== pid)) return;
+    if (raf) { cancelAnimationFrame(raf); raf = 0; apply(); }
+    sec = null; scheduleSave(); renderPartsList(); drawWaveform();
+  };
+  canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
+}
+function secClashOther(t, sec) { return songParts(sec.songId).some(x => x !== sec && x.time && Math.abs(parseTC(x.time) - t) < 0.05); }
+wireMarkerDrag($("waveformCanvas"));
 wireScrub($("waveformCanvas"), t => setPosition(t), trackDuration);
 wireScrub($("shootWave"), t => setPosition(t), trackDuration);
 $("leadSelect").addEventListener("change", e => { curTempo().lead = parseInt(e.target.value, 10) || 0; scheduleSave(); });
@@ -4405,10 +4490,12 @@ $("artistShoots").addEventListener("click", async e => {
 function renderPartsList() {
   const sg = activeSong();
   const parts = songParts(sg.id);
-  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row ${openPartId === pt.id ? "open" : ""}" data-section-id="${pt.id}" style="--sec:${pt.color}">
+  if (selPartId && !parts.some(x => x.id === selPartId)) selPartId = null;
+  paintSectionHints();
+  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row ${openPartId === pt.id ? "open" : ""}${selPartId === pt.id ? " sel" : ""}" data-section-id="${pt.id}" aria-selected="${selPartId === pt.id}" style="--sec:${pt.color}">
       <span class="pdot" style="background-color:${pt.color}"></span>
       <input type="text" class="field part-name" data-part-name value="${esc(pt.name)}" aria-label="Part name">
-      <button type="button" class="tc-paste ${pt.time ? "has" : ""}" data-c="part-paste" title="Fills in the player's current position">${pt.time ? esc(pt.time) : "Set time"}</button>
+      <span class="part-time">${pt.time ? esc(pt.time) : "—"}</span>
       ${pt.time ? `<button type="button" class="icon-btn" data-c="part-cue" title="Play from here" aria-label="Play from here">▶</button>` : ""}
       <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color and delete">⋯</button>
       <div class="part-more">
@@ -4420,6 +4507,60 @@ function renderPartsList() {
   renderSuggest();
 }
 var openPartId = null;
+var selPartId = null;
+function paintSectionHints() {
+  const hint = $("partsHint"), btn = $("addSectionBtn"), has = !!player.src;
+  if (btn) { btn.disabled = !has; btn.title = has ? "Add a section at the playhead" : "Upload the track first"; }
+  if (hint) hint.textContent = !has ? "Upload the track, then add the sections you want to shoot."
+    : selPartId ? "Drag the highlighted marker on the track to move it. Tap the section again to let go."
+    : "Tap a section to highlight it on the track. Drag along the track to move the playhead, then tap + Add section.";
+}
+function selectPart(id) {
+  const sec = id && getSection(id);
+  selPartId = (sec && selPartId !== id) ? id : null;
+  if (sec && selPartId && !sec.time && player.src) sec.time = fmtTC(transportTime()), scheduleSave();
+  if (sec && selPartId && sec.time && !isPlaying()) { const t = parseTC(sec.time); if (t != null) setPosition(t); }
+  renderPartsList(); drawWaveform();
+}
+/* "+ Add section": name + color, placed at the playhead */
+var secDraft = { color: PART_PRESETS[0].color };
+function secClash(t) { const sg = activeSong(); return !!sg && songParts(sg.id).some(x => x.time && Math.abs(parseTC(x.time) - t) < 0.05); }
+function paintSectionModal() {
+  const name = $("secNameInput").value.trim(), t = transportTime(), clash = secClash(t);
+  $("secWhere").textContent = clash ? "There's already a section here. Move the playhead to a different spot first." : "Starts at " + fmtTC(t) + " (where the playhead is). You can drag it later.";
+  $("secAdd").disabled = !name || clash;
+  $("secPresets").innerHTML = PART_PRESETS.map((p, i) => `<button type="button" class="btn small preset-btn" data-sec-preset="${i}" style="--sec:${p.color}"><span class="dot"></span>${p.name}</button>`).join("");
+  const cur = String(secDraft.color).toLowerCase(), isPal = PALETTE.some(c => c.toLowerCase() === cur);
+  $("secColors").innerHTML = PALETTE.map(c => `<button type="button" class="cp-dot${c.toLowerCase() === cur ? " on" : ""}" data-sec-color="${c}" style="background-color:${c}" aria-label="Color ${c}"></button>`).join("")
+    + `<label class="cp-dot cp-custom${isPal ? "" : " on"}" style="${isPal ? "" : "background-color:" + secDraft.color}" title="Pick any color"><input type="color" id="secColorInput" value="${/^#[0-9a-f]{6}$/i.test(secDraft.color) ? secDraft.color : "#888888"}" aria-label="Custom color"></label>`;
+}
+function openSectionModal() {
+  if (!activeSong() || !player.src) return;
+  $("secNameInput").value = ""; secDraft.color = PART_PRESETS[0].color;
+  $("sectionModal").classList.remove("hidden"); paintSectionModal(); $("secNameInput").focus();
+}
+$("secNameInput").addEventListener("input", paintSectionModal);
+$("secNameInput").addEventListener("keydown", e => { if (e.key === "Enter") $("secAdd").click(); });
+$("sectionModal").addEventListener("click", e => {
+  if (e.target.id === "sectionModal") { $("sectionModal").classList.add("hidden"); return; }
+  const pr = e.target.closest("[data-sec-preset]"), co = e.target.closest("[data-sec-color]");
+  if (pr) { const x = PART_PRESETS[+pr.dataset.secPreset]; $("secNameInput").value = x.name; secDraft.color = x.color; paintSectionModal(); }
+  if (co) { secDraft.color = co.dataset.secColor; paintSectionModal(); }
+});
+$("sectionModal").addEventListener("change", e => { if (e.target.id === "secColorInput") { secDraft.color = e.target.value; paintSectionModal(); } });
+$("secCancel").addEventListener("click", () => $("sectionModal").classList.add("hidden"));
+$("secAdd").addEventListener("click", () => {
+  const sg = activeSong(), name = $("secNameInput").value.trim(), t = transportTime();
+  if (!sg || !name || secClash(t)) return;
+  const sec = addPart(sg, null); sec.name = name; sec.color = secDraft.color; sec.time = fmtTC(t);
+  $("sectionModal").classList.add("hidden");
+  selPartId = sec.id; scheduleSave(); renderDraftContent(); drawWaveform();
+  feel("marker");
+});
+$("partsList").addEventListener("click", e => {
+  if (e.target.closest("input, button, label, .part-more")) return;
+  const row = e.target.closest(".part-row"); if (row) selectPart(row.dataset.sectionId);
+});
 document.addEventListener("change", e => {
   const inp = e.target.closest && e.target.closest(".part-color-input"); if (!inp) return;
   const row = inp.closest(".part-row"), sec = row && getSection(row.dataset.sectionId);
@@ -4468,8 +4609,6 @@ function renderSongLinks() {
     ? sg.links.map((u, i) => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a><button type="button" class="icon-btn" data-c="del-link" data-i="${i}" aria-label="Remove link">×</button></div>`).join("")
     : `<p class="muted small" style="margin:0">Reels, TikToks, or videos to reference.</p>`;
 }
-$("partPresets").innerHTML = PART_PRESETS.map((p, i) => `<button type="button" class="btn small preset-btn" data-c="add-part" data-preset="${i}" style="--sec:${p.color}"><span class="dot"></span>${p.name}</button>`).join("")
-  + `<button type="button" class="btn small" data-c="add-part" data-preset="-1">+ Custom</button>`;
 $("songNotes").addEventListener("input", e => { const sg = briefObj(); if (sg) { sg.notes = e.target.value; scheduleSave(); } });
 $("partsList").addEventListener("input", e => {
   if (!e.target.hasAttribute("data-part-name")) return;
@@ -4976,15 +5115,7 @@ document.addEventListener("click", e => {
       scheduleSave(); renderCurrent(); loadActiveTrack();
       break;
     }
-    case "add-part": {
-      const sg = activeSong(); if (!sg) return;
-      const i = +b.dataset.preset;
-      const p = addPart(sg, i >= 0 ? PART_PRESETS[i] : null);
-      if (player.src && transportTime() > 0 && !songParts(sg.id).some(x => x !== p && x.time === fmtTC(transportTime()))) p.time = fmtTC(transportTime());
-      scheduleSave(); renderDraftContent(); drawWaveform();
-      if (i < 0) { const inp = document.querySelector(`#partsList [data-section-id="${p.id}"] [data-part-name]`); if (inp) { inp.focus(); inp.select(); } }
-      break;
-    }
+    case "add-section": openSectionModal(); break;
     case "suggest": runSuggest(false); break;
     case "sug-add": {
       const sg = activeSong(), l = sg && suggestMap[sg.id]; if (!l) return;
@@ -5001,7 +5132,6 @@ document.addEventListener("click", e => {
     case "sug-dismiss": { const sg = activeSong(); if (sg) delete suggestMap[sg.id]; renderSuggest(); break; }
     case "part-more": { if (!sec) return; openPartId = openPartId === sec.id ? null : sec.id; renderPartsList(); break; }
     case "part-set-color": { if (!sec) return; sec.color = b.dataset.color; scheduleSave(); renderDraftContent(); break; }
-    case "part-paste": { const tc = pastePlayhead(); if (tc && sec) { sec.time = tc; scheduleSave(); renderDraftContent(); } break; }
     case "part-cue": if (sec) playCue(sec.time); break;
     case "part-delete": {
       if (!sec) return;
