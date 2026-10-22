@@ -1905,6 +1905,26 @@ async function deleteProjectRecord(id) {
     tx.objectStore("tracks").delete(IDBKeyRange.bound(id, id + "\uffff"));
   });
 }
+/* every uploaded track is stored as a 128 kbps mp3 (we only need it for shooting, not for release) */
+async function toMp3(file) {
+  try {
+    if (!window.lamejs || /\.mp3$/i.test(file.name) || file.type === "audio/mpeg") return file;
+    const ab = await file.arrayBuffer();
+    const buf = await new Promise((res, rej) => { const p = ctx().decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
+    const nch = Math.min(2, buf.numberOfChannels), enc = new lamejs.Mp3Encoder(nch, buf.sampleRate, 128);
+    const to16 = ch => { const o = new Int16Array(ch.length); for (let i = 0; i < ch.length; i++) { const v = Math.max(-1, Math.min(1, ch[i])); o[i] = v < 0 ? v * 32768 : v * 32767; } return o; };
+    const L = to16(buf.getChannelData(0)), R = nch > 1 ? to16(buf.getChannelData(1)) : null, out = [], step = 1152 * 40;
+    for (let i = 0; i < L.length; i += step) {
+      const d = nch > 1 ? enc.encodeBuffer(L.subarray(i, i + step), R.subarray(i, i + step)) : enc.encodeBuffer(L.subarray(i, i + step));
+      if (d.length) out.push(d);
+      if ((i / step) % 10 === 9) await new Promise(r => setTimeout(r, 0));
+    }
+    const end = enc.flush(); if (end.length) out.push(end);
+    const blob = new Blob(out, { type: "audio/mpeg" });
+    if (!blob.size || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".mp3", { type: "audio/mpeg" });
+  } catch (e) { console.error("mp3 convert failed, keeping original", e); return file; }
+}
 async function saveTrack(projectId, blob, name) {
   if (DEMO_MODE) { demoTracks.set(projectId, { blob, name }); return; }
   try { await idb("tracks", "readwrite", tx => { tx.objectStore("tracks").put({ projectId, blob, name }); }); }
@@ -3440,10 +3460,15 @@ $("visionFileInput").addEventListener("change", e => {
 });
 $("producerNotes").addEventListener("input", e => { project.producerNotes = e.target.value; scheduleSave(); });
 $("uploadTrackBtn").addEventListener("click", () => $("trackFileInput").click());
-$("trackFileInput").addEventListener("change", e => {
-  const f = e.target.files[0];
+$("trackFileInput").addEventListener("change", async e => {
+  let f = e.target.files[0];
   e.target.value = "";
   if (!f || !project) return;
+  const pid = project.id;
+  setTempoStatus("Converting to MP3…");
+  f = await toMp3(f);
+  setTempoStatus("");
+  if (!project || project.id !== pid) return;
   if (isContent()) {
     let sg = activeSong();
     if (!sg) { sg = addSong(); }
@@ -4317,10 +4342,10 @@ $("newArtist").addEventListener("change", async e => {
   $("newModal").classList.add("hidden"); openArtistModal("new");
 });
 function openNewModal(artistName, date) {
-  const solo = isArtistTier();
-  $("newArtistLabel").classList.toggle("hidden", solo); $("newTypeChoices").classList.toggle("hidden", solo); $("newCreateBtn").classList.toggle("hidden", !solo);
-  document.querySelector("#newModal h3").textContent = solo ? "New content shoot" : "New";
-  document.querySelector("#newModal .modal-hint").textContent = solo ? "Pick the date. You can change it later." : "Pick the artist and the date, then what kind of shoot it is.";
+  const solo = isArtistTier(), contentOnly = TIER !== "pro";   // only Pro gets Video production
+  $("newArtistLabel").classList.toggle("hidden", solo); $("newTypeChoices").classList.toggle("hidden", contentOnly); $("newCreateBtn").classList.toggle("hidden", !contentOnly);
+  document.querySelector("#newModal h3").textContent = contentOnly ? "New content shoot" : "New";
+  document.querySelector("#newModal .modal-hint").textContent = solo ? "Pick the date. You can change it later." : contentOnly ? "Pick the artist and the date." : "Pick the artist and the date, then what kind of shoot it is.";
   $("newShootDate").value = date || ""; fillNewArtist(artistName || ""); $("newModal").classList.remove("hidden"); }
 $("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal("home"); return; } openNewModal(artistFilter || "", calSel || ""); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
@@ -4328,7 +4353,7 @@ $("newModal").addEventListener("click", async e => {
   if (e.target.id === "newModal") { $("newModal").classList.add("hidden"); return; }
   const b = e.target.closest("[data-type], #newCreateBtn");
   if (!b) return;
-  let type = b.dataset.type, artist = $("newArtist").value === "__new" ? "" : $("newArtist").value;
+  let type = TIER !== "pro" ? "content" : b.dataset.type, artist = $("newArtist").value === "__new" ? "" : $("newArtist").value;
   if (!isArtistTier() && type === "content" && !artist) { $("newArtist").classList.add("need"); $("newArtist").focus(); showNotice("Choose an artist for this shoot first."); return; }
   if (isArtistTier()) {
     type = "content";
