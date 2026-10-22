@@ -982,6 +982,8 @@ details.more > :not(summary) { margin-top: 8px; }
 .cp-dot.on { border-color: var(--text); }
 .cp-custom { background: conic-gradient(#ef4444, #eab308, #22c55e, #14b8a6, #3b82f6, #a855f7, #ef4444); overflow: hidden; display: inline-block; }
 .cp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.move-row { display: flex; gap: 8px; margin: 0 0 10px; }
+.move-row .btn { flex: 1; }
 .tempo-ctl { display: flex; gap: 8px; margin: 0 0 8px; }
 .tempo-ctl .btn { flex: 1; }
 .tempo-wave { display: block; width: 100%; height: 132px; border-radius: 14px; background-color: var(--surface-2); margin-top: 12px; touch-action: none; cursor: ew-resize; }
@@ -1431,6 +1433,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
         <div class="panel" id="sectionsPanel">
           <div class="panel-head"><h2>Song sections</h2><span class="spacer"></span><button type="button" id="addSectionBtn" class="btn small primary" data-c="add-section">+ Add section</button><button type="button" id="suggestBtn" class="btn small hidden" data-c="suggest">Suggest sections</button></div>
           <div id="suggestBox"></div>
+          <div class="move-row"><button type="button" id="moveL" class="btn small" aria-label="Nudge the selected section one measure earlier">‹ Nudge</button><button type="button" id="moveR" class="btn small" aria-label="Nudge the selected section one measure later">Nudge ›</button></div>
           <div id="partsList"></div>
           <p class="muted small" id="partsHint" style="margin:8px 0 0"></p>
         </div>
@@ -4667,10 +4670,26 @@ var selPartId = null;
 function paintSectionHints() {
   const hint = $("partsHint"), btn = $("addSectionBtn"), has = !!player.src;
   if (btn) { btn.disabled = !has; btn.title = has ? "Add a section at the playhead" : "Upload the track first"; }
+  const tp = curTempo(), tempoOk = !!(tp && tp.bpm > 0 && tp.offset != null), canMove = has && !!selPartId && tempoOk;
+  ["moveL", "moveR"].forEach(id => { const b = $(id); if (!b) return; b.disabled = !canMove;
+    b.title = canMove ? "Nudge the section one measure" : !has ? "Upload the track first" : !tempoOk ? "Set the tempo first" : "Tap a section first"; });
   if (hint) hint.textContent = !has ? "Upload the track, then add the sections you want to shoot."
-    : selPartId ? "Drag the highlighted marker on the track to move it. Tap the section again to let go."
+    : selPartId ? "Drag the highlighted marker on the track to move it" + (tempoOk ? ", or use Nudge to jump a measure at a time" : "") + ". Tap the section again to let go."
     : "Tap a section to highlight it on the track. Drag along the track to move the playhead, then tap + Add section.";
 }
+function moveSelectedBar(dir) {                       // jump the selected marker to the previous / next measure line
+  const sec = selPartId && getSection(selPartId), tp = curTempo(), d = trackDuration();
+  if (!sec || !d || !(tp.bpm > 0) || tp.offset == null) return;
+  const bar = (60 / tp.bpm) * 4, t0 = parseTC(sec.time) || 0, k = (t0 - tp.offset) / bar, eps = 0.06 / bar;
+  const kn = dir > 0 ? Math.floor(k + eps) + 1 : Math.ceil(k - eps) - 1;
+  const t = tp.offset + kn * bar;
+  if (t < 0 || t > d || secClashOther(Math.round(t * 10) / 10, sec)) return;
+  sec.time = fmtTC(t); feel("measure");
+  if (!isPlaying()) setPosition(t);
+  scheduleSave(); renderPartsList(); drawWaveform();
+}
+$("moveL").addEventListener("click", () => moveSelectedBar(-1));
+$("moveR").addEventListener("click", () => moveSelectedBar(1));
 function selectPart(id) {
   const sec = id && getSection(id);
   selPartId = (sec && selPartId !== id) ? id : null;
