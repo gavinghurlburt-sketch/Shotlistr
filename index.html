@@ -650,8 +650,8 @@ table.sched tr.done-row td { background-color: var(--done); }
 .song-titles .st { position: absolute; left: 50%; top: 50%; white-space: nowrap; background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; font-size: 36px; line-height: 1.1; font-weight: 800; letter-spacing: -0.045em; color: var(--muted); opacity: .5; transition: transform .42s cubic-bezier(.2,.8,.2,1), opacity .42s ease, color .3s ease; will-change: transform, opacity; backface-visibility: hidden; }
 .song-titles.drag .st, .song-titles.noanim .st { transition: none; }
 .song-titles .st:hover, .song-titles .st:active { background: none; }
-.song-titles .st.before { -webkit-mask-image: linear-gradient(to right, #000 15%, transparent 100%); mask-image: linear-gradient(to right, #000 15%, transparent 100%); }
-.song-titles .st.after { -webkit-mask-image: linear-gradient(to left, #000 15%, transparent 100%); mask-image: linear-gradient(to left, #000 15%, transparent 100%); }
+.song-titles .st.before { -webkit-mask-image: linear-gradient(to right, #000 0%, transparent 72%); mask-image: linear-gradient(to right, #000 0%, transparent 72%); }
+.song-titles .st.after { -webkit-mask-image: linear-gradient(to left, #000 0%, transparent 72%); mask-image: linear-gradient(to left, #000 0%, transparent 72%); }
 .song-titles .st.on { color: var(--text); -webkit-mask-image: none; mask-image: none; }
 @keyframes cardDrop { from { opacity: 0; transform: translateY(-22px); } to { opacity: 1; transform: none; } }
 .part-card.drop { animation: cardDrop .65s cubic-bezier(.2,.8,.2,1) both; }
@@ -4791,16 +4791,20 @@ function stLayout(dragDx, animate) {
     if (!mode) { if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; mode = Math.abs(dx) > Math.abs(dy) ? "x" : "y"; if (mode === "x") box.classList.add("drag"); }
     if (mode !== "x") return;
     if (e.cancelable) e.preventDefault();
-    stLayout(dx, false); box.classList.add("drag");
+    /* the wheel never travels further than the next song in the direction of the finger */
+    const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId), nx = dx < 0 ? stX[ai + 1] : stX[ai - 1];
+    const lim = nx == null ? 28 : Math.abs(nx), eff = nx == null ? Math.sign(dx) * Math.min(lim, Math.abs(dx) * 0.25) : Math.sign(dx) * Math.min(lim, Math.abs(dx));
+    stLayout(eff, false); box.classList.add("drag");
   }, { passive: false });
   const end = e => {
     box.classList.remove("drag");
     if (mode !== "x") { mode = ""; return; }
     const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
     const dx = ((e.changedTouches && e.changedTouches[0]) || {}).clientX - x0, fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.4;
-    let best = ai, bd = Infinity;
-    stX.forEach((cx, i) => { const d = Math.abs(cx + dx); if (d < bd) { bd = d; best = i; } });
-    if (fast && best === ai) best = Math.max(0, Math.min(songs.length - 1, ai + (dx < 0 ? 1 : -1)));
+    /* one song at a time, in the direction of the swipe */
+    const nx = dx < 0 ? stX[ai + 1] : stX[ai - 1];
+    let best = ai;
+    if (nx != null && (fast || Math.abs(dx) > Math.min(70, Math.abs(nx) * 0.35))) best = ai + (dx < 0 ? 1 : -1);
     mode = "";
     if (best !== ai && songs[best]) { feel("select"); setActiveSong(songs[best].id); } else stLayout(0, true);
   };
