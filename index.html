@@ -833,6 +833,8 @@ button:disabled { opacity: .4; }
 #accountBtn { flex: none; max-width: 120px; white-space: nowrap; }
 #accountBtn.signed { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; background-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
 #accountBtn.signed:hover { background-color: var(--accent); opacity: .9; }
+#accountBtn { position: relative; }
+#accountBtn.warn::after { content: ""; position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background-color: var(--danger); box-shadow: 0 0 0 2px var(--bg); }
 
 /* workspace tabs */
 .ws-tabs { padding: 4px 16px 10px; gap: 4px; }

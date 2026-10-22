@@ -9,7 +9,30 @@ const sb = (window.supabase && !DEMO_MODE)
   ? window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } })
   : null;
 let cloudUser = null;
-let syncing = false, syncTimer = null, lastPull = 0, cloudMsg = "";
+let syncing = false, syncTimer = null, lastPull = 0, cloudMsg = "", syncStartedAt = 0, cloudCheck = null;
+function withTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timed out")), ms))]); }
+/* ask the server what it really has, so the status never says "Synced" just because our own queue is empty */
+async function verifyCloud() {
+  if (!sb || !cloudUser) { cloudCheck = null; return null; }
+  try {
+    const [a, b] = await Promise.all([
+      sb.from("producrr_projects").select("id,client_updated_at,deleted_at"),
+      sb.from("producrr_tracks").select("key")]);
+    if (a.error) throw a.error; if (b.error) throw b.error;
+    const cloud = new Map((a.data || []).map(r => [r.id, r]));
+    const behind = (await _localListProjects()).filter(p => {
+      if (isUntouchedExample(p)) return false;
+      const c = cloud.get(p.id);
+      return !c || (!c.deleted_at && (Date.parse(p.updatedAt) || 0) > (Date.parse(c.client_updated_at) || 0) + 1000);
+    });
+    const have = new Set((b.data || []).map(r => r.key));
+    const keys = await idb("tracks", "readonly", tx => tx.objectStore("tracks").getAllKeys());
+    cloudCheck = { projects: behind.map(p => p.docTitle || "Untitled"), tracks: (keys || []).filter(k => !have.has(k)).length, at: Date.now() };
+  } catch (e) { cloudCheck = null; }
+  paintCloud();
+  return cloudCheck;
+}
+function behindCount() { return cloudCheck ? cloudCheck.projects.length + cloudCheck.tracks : 0; }
 
 /* ---- queue of pending pushes (survives restarts) ---- */
 function qLoad() { try { return JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch (e) { return []; } }
@@ -60,15 +83,16 @@ async function clearTrack(projectId) {
 /* ---- pushing ---- */
 function kickSync() { clearTimeout(syncTimer); syncTimer = setTimeout(() => { processQueue(); }, 1500); }
 async function processQueue() {
+  if (syncing && Date.now() - syncStartedAt > 90000) syncing = false; // a stuck request must never block saving forever
   if (!sb || !cloudUser || syncing) return;
   if (navigator.onLine === false) { cloudMsg = "Offline. Changes will sync later."; paintCloud(); return; }
-  syncing = true; cloudMsg = "Syncing…"; paintCloud();
+  syncing = true; syncStartedAt = Date.now(); cloudMsg = "Syncing…"; paintCloud();
   let failed = null;
   try {
     for (let guard = 0; guard < 500; guard++) {
       const q = qLoad(); if (!q.length) break;
       const op = q[0];
-      try { await runOp(op); }
+      try { await withTimeout(runOp(op), op.t === "t" ? 180000 : 30000); }
       catch (e) { failed = e; break; }
       const done = JSON.stringify(op);
       qSave(qLoad().filter(o => JSON.stringify(o) !== done));
@@ -77,6 +101,7 @@ async function processQueue() {
   cloudMsg = failed ? "Sync paused: " + (failed.message || "network problem") : "";
   paintCloud();
   if (failed) console.error("sync", failed);
+  else verifyCloud();
 }
 async function runOp(op) {
   const uidStr = cloudUser.id;
@@ -154,6 +179,7 @@ async function syncDown(force) {
     cloudMsg = "";
     paintCloud();
     await processQueue();
+    await verifyCloud();
     if (!$("projectsView").classList.contains("hidden")) renderProjectsList();
   } catch (e) { cloudMsg = "Sync paused: " + (e.message || "network problem"); paintCloud(); console.error("syncDown", e); }
 }
@@ -169,11 +195,21 @@ function paintCloud() {
   const btn = $("accountBtn"); if (!btn) return;
   btn.textContent = cloudUser ? String(cloudUser.email || "A").trim().charAt(0).toUpperCase() : "Sign in";
   btn.classList.toggle("signed", !!cloudUser);
+  btn.classList.toggle("warn", !cloudUser ? false : (qLoad().length > 0 || behindCount() > 0));
   btn.title = cloudUser ? (cloudUser.email || "Account") : "Sign in";
   const pending = qLoad().length;
   const st = $("cloudStatus");
-  if (st) st.textContent = !cloudUser ? "" : (cloudMsg || (pending ? pending + " change" + (pending === 1 ? "" : "s") + " waiting to sync" : "Synced"));
+  let line = "";
+  if (!cloudUser) line = "Only on this phone · sign in to back up";
+  else if (cloudMsg) line = cloudMsg;
+  else if (pending) line = pending + " change" + (pending === 1 ? "" : "s") + " waiting to sync";
+  else if (cloudCheck) {
+    const n = behindCount();
+    line = n ? "⚠ " + n + " item" + (n === 1 ? "" : "s") + " only on this phone" : "Saved to your account · " + new Date(cloudCheck.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  } else line = "Checking your account…";
+  if (st) st.textContent = line;
   const ms = $("acctSyncLine"); if (ms && st) ms.textContent = st.textContent;
+  if (st) st.style.color = cloudUser && !pending && !cloudMsg && cloudCheck && behindCount() ? "var(--danger, #ff6b5e)" : "";
 }
 function acctShow(view, msg) {
   ["acctSignedOut", "acctSignedIn", "acctCode", "acctReset"].forEach(id => $(id).classList.toggle("hidden", id !== view));
@@ -245,8 +281,9 @@ async function acctSetPassword() {
 }
 async function acctSignOut() {
   await processQueue();
-  const left = qLoad().length;
-  if (left && !confirm(left + " change(s) haven't synced yet and will be lost on this device if you sign out. Sign out anyway?")) return;
+  await verifyCloud();
+  const left = qLoad().length, c = cloudCheck, names = c ? c.projects.slice(0, 5).join(", ") + (c.tracks ? (c.projects.length ? " and " : "") + c.tracks + " track(s)" : "") : "";
+  if ((left || behindCount() || !c) && !confirm((left || behindCount() ? "These aren't saved to your account yet and will be LOST if you sign out: " + (names || left + " change(s)") + ". Sign out anyway?" : "Couldn't confirm that everything is saved to your account. Sign out anyway?"))) return;
   if (project) { try { await persistNow(); } catch (e) {} }
   await sb.auth.signOut({ scope: "local" });
   await wipeLocal();
@@ -271,7 +308,7 @@ async function acctDelete() {
 function wireAccountUI() {
   $("accountBtn").addEventListener("click", () => {
     if (!sb) { acctShow("acctSignedOut", "Accounts aren't available in this build."); return; }
-    if (cloudUser) { $("acctEmailLine").textContent = cloudUser.email || ""; acctShow("acctSignedIn"); }
+    if (cloudUser) { $("acctEmailLine").textContent = cloudUser.email || ""; acctShow("acctSignedIn"); verifyCloud(); }
     else acctShow("acctSignedOut");
   });
   $("acctClose").addEventListener("click", acctCloseModal);
@@ -284,7 +321,13 @@ function wireAccountUI() {
   $("acctForgot").addEventListener("click", acctSendReset);
   $("acctCodeGo").addEventListener("click", acctVerifyCode);
   $("acctNewPassGo").addEventListener("click", acctSetPassword);
-  $("acctSyncNow").addEventListener("click", () => syncDown(true));
+  $("acctSyncNow").addEventListener("click", async () => {
+    $("acctMsg").textContent = "Syncing…";
+    const before = qLoad().length;
+    await syncDown(true);
+    const c = await verifyCloud();
+    $("acctMsg").textContent = !c ? "Couldn't reach your account. Check your connection and try again." : behindCount() ? "Still only on this phone: " + (c.projects.join(", ") || c.tracks + " track(s)") : (before ? "Uploaded " + before + " change" + (before === 1 ? "" : "s") + ". " : "") + "Everything is saved to your account.";
+  });
   $("acctSignOut").addEventListener("click", acctSignOut);
   $("acctDelete").addEventListener("click", acctDelete);
   acctSetMode("in");
