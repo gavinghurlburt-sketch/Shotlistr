@@ -936,10 +936,20 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-wrap { position: relative; border-radius: 24px; overflow: hidden; }
 .pc-wrap .project-card { position: relative; z-index: 1; touch-action: pan-y; transition: transform .22s cubic-bezier(.2,.8,.2,1); -webkit-user-select: none; user-select: none; }
 .pc-wrap .project-card.dragging { transition: none; }
-.pc-del { position: absolute; top: 0; right: 0; bottom: 0; width: 96px; min-height: 0; border-radius: 0; background-color: var(--danger); color: #fff; font-weight: 700; font-size: 15px; z-index: 0; }
+.pc-del { position: absolute; top: 0; right: 0; bottom: 0; width: 128px; padding: 0 0 0 32px; min-height: 0; border-radius: 0; background-color: var(--danger); color: #fff; font-weight: 700; font-size: 15px; z-index: 0; }
 .pc-del:hover { background-color: var(--danger); }
 .pc-del { opacity: 0; }
 .pc-wrap.rv .pc-del { opacity: 1; }
+/* home: Projects / Artists */
+.projects-title.home-tabs { display: flex; align-items: baseline; gap: 20px; }
+.home-tabs .ht { background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; font: inherit; letter-spacing: inherit; color: var(--muted); opacity: .55; cursor: pointer; transition: color .25s ease, opacity .25s ease; box-shadow: none; }
+.home-tabs .ht:hover { background: none; }
+.home-tabs .ht.on { color: var(--text); opacity: 1; }
+#homeClip { overflow: hidden; margin: 0 -2px; padding: 0 2px; }
+#homeSlider { display: flex; width: 100%; }
+.home-pane { flex: 0 0 100%; min-width: 0; }
+.home-pane.off { display: none; }
+.cover.init { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 26px; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
 /* v2.3 plan */
 .tpl-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; text-align: left; padding: 18px 20px; min-height: 0; border-radius: 26px; background-color: var(--surface); margin: 6px 0 16px; }
 .tpl-card:hover { background-color: var(--surface-2); }
@@ -1036,19 +1046,34 @@ details.more > :not(summary) { margin-top: 8px; }
   <!-- ===== projects ===== -->
   <section id="projectsView">
     <div class="projects-wrap">
-      <h1 class="projects-title">Projects</h1>
-      <p class="muted">Each project keeps its own shots, references, tracks, schedule and takes. Everything is saved in this browser.</p>
+      <h1 class="projects-title home-tabs"><button type="button" class="ht on" data-home="projects">Projects</button><button type="button" class="ht" data-home="artists">Artists</button></h1>
       <div class="row-flex">
         <button id="newBtn" class="btn primary">New…</button>
       </div>
       <input type="file" id="importProjectInput" accept=".json,application/json" hidden>
-      <div id="calCard" class="cal"></div>
-      <div id="artistChips" class="chip-row"></div>
-      <div id="projectsStatus" class="muted small" style="margin-top:8px"></div>
-      <div id="projectsList" class="projects-list"></div>
+      <div id="homeClip"><div id="homeSlider">
+        <div id="paneProjects" class="home-pane">
+          <p class="muted">Each project keeps its own shots, references, tracks, schedule and takes. Everything is saved in this browser.</p>
+          <div id="calCard" class="cal"></div>
+          <div id="artistChips" class="chip-row"></div>
+          <div id="projectsStatus" class="muted small" style="margin-top:8px"></div>
+          <div id="projectsList" class="projects-list"></div>
+        </div>
+        <div id="paneArtists" class="home-pane off">
+          <p class="muted">Everyone you shoot for. Tap an artist to see their projects.</p>
+          <div id="artistsList" class="projects-list"></div>
+        </div>
+      </div></div>
     </div>
   </section>
 
+  <div id="artistModal" class="modal hidden">
+    <div class="modal-inner">
+      <h3>New artist</h3>
+      <input type="text" id="artistNameInput" class="field" style="width:100%" placeholder="Artist or band name" autocapitalize="words">
+      <div class="modal-actions"><button type="button" id="artistCancel" class="btn">Cancel</button><button type="button" id="artistAdd" class="btn primary">Add</button></div>
+    </div>
+  </div>
   <div id="settingsModal" class="modal hidden">
     <div class="modal-inner">
       <h3>Settings</h3>
@@ -3444,12 +3469,102 @@ function projectCardHTML(p) {
       </div>
     </div>`;
 }
+var ART_KEY = "producrr_artists_v1";
+function storedArtists() { try { const a = JSON.parse(localStorage.getItem(ART_KEY)); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function saveArtists(a) { try { localStorage.setItem(ART_KEY, JSON.stringify(a)); } catch (e) {} }
+function allArtistNames(all) {
+  const seen = new Map();
+  storedArtists().concat(all.map(p => p.artist)).forEach(n => { n = (n || "").trim(); if (n && !seen.has(n.toLowerCase())) seen.set(n.toLowerCase(), n); });
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+}
+function renderArtists(all, names) {
+  const box = $("artistsList"), today = ymd(new Date());
+  if (!names.length) { box.innerHTML = `<div class="projects-empty">No artists yet. Add one with New artist…</div>`; return; }
+  box.innerHTML = names.map(n => {
+    const ps = all.filter(p => (p.artist || "").toLowerCase() === n.toLowerCase());
+    const withCover = ps.filter(p => p.cover).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+    const next = ps.map(p => primaryDate(p, today)).filter(d => d && d >= today).sort()[0];
+    const sub = [`${ps.length} project${ps.length === 1 ? "" : "s"}`, next ? "Next shoot " + dayLabel(next, false) : ""].filter(Boolean).join(" · ");
+    return `<div class="pc-wrap">
+      <button type="button" class="pc-del" data-delete-artist="${esc(n)}">Remove</button>
+      <div class="project-card"><div class="project-card-main" data-artist-open="${esc(n)}" role="button" tabindex="0">
+        <div class="cover ${withCover ? "img" : "init"}" style="${coverStyle(n)}${withCover ? `;background-image:url(${withCover.cover})` : ""}">${withCover ? "" : esc(n.trim().charAt(0).toUpperCase())}</div>
+        <div class="pc-text"><div class="project-card-name">${esc(n)}</div><div class="muted small">${esc(sub)}</div></div>
+      </div></div></div>`;
+  }).join("");
+}
+var homeMode = "projects";
+function paintHomeMode() {
+  document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === homeMode));
+  $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
+}
+function setHomeMode(m) {
+  if (m === homeMode) return;
+  const slider = $("homeSlider"), pp = $("paneProjects"), pa = $("paneArtists"), toA = m === "artists";
+  homeMode = m; paintHomeMode(); closeSwipedCards();
+  try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {}
+  const done = () => { (toA ? pp : pa).classList.add("off"); slider.style.transform = ""; slider.style.willChange = ""; };
+  if (!slider.animate || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { pp.classList.toggle("off", toA); pa.classList.toggle("off", !toA); slider.style.transform = ""; return; }
+  const cur = homeDragX(slider);
+  pp.classList.remove("off"); pa.classList.remove("off");
+  const W = $("homeClip").clientWidth, to = toA ? -W : 0;
+  const from = cur === null ? (toA ? 0 : -W) : cur;
+  slider.style.willChange = "transform";
+  slider.style.transform = `translate3d(${to}px,0,0)`;
+  slider.animate([{ transform: `translate3d(${from}px,0,0)` }, { transform: `translate3d(${to}px,0,0)` }], { duration: 300, easing: "cubic-bezier(.22,.8,.2,1)" }).finished.then(done, done);
+}
+function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.style.transform || ""); return m ? parseFloat(m[1]) : null; }
+/* swipe left / right between Projects and Artists; the page follows your finger */
+(function () {
+  const clip = $("homeClip"), slider = $("homeSlider"), pp = $("paneProjects"), pa = $("paneArtists");
+  let sx = 0, sy = 0, st = 0, ok = false, locked = false, dxNow = 0, onCard = false, W = 1;
+  function blocked(el) { for (let n = el; n && n !== document.body; n = n.parentElement) { if (!n.classList) return true; if (/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName) || n.classList.contains("modal")) return true; } return false; }
+  document.addEventListener("touchstart", e => {
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false;
+    const card = e.target.closest && e.target.closest(".project-card");
+    onCard = !!card;
+    ok = e.touches.length === 1 && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
+    if (ok && onCard && homeMode === "projects") ok = false; /* on a project card, swipe-left is Delete */
+  }, { passive: true });
+  document.addEventListener("touchmove", e => {
+    if (!ok) return;
+    const t = e.touches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (!locked) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { ok = false; return; }
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (onCard && dx < 0) { ok = false; return; } /* artist card: swipe-left is Remove */
+        if ((homeMode === "projects" && dx > 0) || (homeMode === "artists" && dx < 0)) { ok = false; return; }
+        locked = true; W = clip.clientWidth; pp.classList.remove("off"); pa.classList.remove("off"); slider.style.willChange = "transform";
+      } else return;
+    }
+    if (e.cancelable) e.preventDefault();
+    dxNow = dx;
+    const base = homeMode === "artists" ? -W : 0;
+    slider.style.transform = `translate3d(${base + dx}px,0,0)`;
+  }, { passive: false });
+  function finish(cancelled) {
+    if (!ok) return; ok = false;
+    if (!locked) return; locked = false;
+    const dx = dxNow, v = Math.abs(dx) / Math.max(1, Date.now() - st);
+    const go = !cancelled && (Math.abs(dx) > W * 0.28 || (v > 0.45 && Math.abs(dx) > 36));
+    const was = homeMode;
+    if (go) { /* hand off to setHomeMode, which animates from the current finger position */ homeMode = was === "artists" ? "projects" : "artists"; const m = homeMode; homeMode = was; setHomeMode(m); return; }
+    const base = was === "artists" ? -W : 0, cur = base + dx;
+    const done = () => { (was === "artists" ? pp : pa).classList.add("off"); slider.style.transform = ""; slider.style.willChange = ""; };
+    if (!slider.animate) { done(); return; }
+    slider.style.transform = `translate3d(${base}px,0,0)`;
+    slider.animate([{ transform: `translate3d(${cur}px,0,0)` }, { transform: `translate3d(${base}px,0,0)` }], { duration: 240, easing: "cubic-bezier(.22,.8,.2,1)" }).finished.then(done, done);
+  }
+  document.addEventListener("touchend", () => finish(false), { passive: true });
+  document.addEventListener("touchcancel", () => finish(true), { passive: true });
+})();
 async function renderProjectsList() {
   const list = $("projectsList");
   let all = [];
   try { all = await listProjects(); }
   catch (e) { list.innerHTML = ""; $("projectsStatus").textContent = "This browser is blocking the storage Producrr needs. Private browsing modes often do this."; return; }
-  const artists = Array.from(new Set(all.map(p => p.artist).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const artists = allArtistNames(all);
+  renderArtists(all, artists);
   if (artistFilter && !artists.includes(artistFilter)) artistFilter = null;
   $("artistList").innerHTML = artists.map(a => `<option value="${esc(a)}"></option>`).join("");
   $("artistChips").innerHTML = artists.length ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
@@ -3476,6 +3591,8 @@ async function renderProjectsList() {
   list.innerHTML = html;
 }
 document.addEventListener("click", e => {
+  const hm = e.target.closest("[data-home]");
+  if (hm) { setHomeMode(hm.dataset.home); return; }
   const c = e.target.closest("[data-cal]");
   if (c) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (+c.dataset.cal), 1); renderProjectsList(); return; }
   const d = e.target.closest("[data-day]");
@@ -3488,10 +3605,9 @@ document.addEventListener("click", e => {
 var swipeMoved = false;
 const DEL_W = 96;
 function closeSwipedCards(except) {
-  document.querySelectorAll("#projectsList .project-card.open").forEach(c => { if (c !== except) { c.classList.remove("open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
+  document.querySelectorAll(".pc-wrap .project-card.open").forEach(c => { if (c !== except) { c.classList.remove("open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
 }
-(function () {
-  const list = $("projectsList");
+function wireSwipeDelete(list) {
   let card = null, sx = 0, sy = 0, base = 0, dx = 0, live = false, id = null, t0 = 0;
   list.addEventListener("pointerdown", e => {
     const c = e.target.closest(".project-card");
@@ -3533,7 +3649,9 @@ function closeSwipedCards(except) {
     const c = e.target.closest(".project-card");
     if (c && c.classList.contains("open")) { e.stopImmediatePropagation(); e.preventDefault(); closeSwipedCards(); }
   }, true);
-})();
+}
+wireSwipeDelete($("projectsList"));
+wireSwipeDelete($("artistsList"));
 $("projectsList").addEventListener("click", async e => {
   const o = e.target.closest("[data-open-id]");
   if (o) { openProject(o.dataset.openId); return; }
@@ -3546,6 +3664,31 @@ $("projectsList").addEventListener("click", async e => {
   }
 });
 $("projectsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.openId) openProject(e.target.dataset.openId); });
+$("artistsList").addEventListener("click", async e => {
+  const o = e.target.closest("[data-artist-open]");
+  if (o) { artistFilter = o.dataset.artistOpen; calSel = null; await renderProjectsList(); setHomeMode("projects"); return; }
+  const d = e.target.closest("[data-delete-artist]");
+  if (d) {
+    const n = d.dataset.deleteArtist;
+    const all = await listProjects(), mine = all.filter(p => (p.artist || "").toLowerCase() === n.toLowerCase());
+    if (!confirm(`Remove "${n}"?` + (mine.length ? ` Their ${mine.length} project${mine.length === 1 ? "" : "s"} stay, just without an artist.` : ""))) { closeSwipedCards(); return; }
+    saveArtists(storedArtists().filter(x => x.toLowerCase() !== n.toLowerCase()));
+    try { for (const p of mine) { p.artist = ""; p.updatedAt = new Date().toISOString(); await putProjectRecord(p); } } catch (err) { alert("Couldn't update that artist's projects. Try again."); }
+    if (artistFilter && artistFilter.toLowerCase() === n.toLowerCase()) artistFilter = null;
+    renderProjectsList();
+  }
+});
+$("artistsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.artistOpen) e.target.click(); });
+function openArtistModal() { $("artistNameInput").value = ""; $("artistModal").classList.remove("hidden"); $("artistNameInput").focus(); }
+function addArtist() {
+  const n = $("artistNameInput").value.trim(); if (!n) return;
+  const a = storedArtists(); if (!a.some(x => x.toLowerCase() === n.toLowerCase())) { a.push(n); saveArtists(a); }
+  $("artistModal").classList.add("hidden"); renderProjectsList();
+}
+$("artistAdd").addEventListener("click", addArtist);
+$("artistCancel").addEventListener("click", () => $("artistModal").classList.add("hidden"));
+$("artistNameInput").addEventListener("keydown", e => { if (e.key === "Enter") addArtist(); });
+$("artistModal").addEventListener("click", e => { if (e.target.id === "artistModal") $("artistModal").classList.add("hidden"); });
 async function createProject(name, type, artist, date) {
   const now = new Date().toISOString();
   const base = { id: uid(), type, artist: artist || "", shootDate: date || "", shootDays: (type === "content" && date) ? [{ id: uid(), date, start: "", location: "", notes: "", hours: 6 }] : [], docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
@@ -3554,7 +3697,7 @@ async function createProject(name, type, artist, date) {
   await putProjectRecord(rec);
   await openProject(rec.id);
 }
-$("newBtn").addEventListener("click", () => { $("newProjectName").value = ""; $("newArtist").value = artistFilter || ""; $("newShootDate").value = calSel || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); });
+$("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal(); return; } $("newProjectName").value = ""; $("newArtist").value = artistFilter || ""; $("newShootDate").value = calSel || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
 $("newModal").addEventListener("click", e => {
   if (e.target.id === "newModal") { $("newModal").classList.add("hidden"); return; }
