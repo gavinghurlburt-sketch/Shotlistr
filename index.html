@@ -65,6 +65,8 @@
   --tc-bg: transparent;
   --tc-fg: #151515;
   --good: #1b6b3a;
+  --good-fill: #34c759;
+  --good-edge: rgba(52,199,89,.55);
   --good-bg: #dff1e4;
   --bad: #9f2a22;
   --bad-bg: #f8e1df;
@@ -105,6 +107,8 @@
   --lane: rgba(255,255,255,.05);
   --tc-fg: #f5f5f7;
   --good: #7ee0a0;
+  --good-fill: #30d158;
+  --good-edge: rgba(48,209,88,.5);
   --good-bg: #1b2b21;
   --bad: #ff8a80;
   --bad-bg: #33201f;
@@ -639,7 +643,6 @@ table.sched tr.done-row td { background-color: var(--done); }
 .part-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .part-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; scroll-margin-top: 76px; overflow: hidden; }
 .part-card.open { border-color: var(--sec); box-shadow: 0 0 0 1px var(--sec); }
-.part-card.complete:not(.open) { opacity: .6; }
 .pc-head { display: flex; align-items: center; gap: 10px; width: 100%; background: transparent; border: 0; border-radius: 0; padding: 16px 18px; text-align: left; font: inherit; color: inherit; }
 .pc-head .dot { width: 14px; height: 14px; flex: 0 0 auto; }
 .pc-name { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
@@ -656,7 +659,28 @@ table.sched tr.done-row td { background-color: var(--done); }
 @keyframes cardDrop { from { opacity: 0; transform: translateY(-22px); } to { opacity: 1; transform: none; } }
 .part-card.drop { animation: cardDrop .65s cubic-bezier(.2,.8,.2,1) both; }
 .shoot-date { font-size: 14px; margin: 0 0 12px; }
-.pc-body { padding: 0 18px 18px; }
+.pc-body { padding: 0 14px 16px; }
+.part-card { position: relative; }
+.part-card.open { background: linear-gradient(to bottom, color-mix(in srgb, var(--sec) 15%, var(--surface)), var(--surface) 220px); }
+.pc-prog { height: 4px; margin: 0 18px 14px; border-radius: 4px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
+.part-card.open .pc-prog { margin-bottom: 12px; }
+.pc-prog i { display: block; height: 100%; width: var(--p, 0%); border-radius: 4px; background: var(--sec); transition: width .45s cubic-bezier(.2,.8,.2,1); }
+.part-card.complete, .part-card.complete.open { background: var(--good-bg); border-color: var(--good-edge); box-shadow: none; }
+.part-card.complete .pc-prog i { background: var(--good-fill); }
+.part-card.complete .pc-meta { color: var(--good); font-weight: 700; }
+.part-card.complete .pc-chev { border-color: var(--good); }
+.pc-body .part-head { margin-bottom: 12px; }
+.pc-body .part-head .muted { flex: 1 1 100%; }
+.pc-body .btn.play-part.primary { width: 100%; background-color: var(--sec); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--sec) 40%, transparent); }
+.part-card.complete .btn.play-part.primary { background-color: var(--good-fill); box-shadow: none; }
+.pc-body .shot-tiles { grid-template-columns: 1fr; gap: 8px; }
+.pc-body .tile { background-color: var(--surface-2); border: 1px solid var(--border); border-radius: 18px; padding: 14px; gap: 10px; transition: background-color .3s ease, border-color .3s ease; }
+.pc-body .tile.done { background-color: color-mix(in srgb, var(--good-fill) 14%, var(--surface-2)); border-color: var(--good-edge); }
+.pc-body .tile-top strong { font-size: 17px; }
+.tile-check { width: 32px; height: 32px; min-width: 32px; min-height: 32px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; background-color: transparent; box-shadow: inset 0 0 0 2px var(--border-strong); flex: none; }
+.tile-check.on { background-color: var(--good-fill); box-shadow: none; color: #fff; }
+.take-pill { width: 34px; height: 34px; min-width: 34px; min-height: 34px; aspect-ratio: 1 / 1; padding: 0; flex: none; line-height: 1; }
+.pc-body .tile-add { min-height: 54px; border-radius: 18px; }
 .part-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .part-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; }
 .part-title .dot { width: 14px; height: 14px; }
@@ -4745,7 +4769,7 @@ function tileHTML(r) {
   const active = r.takes.find(t => t.id === tileActiveTake[r.id]) || r.takes[r.takes.length - 1];
   const pills = r.takes.map(t => `<button type="button" class="take-pill r-${t.rating || "none"} ${active && t.id === active.id ? "active" : ""}" data-c="pick-take" data-take-id="${t.id}" title="Take ${t.n}${t.rating ? ": " + RATING_BY_ID[t.rating].label : ""}" aria-label="Take ${t.n}">${t.n}</button>`).join("");
   return `<div class="tile ${r.checked ? "done" : ""}" data-row-id="${r.id}">
-    <div class="tile-top"><strong>${esc(r.subject || "Shot")}</strong><button type="button" class="tile-check ${r.checked ? "on" : ""}" data-c="tile-done">${r.checked ? "✓ Done" : "Mark done"}</button></div>
+    <div class="tile-top"><strong>${esc(r.subject || "Shot")}</strong><button type="button" class="tile-check ${r.checked ? "on" : ""}" data-c="tile-done" aria-label="${r.checked ? "Done, tap to undo" : "Mark done"}" aria-pressed="${r.checked ? "true" : "false"}">${r.checked ? "✓" : ""}</button></div>
     ${r.notes ? `<div class="muted small">${esc(r.notes)}</div>` : ""}
     <div class="tile-takes">${pills}<button type="button" class="btn small primary" data-c="tile-take">+ Take</button></div>
     ${active ? `<div class="tile-rate"><span class="small muted">Take ${active.n}</span><div class="rating-chips">${RATINGS.map(x => `<button type="button" class="rchip r-${x.id} ${active.rating === x.id ? "on" : ""}" data-c="tile-rate" data-take-id="${active.id}" data-rating="${x.id}">${x.label}</button>`).join("")}</div></div><div class="tile-loc">${locSelectHTML(active)}</div>` : ""}
@@ -4850,17 +4874,18 @@ function renderShootContent() {
   panel.innerHTML = parts.map((p, idx) => {
     const d = p.rows.filter(r => r.checked).length, open = p.id === shootOpenId;
     const complete = p.rows.length && d === p.rows.length;
-    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span><span class="pc-chev"></span></button>`;
-    if (!open) return `<div class="part-card ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}</div>`;
+    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${complete ? "✓ " : ""}${d}/${p.rows.length}</span><span class="pc-chev"></span></button>`;
+    const pct = p.rows.length ? Math.round(d / p.rows.length * 100) : 0, prog = `<div class="pc-prog" style="--p:${pct}%"><i></i></div>`;
+    if (!open) return `<div class="part-card ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}${prog}</div>`;
     const prev = parts[idx - 1], next = parts[idx + 1];
     const ss = shootSongs(), nextSong = ss[ss.indexOf(sg) + 1];
     const allDone = p.rows.length > 0 && d === p.rows.length;
-    return `<div class="part-card open ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}
+    return `<div class="part-card open ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}${prog}
       <div class="pc-body">
         <div class="part-head">
           <div class="muted small">${esc(sg.name)} · ${p.time ? `every shot starts at ${esc(p.time)}` : "no start time set — add one on the artist page"}</div>
           <span class="spacer"></span>
-          ${p.time ? `<button type="button" class="btn primary big-btn" data-c="play-part">▶ Play ${esc(partLabel(p))}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
+          ${p.time ? `<button type="button" class="btn primary big-btn play-part" data-c="play-part">▶ Play ${esc(partLabel(p))}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
         </div>
         <div class="shot-tiles">${p.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
         <div class="part-nav">
