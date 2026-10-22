@@ -677,6 +677,8 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-body .part-head .muted { flex: 1 1 100%; }
 .play-row { flex: 1 1 100%; display: flex; gap: 8px; align-items: stretch; }
 .play-row .play-part { flex: 1; }
+.shoot-track-det { margin-top: 18px; }
+.shoot-track-det > .transport-slot { margin-top: 8px; }
 .pc-body .btn.rate-btn.on { background-color: var(--sec); color: #fff; box-shadow: 0 4px 14px color-mix(in srgb, var(--sec) 40%, transparent); }
 .part-card.complete .pc-body .btn.rate-btn.on { background-color: var(--good-fill); box-shadow: none; }
 .rate-btn { flex: none; min-width: 64px; transition: background-color .15s, color .15s; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background-color: color-mix(in srgb, var(--sec) 22%, var(--surface-2)); color: var(--text); }
@@ -1452,9 +1454,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <div id="cShootStatus" class="status-banner"></div>
     <div id="shootSongTabs" class="song-titles"></div>
     <div id="shootDateLine" class="shoot-date muted hidden"></div>
-    <div class="transport-slot"></div>
     <div id="partStrip" class="part-strip hidden"></div>
     <div id="partPanel" class="part-list"></div>
+    <details id="shootTrackDet" class="more shoot-track-det"><summary>Full song track</summary><div class="transport-slot"></div></details>
   </section>
 
   <!-- ===== cut ===== -->
@@ -2734,11 +2736,19 @@ function updateTransportUI() {
     btn.title = isPlaying() ? "Stop and return to where playback started" : "Play from the playhead";
     btn.disabled = !player.src;
   });
+  document.querySelectorAll(".play-part").forEach(b => {
+    const on = isPlaying(), ico = b.querySelector(".pp-ico"), txt = b.querySelector(".pp-txt");
+    if (!ico || !txt) return;
+    if (!b.dataset.label) b.dataset.label = txt.textContent;
+    ico.textContent = on ? "■" : "▶"; txt.textContent = on ? "Stop" : b.dataset.label;
+    b.setAttribute("aria-label", on ? "Stop" : "Play " + b.dataset.label.replace(/^Play /, ""));
+  });
   paintTrackUI(); paintTempo();
   paintRate();
   updateTimecodes();
 }
 let rafOn = false;
+document.addEventListener("toggle", e => { if (e.target && e.target.id === "shootTrackDet") requestAnimationFrame(drawWaveform); }, true);
 function startRaf() { if (rafOn) return; rafOn = true; requestAnimationFrame(tick); }
 function tick() {
   updateTimecodes();
@@ -4897,7 +4907,7 @@ function renderShootContent() {
         <div class="part-head">
           ${p.time ? "" : `<div class="muted small">No start time set. Add one on the artist page.</div>`}
           <span class="spacer"></span>
-          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn${partRate[p.id] === 0.5 ? " on" : ""}" data-c="rate-toggle" data-rate="0.5" aria-pressed="${partRate[p.id] === 0.5}" aria-label="Half speed" title="Half speed">${ICON_TURTLE}</button><button type="button" class="btn primary big-btn play-part" data-c="play-part">▶ Play ${esc(partLabel(p))}</button><button type="button" class="btn rate-btn${partRate[p.id] === 2 ? " on" : ""}" data-c="rate-toggle" data-rate="2" aria-pressed="${partRate[p.id] === 2}" aria-label="Double speed" title="Double speed">${ICON_RABBIT}</button></div>` : ""}
+          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn${partRate[p.id] === 0.5 ? " on" : ""}" data-c="rate-toggle" data-rate="0.5" aria-pressed="${partRate[p.id] === 0.5}" aria-label="Half speed" title="Half speed">${ICON_TURTLE}</button><button type="button" class="btn primary big-btn play-part" data-c="play-part"><span class="pp-ico">▶</span> <span class="pp-txt">Play ${esc(partLabel(p))}</span></button><button type="button" class="btn rate-btn${partRate[p.id] === 2 ? " on" : ""}" data-c="rate-toggle" data-rate="2" aria-pressed="${partRate[p.id] === 2}" aria-label="Double speed" title="Double speed">${ICON_RABBIT}</button></div>` : ""}
         </div>
         <div class="shot-tiles">${p.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
         <div class="part-nav">
@@ -4908,6 +4918,7 @@ function renderShootContent() {
         </div>
       </div></div>`;
   }).join("");
+  updateTransportUI();
   if (lastShootSong !== activeSongId) { lastShootSong = activeSongId; dropT0 = Date.now(); }
   /* re-renders during the first couple of seconds (e.g. the track finishing loading) carry the animation on instead of restarting it */
   const el0 = Date.now() - dropT0;
@@ -5012,7 +5023,11 @@ document.addEventListener("click", e => {
       (b.closest(".play-row") || document).querySelectorAll(".rate-btn").forEach(x => { const on = partRate[p.id] === +x.dataset.rate; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
       break;
     }
-    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time, partRate[p.id] || p.speed || 1); break; }
+    case "play-part": {
+      if (isPlaying()) { stopAndReturn(); updateTransportUI(); break; }
+      const p = currentShootPart(); if (p) playCue(p.time, partRate[p.id] || p.speed || 1);
+      break;
+    }
     case "tile-done": if (row) { row.checked = !row.checked; row.doneAt = row.checked ? new Date().toISOString() : null; scheduleSave(); renderShootContent(); } break;
     case "tile-take": {
       if (!row) return;
