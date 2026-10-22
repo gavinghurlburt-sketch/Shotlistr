@@ -989,6 +989,13 @@ details.more > :not(summary) { margin-top: 8px; }
 .tap-readout { font-size: 44px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 10px 0 2px; }
 .tap-big { width: 100%; min-height: 104px; border-radius: 28px; font-size: 24px; font-weight: 800; touch-action: manipulation; }
 .btn.primary.tap-big.tapping { background-color: var(--accent); color: #111; }
+.tap-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.beat-dots { display: flex; gap: 8px; }
+.beat-dots i { width: 14px; height: 14px; border-radius: 50%; background-color: var(--surface-2); transition: background-color .08s, transform .08s; }
+.beat-dots i.on { background-color: var(--accent); transform: scale(1.25); }
+.beat-dots i:first-child.on { background-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); }
+.tap-big.hit { animation: tapHit .18s ease-out; }
+@keyframes tapHit { 0% { transform: scale(.96); filter: brightness(1.25); } 100% { transform: scale(1); filter: none; } }
 .tap-big:active { transform: scale(.985); }
 .tempo-more { margin-top: 4px; }
 .tempo-wave { display: block; width: 100%; height: 132px; border-radius: 14px; background-color: var(--surface-2); margin-top: 12px; touch-action: none; cursor: ew-resize; }
@@ -1254,16 +1261,13 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   <div id="tempoModal" class="modal hidden">
     <div class="modal-inner">
       <h3>Tap the tempo</h3>
-      <p class="modal-hint">Press play, then tap along to the beat. Start on the 1 of a measure. It rounds to a whole BPM and locks onto the track's beat.</p>
+      <p class="muted small" id="tapHint" style="margin:0 0 6px"></p>
       <canvas id="tempoWave" class="tempo-wave hidden" aria-hidden="true"></canvas>
-      <div class="tap-readout" id="tapReadout" aria-live="polite">—</div>
-      <p class="muted small" id="tapHint" style="margin:0 0 10px"></p>
-      <button type="button" id="tapBtn" class="btn primary tap-big">▶ Play the song</button>
-      <div class="tempo-ctl"><button type="button" id="tapStop" class="btn small">■ Stop</button><button type="button" id="tapReset" class="btn small">Start over</button><button type="button" id="tempoClickBtn" class="btn small" aria-pressed="false">Click</button></div>
-      <details class="more tempo-more"><summary>Type it in or change settings</summary>
+      <div class="tap-top"><div class="tap-readout" id="tapReadout" aria-live="polite">—</div><div class="beat-dots" id="beatDots" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>
+      <button type="button" id="tapBtn" class="btn primary tap-big">TAP</button>
+      <div class="tempo-ctl"><button type="button" id="tapReset" class="btn small">Start over</button></div>
+      <details class="more tempo-more"><summary>More settings</summary>
       <div class="tempo-form">
-        <label>BPM <input type="number" id="bpmInput" class="field num" min="30" max="300" step="0.1" placeholder="—"></label>
-        <label>Song starts at <input type="text" id="songStartInput" class="field num" inputmode="decimal" placeholder="0:00.0"></label>
         <label class="check"><input type="checkbox" id="countInToggle"> Count-in</label>
         <select id="countInBars" class="field" aria-label="Count-in length"><option value="1">1 bar</option><option value="2">2 bars</option></select>
         <label class="check" title="Scrubbing and cues land on measure starts and markers"><input type="checkbox" id="snapToggle"> Snap cues to the beat</label>
@@ -2591,6 +2595,12 @@ async function readyEngine() {
   if (await clockRunning(c)) return c;
   return null;
 }
+var lpfNode = null;
+function songOut(c) {                                   // while tapping the tempo, roll off the highs so the click cuts through
+  if (!tap.active) return c.destination;
+  if (!lpfNode || lpfNode.context !== c) { lpfNode = c.createBiquadFilter(); lpfNode.type = "lowpass"; lpfNode.frequency.value = 650; lpfNode.Q.value = 0.6; lpfNode.connect(c.destination); }
+  return lpfNode;
+}
 function scheduleClick(c, time, accent, vol) {
   const osc = c.createOscillator(), gain = c.createGain();
   osc.type = "square";
@@ -2699,7 +2709,7 @@ async function playFrom(target, withCountIn, rate) {
   const src = c.createBufferSource();
   src.buffer = buf;
   src.playbackRate.value = srcRate;
-  src.connect(c.destination);
+  src.connect(songOut(c));
   src.start(songAt, buf === audioBuffer ? offset : Math.max(0, (offset - bufStart) / rt));
   cue = { src, ctxStart: songAt, offset, clicks, timers, rate: rt };
   startClickPump();
@@ -2991,7 +3001,6 @@ function runTempoDetect() {
 }
 function syncTempoInputs() {
   const tp = curTempo();
-  if (document.activeElement !== $("bpmInput")) $("bpmInput").value = tp.bpm || "";
   $("countInToggle").checked = !!tp.countIn;
   $("clickToggle").classList.toggle("primary", !!tp.click);
   $("clickToggle").setAttribute("aria-pressed", String(!!tp.click));
@@ -3000,7 +3009,6 @@ function syncTempoInputs() {
   $("snapToggle").checked = !!tp.snap;
   $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
   $("leadSelect").value = String(tp.lead || 0);
-  if (document.activeElement !== $("songStartInput")) $("songStartInput").value = tp.songStart != null ? fmtTC(tp.songStart) : "";
   paintTempo();
 }
 
@@ -3453,24 +3461,11 @@ $("removeTrackBtn").addEventListener("click", () => {
   if (isContent()) renderCurrent();
 });
 $("detectTempoBtn").addEventListener("click", runTempoDetect);
-$("bpmInput").addEventListener("input", e => {
-  const v = parseFloat(e.target.value);
-  curTempo().bpm = isFinite(v) && v >= 30 && v <= 300 ? v : null;
-  if (curTempo().bpm && curTempo().offset == null) curTempo().offset = curTempo().songStart || 0;
-  $("snapToggle").disabled = !(curTempo().bpm && curTempo().offset != null);
-  scheduleSave(); drawWaveform(); paintTempo();
-});
-$("songStartInput").addEventListener("change", e => {
-  const v = parseTC(e.target.value);
-  if (v == null || !project) return;
-  const tp = curTempo(); tp.songStart = v; tp.offset = v;
-  $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
-  scheduleSave(); drawWaveform(); paintTempo();
-});
 /* tap tempo: play the track, tap the beat; taps give the rough tempo and the "1", the track's onsets lock it in */
-var tap = { taps: [], snap: null, startedAt: 0 };
+var tap = { taps: [], snap: null, base: null, active: false, sched: [], lastSongT: -1, timer: 0, prevClick: false };
 function outLatency() { try { return (audioCtx && (audioCtx.outputLatency || audioCtx.baseLatency)) || 0; } catch (e) { return 0; } }
-function quantizeTaps(taps) {
+function quantizeTaps(all) {
+  const taps = all.slice(-40);                              // the latest taps decide, so early wobble can't pull it off
   if (taps.length < 4) return null;
   const d = []; for (let i = 1; i < taps.length; i++) d.push(taps[i] - taps[i - 1]);
   const sorted = d.slice().sort((a, b) => a - b), m = sorted[sorted.length >> 1];
@@ -3504,37 +3499,73 @@ function quantizeTaps(taps) {
     for (let o = c - P / 4; o <= c + P / 4; o += 0.25) { const sc = gridAt(bpm, o); if (sc > bestS) { bestS = sc; bestO = o; } }
     offsetSec = bestO / info.fps + info.bias;
   }
-  const k0 = Math.round((t[0] - offsetSec) / beat);                                        // the beat the first tap was on is the 1
-  let anchor = offsetSec + k0 * beat; anchor -= Math.floor(anchor / bar) * bar;
+  const wrap = x => x - Math.floor(x / bar) * bar;
+  let anchor;
+  if (tap.base == null) { const k0 = Math.round((t[0] - offsetSec) / beat); anchor = wrap(offsetSec + k0 * beat); }   // the beat the first tap was on is the 1
+  else {                                                                                   // later on, keep the same beat as the 1
+    let bestD = 1e9; anchor = wrap(offsetSec);
+    for (let j = 0; j < 4; j++) { const a = wrap(offsetSec + j * beat), dd = Math.abs(((a - tap.base + bar * 1.5) % bar) - bar / 2); if (dd < bestD) { bestD = dd; anchor = a; } }
+  }
   return { bpm, offset: Math.round(anchor * 1000) / 1000, cv };
 }
 function tapReadout() {
   const n = tap.taps.length, q = quantizeTaps(tap.taps), tp = curTempo();
-  $("tapReadout").textContent = q && q.bpm ? q.bpm + " BPM" : (tp.bpm ? Math.round(tp.bpm * 10) / 10 + " BPM" : "—");
+  $("tapReadout").textContent = q && q.bpm ? q.bpm + " BPM" : (tp.bpm ? Math.round(tp.bpm) + " BPM" : "—");
   $("tapHint").textContent = !player.src ? "Upload a track first."
-    : !n ? (isPlaying() ? "Tap the big button on every beat." : "Press play, then tap on every beat. Start on the 1.")
-    : n < 4 ? "Keep tapping. A few more beats." 
-    : q && q.uneven ? "Those taps were uneven. Keep going, or tap Start over."
-    : q && q.cv > 0.12 ? "Pretty uneven, but it's still locking on. A few more taps will help."
-    : "Locked in. Listen with Click on, or tap Done.";
+    : !n ? "Tap along with the beat while the song plays."
+    : n < 4 ? "Keep tapping, a few more beats."
+    : q && q.uneven ? "Those taps were uneven. Keep tapping, or tap Start over."
+    : "Once the click lines up perfectly with the song, press Done.";
 }
 function paintTapUI() {
   const b = $("tapBtn"); if (!b) return;
   const playing = isPlaying();
-  b.textContent = playing ? "TAP" : "▶ Play the song";
+  b.textContent = playing ? "TAP" : "▶ Play again";
   b.classList.toggle("tapping", playing); b.disabled = !player.src;
-  $("tapStop").disabled = !playing;
   $("tapReset").disabled = !tap.taps.length && !tap.snap;
-  const tp = curTempo();
-  $("tempoClickBtn").classList.toggle("primary", !!tp.click); $("tempoClickBtn").setAttribute("aria-pressed", String(!!tp.click));
-  $("tempoClickBtn").disabled = !(tp.bpm && tp.offset != null);
   if (!$("tempoModal").classList.contains("hidden")) tapReadout();
 }
 function applyTaps() {
   const q = quantizeTaps(tap.taps); if (!q || !q.bpm) return;
+  if (tap.base == null) tap.base = q.offset;
   const tp = curTempo();
   tp.bpm = q.bpm; tp.offset = q.offset; tp.detected = true; if (tp.songStart == null) tp.songStart = q.offset;
   scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo();
+  gameClickReset();
+}
+/* the click: scheduled just ahead of the playhead from the CURRENT tempo, so it re-lines up as soon as you tap */
+function songTAt(ctxTime) { return cue.offset + (ctxTime - cue.ctxStart) * (cue.rate || 1); }
+function gameClickReset() {
+  (tap.sched || []).forEach(n => { if (n.when > (audioCtx ? audioCtx.currentTime : 0) + 0.04) { try { n.osc.stop(); } catch (e) {} n.dead = true; } });
+  tap.sched = []; tap.lastSongT = cue && audioCtx ? songTAt(audioCtx.currentTime + 0.05) : -1;
+}
+function gameClickTick() {
+  const c = audioCtx, tp = curTempo();
+  if (!tap.active || !cue || !c || !(tp.bpm > 0) || tp.offset == null || cueCountingIn()) return;
+  const beat = 60 / tp.bpm, now = c.currentTime, horizon = songTAt(now + 0.28);
+  let k = Math.ceil((Math.max(tap.lastSongT, songTAt(now + 0.02)) - tp.offset) / beat - 1e-6);
+  for (;; k++) {
+    const songT = tp.offset + k * beat;
+    if (songT > horizon) break;
+    if (songT <= tap.lastSongT + 1e-6 || songT < 0) continue;
+    const when = cue.ctxStart + (songT - cue.offset) / (cue.rate || 1), accent = (((k % 4) + 4) % 4) === 0;
+    if (when < now) continue;
+    const osc = scheduleClick(c, when, accent, 0.9), rec = { osc, when };
+    tap.sched.push(rec); if (tap.sched.length > 12) tap.sched.shift();
+    tap.lastSongT = songT;
+    const idx = ((k % 4) + 4) % 4;
+    setTimeout(() => { if (!rec.dead) beatPulse(idx); }, Math.max(0, (when - now) * 1000));
+  }
+}
+function beatPulse(idx) {
+  const dots = $("beatDots").children;
+  for (let i = 0; i < dots.length; i++) dots[i].classList.toggle("on", i === idx);
+}
+function startGame() {
+  if (!player.src) return;
+  const tp = curTempo();
+  playFrom(tp.songStart != null ? Math.max(0, tp.songStart) : 0, false, 1);
+  setTimeout(() => { gameClickReset(); paintTapUI(); drawTempoWave(); }, 250);
 }
 function drawTempoWave() {
   const c = $("tempoWave"); if (!c || $("tempoModal").classList.contains("hidden")) return;
@@ -3559,39 +3590,44 @@ function drawTempoWave() {
     const a = Math.pow(Math.min(1, mxv / peaks._norm), 0.8), bh = Math.max(2, a * h * 0.8), x = i * step + (step - 2) / 2;
     g.fillStyle = x <= playX ? C.played : C.bar; g.fillRect(x, mid - bh / 2, 2, bh);
   }
-  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ffd60a";
-  g.fillStyle = accent;
-  tap.taps.forEach(t => { const x = t / dur * w; g.beginPath(); g.arc(x, 6, 3, 0, 7); g.fill(); });
   g.fillStyle = C.head; g.fillRect(Math.round(playX) - 1, 0, 2, h);
 }
-function tapStopPlay() { if (isPlaying()) stopAndReturn(); paintTapUI(); drawTempoWave(); }
 $("tapBtn").addEventListener("pointerdown", e => {
   if (!player.src) return;
   e.preventDefault();
-  if (!isPlaying()) {                                       // first press just starts the song, so there's something to tap along to
-    const tp = curTempo(); tap.taps = []; tap.snap = tap.snap || { bpm: tp.bpm, offset: tp.offset, songStart: tp.songStart };
-    playFrom(tp.songStart != null ? Math.max(0, tp.songStart) : 0, false, 1); setTimeout(() => { paintTapUI(); drawTempoWave(); }, 250);
-    return;
-  }
+  if (!isPlaying()) { tap.taps = []; tap.base = null; startGame(); return; }
   const t = transportTime(), last = tap.taps[tap.taps.length - 1];
   if (last != null && t - last < 0.12) return;              // ignore a bounce
-  if (!tap.snap) { const tp = curTempo(); tap.snap = { bpm: tp.bpm, offset: tp.offset, songStart: tp.songStart }; }
+  if (!tap.snap) { const tp = curTempo(); tap.snap = { bpm: tp.bpm, offset: tp.offset, songStart: tp.songStart, click: tap.prevClick }; }
   tap.taps.push(t); feel("light");
+  const b = $("tapBtn"); b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit");
   applyTaps(); paintTapUI(); drawTempoWave();
 });
-$("tapStop").addEventListener("click", tapStopPlay);
 $("tapReset").addEventListener("click", () => {
-  tapStopPlay();
-  if (tap.snap) { const tp = curTempo(); tp.bpm = tap.snap.bpm; tp.offset = tap.snap.offset; tp.songStart = tap.snap.songStart; scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo(); }
-  tap.taps = []; tap.snap = null; paintTapUI(); drawTempoWave();
+  if (tap.snap) { const tp = curTempo(); tp.bpm = tap.snap.bpm; tp.offset = tap.snap.offset; tp.songStart = tap.snap.songStart; scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo(); gameClickReset(); }
+  tap.taps = []; tap.snap = null; tap.base = null; paintTapUI(); drawTempoWave();
 });
-$("tempoClickBtn").addEventListener("click", () => { $("clickToggle").click(); paintTapUI(); });
-function tapClose() { tapStopPlay(); tap.taps = []; tap.snap = null; $("tempoModal").classList.add("hidden"); }
+function openTapGame() {
+  const tp = curTempo();
+  tap.taps = []; tap.snap = null; tap.base = null; tap.active = true; tap.prevClick = !!tp.click; tp.click = false;   // the game plays its own click
+  $("tempoModal").classList.remove("hidden");
+  clearInterval(tap.timer); tap.timer = setInterval(gameClickTick, 80);
+  syncTempoInputs(); paintTapUI();
+  requestAnimationFrame(drawTempoWave);
+  startGame();
+}
+function tapClose() {
+  clearInterval(tap.timer); tap.active = false;
+  if (isPlaying()) stopAndReturn();
+  curTempo().click = !!tap.prevClick; scheduleSave();
+  tap.taps = []; tap.snap = null; tap.base = null; tap.sched = [];
+  $("tempoModal").classList.add("hidden"); paintTapUI(); syncTempoInputs();
+}
 player.addEventListener("pause", () => setTimeout(() => { paintTapUI(); drawTempoWave(); }, 50));
 $("tempoModal").addEventListener("input", () => requestAnimationFrame(() => { paintTapUI(); drawTempoWave(); }));
 $("tempoModal").addEventListener("change", () => requestAnimationFrame(() => { paintTapUI(); drawTempoWave(); }));
 window.addEventListener("resize", () => drawTempoWave());
-$("tempoManualBtn").addEventListener("click", () => { syncTempoInputs(); $("tempoModal").classList.remove("hidden"); tap.taps = []; tap.snap = null; requestAnimationFrame(() => { paintTapUI(); drawTempoWave(); }); });
+$("tempoManualBtn").addEventListener("click", openTapGame);
 $("tempoDone").addEventListener("click", tapClose);
 $("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) tapClose(); });
 $("clickToggle").addEventListener("click", () => {
