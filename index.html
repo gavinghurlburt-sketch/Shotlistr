@@ -982,6 +982,7 @@ details.more > :not(summary) { margin-top: 8px; }
 .cp-dot.on { border-color: var(--text); }
 .cp-custom { background: conic-gradient(#ef4444, #eab308, #22c55e, #14b8a6, #3b82f6, #a855f7, #ef4444); overflow: hidden; display: inline-block; }
 .cp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.tempo-ctl { display: flex; gap: 8px; margin: 0 0 12px; }
 .tempo-wave { display: block; width: 100%; height: 132px; border-radius: 14px; background-color: var(--surface-2); margin-top: 12px; touch-action: none; cursor: ew-resize; }
 .part-time { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--muted); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; white-space: nowrap; padding: 0 4px; }
 .part-row { cursor: pointer; }
@@ -1247,7 +1248,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <h3>Tempo &amp; song start</h3>
       <p class="modal-hint">Found automatically. If the beat lines on the waveform look off (often double or half time), fix it here.</p>
       <canvas id="tempoWave" class="tempo-wave hidden" aria-label="Drag to set where the song starts. Hold to zoom in."></canvas>
-      <p class="muted small" id="tempoWaveHint" style="margin:6px 0 12px"></p>
+      <p class="muted small" id="tempoWaveHint" style="margin:6px 0 8px"></p>
+      <div class="tempo-ctl"><button type="button" id="tempoPlayBtn" class="btn small">▶ Play from song start</button><button type="button" id="tempoClickBtn" class="btn small" aria-pressed="false">Click</button></div>
       <div class="tempo-form">
         <label>BPM <input type="number" id="bpmInput" class="field num" min="30" max="300" step="0.1" placeholder="—"></label>
         <label>Song starts at <input type="text" id="songStartInput" class="field num" inputmode="decimal" placeholder="0:00.0"></label>
@@ -3447,7 +3449,7 @@ function drawTempoWave() {
   const c = $("tempoWave"); if (!c || $("tempoModal").classList.contains("hidden")) return;
   const dur = trackDuration(), has = !!(dur && peaks);
   c.classList.toggle("hidden", !has);
-  $("tempoWaveHint").textContent = has ? "Drag to set where the song starts. Press and hold to zoom in for fine adjustments." : "Upload a track to set the tempo by eye.";
+  $("tempoWaveHint").textContent = has ? "Drag to set where the song starts. You'll hear it each time you pause. Press and hold to zoom in for fine adjustments." : "Upload a track to set the tempo by eye.";
   if (!has) return;
   const h = c.clientHeight || 132, { g, w } = drawWaveBase(c, h), C = waveColors(), tp = curTempo();
   const v0 = tw.zoom ? tw.v0 : 0, v1 = tw.zoom ? tw.v1 : dur, span = v1 - v0;
@@ -3481,6 +3483,9 @@ function drawTempoWave() {
       g.fillText(label, Math.max(4, Math.min(w - tw2 - 4, x + 10)), h - 8);
     }
   }
+  $("tempoPlayBtn").textContent = isPlaying() ? "■ Stop" : "▶ Play from song start";
+  $("tempoClickBtn").classList.toggle("primary", !!tp.click); $("tempoClickBtn").setAttribute("aria-pressed", String(!!tp.click));
+  $("tempoClickBtn").disabled = !(tp.bpm && tp.offset != null);
   if (tw.zoom) { g.font = "700 11px -apple-system, sans-serif"; g.fillStyle = C.muted; g.fillText("Zoomed in · " + span.toFixed(0) + "s", 8, 16); }
 }
 (function wireTempoWave() {
@@ -3493,6 +3498,15 @@ function drawTempoWave() {
     const span = tw.v1 - tw.v0;
     return { t: Math.max(0, Math.min(dur(), anchorT + (px - anchorX) * span / r.width)), px };
   };
+  let audTimer = 0, stopTimer = 0;
+  const audition = t => {                         // pause for a moment while dragging and you hear a short bit from that spot
+    clearTimeout(audTimer); clearTimeout(stopTimer);
+    audTimer = setTimeout(() => {
+      if (!down) return;
+      playFrom(Math.max(0, t), false, 1);
+      stopTimer = setTimeout(() => { if (down) stopAndReturn(); }, 750);
+    }, 130);
+  };
   const set = (x) => {
     const { t, px } = tOf(x), tp = curTempo(), r = c.getBoundingClientRect();
     const v = Math.round(t * 100) / 100;
@@ -3503,6 +3517,8 @@ function drawTempoWave() {
       lastBeat = b;
     }
     tp.songStart = v; tp.offset = v;
+    if (isPlaying()) stopAndReturn();
+    audition(v);
     syncTempoInputs(); drawTempoWave(); drawWaveform();
   };
   c.addEventListener("pointerdown", e => {
@@ -3524,15 +3540,25 @@ function drawTempoWave() {
     if (!tw.zoom && moved > 10) clearTimeout(holdT);
     set(e.clientX);
   });
-  const end = () => { if (!down) return; down = false; clearTimeout(holdT); tw.zoom = false; scheduleSave(); paintTempo(); drawTempoWave(); };
+  const end = () => {
+    if (!down) return; down = false; clearTimeout(holdT); clearTimeout(audTimer); clearTimeout(stopTimer); tw.zoom = false;
+    scheduleSave(); paintTempo(); drawTempoWave();
+    const tp = curTempo(); if (tp.songStart != null) { playFrom(tp.songStart, false, 1); setTimeout(drawTempoWave, 300); }   // let go and it keeps playing from the start so you can judge the beat
+  };
   c.addEventListener("pointerup", end); c.addEventListener("pointercancel", end);
 })();
+$("tempoPlayBtn").addEventListener("click", () => {
+  if (isPlaying()) { stopAndReturn(); } else { const tp = curTempo(); playFrom(tp.songStart != null ? tp.songStart : 0, false, 1); }
+  setTimeout(drawTempoWave, 250);
+});
+$("tempoClickBtn").addEventListener("click", () => { $("clickToggle").click(); drawTempoWave(); });
+player.addEventListener("pause", () => setTimeout(drawTempoWave, 50));
 $("tempoModal").addEventListener("input", () => requestAnimationFrame(drawTempoWave));
 $("tempoModal").addEventListener("change", () => requestAnimationFrame(drawTempoWave));
 window.addEventListener("resize", () => drawTempoWave());
 $("tempoManualBtn").addEventListener("click", () => { syncTempoInputs(); $("tempoModal").classList.remove("hidden"); requestAnimationFrame(drawTempoWave); });
-$("tempoDone").addEventListener("click", () => $("tempoModal").classList.add("hidden"));
-$("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) $("tempoModal").classList.add("hidden"); });
+$("tempoDone").addEventListener("click", () => { $("tempoModal").classList.add("hidden"); if (isPlaying()) stopAndReturn(); });
+$("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) { $("tempoModal").classList.add("hidden"); if (isPlaying()) stopAndReturn(); } });
 $("clickToggle").addEventListener("click", () => {
   const tp = curTempo(); if (!project) return;
   tp.click = !tp.click; scheduleSave(); syncTempoInputs();
