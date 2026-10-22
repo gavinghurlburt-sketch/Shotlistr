@@ -1104,6 +1104,10 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .order-card { background-color: var(--surface); border-radius: 26px; padding: 14px 16px; margin: 6px 0 4px; }
 .order-card h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .order-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-weight: 600; }
+.ord-hint { margin: -4px 0 6px; }
+.ord-grip { margin-left: auto; padding: 6px 4px 6px 14px; font-size: 22px; line-height: 1; color: var(--muted); touch-action: none; cursor: grab; }
+.order-row .spd + .ord-grip { margin-left: 10px; }
+.ord-ghost { opacity: .35; }
 .order-row .n { color: var(--muted); font-weight: 700; width: 20px; }
 .order-row .sp { color: var(--muted); font-size: 13px; font-weight: 500; }
 .order-row .spd { margin-left: auto; font-size: 12.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background-color: var(--accent); color: var(--accent-fg); }
@@ -2514,7 +2518,17 @@ function isContent() { return !!project && (project.type === "content" || projec
 function trackOwnerId() { return project.type === "content" && project.artistId ? project.artistId : project.id; }
 let activeSongId = null;
 /* songs that actually have sections picked in Plan; Shoot and Cut only deal with these */
-function shootSongs() { return project.songs.filter(sg => songParts(sg.id).length); }
+/* the order the user wants to shoot in (Plan → Shoot order); sections not in the list keep song/time order after it */
+function shootRank(id) { const o = project.shootOrder; const i = Array.isArray(o) ? o.indexOf(id) : -1; return i < 0 ? 1e6 : i; }
+function shootParts(songId) { const ps = songParts(songId); return Array.isArray(project.shootOrder) && project.shootOrder.length ? ps.map((p, i) => ({ p, i })).sort((a, b) => shootRank(a.p.id) - shootRank(b.p.id) || a.i - b.i).map(x => x.p) : ps; }
+function shootRows() {
+  const rows = []; project.songs.forEach((sg, si) => songParts(sg.id).forEach((p, pi) => rows.push({ sg, p, k: si * 1000 + pi })));
+  return Array.isArray(project.shootOrder) && project.shootOrder.length ? rows.sort((a, b) => shootRank(a.p.id) - shootRank(b.p.id) || a.k - b.k) : rows;
+}
+function shootSongs() {
+  const l = project.songs.filter(sg => songParts(sg.id).length);
+  return Array.isArray(project.shootOrder) && project.shootOrder.length ? l.map((sg, i) => ({ sg, i, r: Math.min(...songParts(sg.id).map(p => shootRank(p.id))) })).sort((a, b) => a.r - b.r || a.i - b.i).map(x => x.sg) : l;
+}
 function activeSong() { return project && project.songs.find(x => x.id === activeSongId) || null; }
 function curTempo() {
   if (!project) return defaultTempo();
@@ -5021,9 +5035,12 @@ function renderSetPick() {
   }).join("");
 }
 function renderSetOrder() {
-  const el = $("setOrder"), rows = [];
-  project.songs.forEach(sg => songParts(sg.id).forEach(p => rows.push({ sg, p })));
-  el.innerHTML = rows.length ? `<div class="order-card"><h3>Shoot order</h3>${rows.map((r, i) => `<div class="order-row"><span class="n">${i + 1}</span><span>${esc(r.p.name)}</span><span class="sp">${esc(r.sg.name)}</span>${(r.p.speed || 1) !== 1 ? `<span class="spd">${speedLabel(r.p.speed)}</span>` : ""}</div>`).join("")}</div>` : "";
+  const el = $("setOrder"), rows = shootRows();
+  el.innerHTML = rows.length ? `<div class="order-card"><h3>Shoot order</h3><p class="muted small ord-hint">Drag ⠿ to change the order you shoot in.</p><div class="order-list">${rows.map((r, i) => `<div class="order-row" data-pid="${r.p.id}"><span class="n">${i + 1}</span><span>${esc(r.p.name)}</span><span class="sp">${esc(r.sg.name)}</span>${(r.p.speed || 1) !== 1 ? `<span class="spd">${speedLabel(r.p.speed)}</span>` : ""}<span class="ord-grip" aria-label="Drag to reorder">⠿</span></div>`).join("")}</div></div>` : "";
+  const list = el.querySelector(".order-list");
+  if (list && typeof Sortable !== "undefined") new Sortable(list, { handle: ".ord-grip", animation: 150, forceFallback: false, ghostClass: "ord-ghost",
+    onStart: () => feel("select"),
+    onEnd: () => { feel("select"); project.shootOrder = Array.from(list.children).map(x => x.dataset.pid); scheduleSave(); renderSetOrder(); } });
 }
 async function linkArtist(a) {
   project.artistId = a.id; project.artist = a.docTitle;
@@ -5222,7 +5239,7 @@ function tileHTML(r) {
 function currentShootPart() {
   const sg = activeSong();
   if (!sg) return null;
-  const parts = songParts(sg.id);
+  const parts = shootParts(sg.id);
   return parts.find(p => p.id === shootPartId) || parts.find(p => p.rows.some(r => !r.checked)) || parts[0] || null;
 }
 var lastShootSong = null, dropT0 = 0;
@@ -5302,7 +5319,7 @@ function renderShootContent() {
     panel.innerHTML = `<p style="margin-top:0">Pick the songs and sections you want to shoot in Plan first.</p><button type="button" class="btn primary" data-c="go-draft">Open Plan</button>`;
     return;
   }
-  const parts = songParts(sg.id);
+  const parts = shootParts(sg.id);
   if (!parts.length) {
     strip.innerHTML = "";
     panel.innerHTML = `<p style="margin-top:0">${esc(sg.name)} has no sections picked yet. Choose them in Plan.</p><button type="button" class="btn primary" data-c="go-draft">Open Plan</button>`;
