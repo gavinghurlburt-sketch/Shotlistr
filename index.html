@@ -628,6 +628,16 @@ table.sched tr.done-row td { background-color: var(--done); }
 .part-chip.active, .part-chip.active:hover { border-color: var(--sec); box-shadow: 0 0 0 1px var(--sec); background-color: var(--surface-2); background-color: color-mix(in srgb, var(--sec) 22%, var(--surface)); }
 .part-chip.complete { opacity: .6; }
 .part-chip-meta { font-weight: 500; font-size: 11px; color: var(--muted); }
+.part-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.part-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; scroll-margin-top: 76px; overflow: hidden; }
+.part-card.open { border-color: var(--sec); box-shadow: 0 0 0 1px var(--sec); }
+.part-card.complete:not(.open) { opacity: .6; }
+.pc-head { display: flex; align-items: center; gap: 10px; width: 100%; background: transparent; border: 0; border-radius: 0; padding: 16px 18px; text-align: left; font: inherit; color: inherit; }
+.pc-head .dot { width: 14px; height: 14px; flex: 0 0 auto; }
+.pc-name { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.pc-meta { margin-left: auto; font-size: 12px; color: var(--muted); }
+.pc-chev { color: var(--muted); width: 14px; text-align: center; }
+.pc-body { padding: 0 18px 18px; }
 .part-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .part-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; }
 .part-title .dot { width: 14px; height: 14px; }
@@ -1372,8 +1382,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <div id="cShootStatus" class="status-banner"></div>
     <div id="shootSongTabs" class="song-tabs"></div>
     <div class="transport-slot"></div>
-    <div id="partStrip" class="part-strip"></div>
-    <div id="partPanel" class="panel"></div>
+    <div id="partStrip" class="part-strip hidden"></div>
+    <div id="partPanel" class="part-list"></div>
   </section>
 
   <!-- ===== cut ===== -->
@@ -3954,7 +3964,7 @@ async function openProject(id) {
   if (project.type === "artist") project.workspace = "draft";
   else if (project.type === "content" && project.workspace === "draft") project.workspace = "plan";
   activeSongId = project.songs.length ? project.songs[0].id : null;
-  cutTime = 0; shootPartId = null; playRate = 1;
+  cutTime = 0; shootPartId = null; shootOpenId = null; playRate = 1;
   resetPlayer();
   setTempoStatus("");
   await loadArtistRec();
@@ -4007,7 +4017,7 @@ function switchWs(ws, initial) {
   document.querySelectorAll(".ws-view").forEach(v => v.classList.toggle("hidden", v.id !== vid));
   if (!initial) scheduleSave();
   if (project.type === "content" && (ws === "shoot" || ws === "cut") && project.songs.length) {
-    if (!activeSong()) { activeSongId = project.songs[0].id; shootPartId = null; }
+    if (!activeSong()) { activeSongId = project.songs[0].id; shootPartId = null; shootOpenId = null; }
     if (trackKey() !== loadedTrackKey) { renderCurrent(); loadActiveTrack(); window.scrollTo(0, 0); return; }
   }
   renderCurrent();
@@ -4063,6 +4073,7 @@ $("settingsModal").addEventListener("click", e => { if (e.target === $("settings
 /* ================= content shoot: model helpers ================= */
 let cPlanSub = "shoots";
 let shootPartId = null;
+var shootOpenId = null;
 const tileActiveTake = {};
 let tplSortable = null, cBoardSortables = [];
 
@@ -4183,7 +4194,7 @@ $("bannerFile").addEventListener("change", async e => {
 function setActiveSong(id) {
   if (!id || id === activeSongId) return;
   activeSongId = id;
-  shootPartId = null;
+  shootPartId = null; shootOpenId = null;
   renderCurrent();
   loadActiveTrack();
 }
@@ -4404,7 +4415,7 @@ function removeEntry(sec) {
   project.sections = project.sections.filter(x => x.id !== sec.id);
   if (!project.sections.some(x => x.songId === sec.songId)) {
     project.songs = project.songs.filter(x => x.id !== sec.songId);
-    if (activeSongId === sec.songId) { activeSongId = project.songs.length ? project.songs[0].id : null; shootPartId = null; }
+    if (activeSongId === sec.songId) { activeSongId = project.songs.length ? project.songs[0].id : null; shootPartId = null; shootOpenId = null; }
   }
 }
 function toggleEntry(as, speed) {
@@ -4669,28 +4680,33 @@ function renderShootContent() {
   shootPartId = pt.id;
   if (!isPlaying()) playRate = pt.speed || 1;
   paintRate();
-  strip.innerHTML = parts.map(p => {
-    const d = p.rows.filter(r => r.checked).length;
-    return `<button type="button" class="part-chip ${p.id === pt.id ? "active" : ""} ${p.rows.length && d === p.rows.length ? "complete" : ""}" data-c="pick-part" data-section-id="${p.id}" style="--sec:${p.color}"><span class="dot"></span>${esc(partLabel(p))} <span class="part-chip-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span></button>`;
-  }).join("");
+  strip.innerHTML = "";
+  if (shootOpenId && !parts.some(p => p.id === shootOpenId)) shootOpenId = null;
   const tp = curTempo();
-  const idx = parts.indexOf(pt), prev = parts[idx - 1], next = parts[idx + 1];
-  const nextSong = project.songs[project.songs.indexOf(sg) + 1];
-  const doneN = pt.rows.filter(r => r.checked).length;
-  const allDone = pt.rows.length > 0 && doneN === pt.rows.length;
-  panel.innerHTML = `<div class="part-head" style="--sec:${pt.color}">
-      <div><div class="part-title"><span class="dot"></span>${esc(partLabel(pt))}</div><div class="muted small">${esc(sg.name)} · ${pt.time ? `every shot starts at ${esc(pt.time)}` : "no start time set — add one on the artist page"}</div></div>
-      <span class="spacer"></span>
-      ${pt.time ? `<button type="button" class="btn primary big-btn" data-c="play-part">▶ Play ${esc(partLabel(pt))}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
-    </div>
-    <div class="shot-tiles">${pt.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
-    <div class="part-nav">
-      ${allDone ? `<span class="all-done">All ${pt.rows.length} shots in ${esc(partLabel(pt))} are done.</span>` : `<span class="muted small">${doneN} of ${pt.rows.length} done in this part</span>`}
-      <span class="spacer"></span>
-      ${prev ? `<button type="button" class="btn" data-c="goto-part" data-section-id="${prev.id}">‹ ${esc(partLabel(prev))}</button>` : ""}
-      ${next ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="goto-part" data-section-id="${next.id}">Next: ${esc(partLabel(next))} ›</button>`
-        : nextSong ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="next-song" data-song="${nextSong.id}">Next song: ${esc(nextSong.name)} ›</button>` : ""}
-    </div>`;
+  panel.innerHTML = parts.map((p, idx) => {
+    const d = p.rows.filter(r => r.checked).length, open = p.id === shootOpenId;
+    const complete = p.rows.length && d === p.rows.length;
+    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span><span class="pc-chev">${open ? "▾" : "▸"}</span></button>`;
+    if (!open) return `<div class="part-card ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}</div>`;
+    const prev = parts[idx - 1], next = parts[idx + 1];
+    const nextSong = project.songs[project.songs.indexOf(sg) + 1];
+    const allDone = p.rows.length > 0 && d === p.rows.length;
+    return `<div class="part-card open ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}
+      <div class="pc-body">
+        <div class="part-head">
+          <div class="muted small">${esc(sg.name)} · ${p.time ? `every shot starts at ${esc(p.time)}` : "no start time set — add one on the artist page"}</div>
+          <span class="spacer"></span>
+          ${p.time ? `<button type="button" class="btn primary big-btn" data-c="play-part">▶ Play ${esc(partLabel(p))}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
+        </div>
+        <div class="shot-tiles">${p.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
+        <div class="part-nav">
+          ${allDone ? `<span class="all-done">All ${p.rows.length} shots in ${esc(partLabel(p))} are done.</span>` : `<span class="muted small">${d} of ${p.rows.length} done in this part</span>`}
+          <span class="spacer"></span>
+          ${next ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="goto-part" data-section-id="${next.id}">Next: ${esc(partLabel(next))} ›</button>`
+            : nextSong ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="next-song" data-song="${nextSong.id}">Next song: ${esc(nextSong.name)} ›</button>` : ""}
+        </div>
+      </div></div>`;
+  }).join("");
 }
 
 /* ================= content: shared actions ================= */
@@ -4778,7 +4794,12 @@ document.addEventListener("click", e => {
       break;
     }
     case "go-draft": switchWs("plan"); break;
-    case "pick-part": case "goto-part": if (sec) { shootPartId = sec.id; renderShootContent(); } break;
+    case "pick-part": case "goto-part": case "toggle-part": if (sec) {
+      const closing = b.dataset.c === "toggle-part" && shootOpenId === sec.id;
+      shootPartId = sec.id; shootOpenId = closing ? null : sec.id;
+      renderShootContent();
+      if (!closing) { const el = document.querySelector(`#partPanel .part-card[data-section-id="${sec.id}"]`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    } break;
     case "next-song": setActiveSong(b.dataset.song); break;
     case "play-part": { const p = currentShootPart(); if (p) playCue(p.time, p.speed || 1); break; }
     case "tile-done": if (row) { row.checked = !row.checked; row.doneAt = row.checked ? new Date().toISOString() : null; scheduleSave(); renderShootContent(); } break;
