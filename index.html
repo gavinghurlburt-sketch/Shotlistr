@@ -4890,7 +4890,7 @@ function renderShootContent() {
     return `<div class="part-card open ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}${prog}
       <div class="pc-body">
         <div class="part-head">
-          <div class="muted small">${esc(sg.name)} · ${p.time ? `every shot starts at ${esc(p.time)}` : "no start time set — add one on the artist page"}</div>
+          ${p.time ? "" : `<div class="muted small">No start time set. Add one on the artist page.</div>`}
           <span class="spacer"></span>
           ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn" data-c="play-part" data-rate="0.5" aria-label="Play ${esc(p.name)} at half speed">½×</button><button type="button" class="btn primary big-btn play-part" data-c="play-part" data-rate="${p.speed || 1}">▶ Play ${esc(partLabel(p))}</button><button type="button" class="btn rate-btn" data-c="play-part" data-rate="2" aria-label="Play ${esc(p.name)} at double speed">2×</button></div>` : ""}
         </div>
