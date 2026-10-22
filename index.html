@@ -969,8 +969,13 @@ details.more > :not(summary) { margin-top: 8px; }
 .suggest-row { display: flex; gap: 8px; }
 .part-row .part-name { background-color: transparent; border-color: transparent; padding-left: 4px; }
 .part-row .part-name:focus { background-color: var(--input-bg); }
+.color-pick { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 1 1 100%; padding: 2px 0 4px; }
+.cp-dot { width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: inset 0 0 0 2px var(--surface-2); position: relative; cursor: pointer; flex: none; }
+.cp-dot.on { border-color: var(--text); }
+.cp-custom { background: conic-gradient(#ef4444, #eab308, #22c55e, #14b8a6, #3b82f6, #a855f7, #ef4444); overflow: hidden; display: inline-block; }
+.cp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .part-row .pdot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
-.part-row .part-more { display: none; gap: 8px; width: 100%; }
+.part-row .part-more { display: none; gap: 8px; width: 100%; flex-wrap: wrap; }
 .part-row.open .part-more { display: flex; }
 .part-row { flex-wrap: wrap; }
 /* v2.2 */
@@ -4400,7 +4405,7 @@ function renderPartsList() {
       ${pt.time ? `<button type="button" class="icon-btn" data-c="part-cue" title="Play from here" aria-label="Play from here">▶</button>` : ""}
       <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color and delete">⋯</button>
       <div class="part-more">
-        <button type="button" class="btn small" data-c="part-color">Change color</button>
+        <div class="color-pick" role="group" aria-label="Section color">${PALETTE.map(c => `<button type="button" class="cp-dot${c.toLowerCase() === String(pt.color).toLowerCase() ? " on" : ""}" data-c="part-set-color" data-color="${c}" style="background-color:${c}" aria-label="Color ${c}"></button>`).join("")}<label class="cp-dot cp-custom${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : " on"}" style="${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : "background-color:" + pt.color}" title="Pick any color"><input type="color" class="part-color-input" value="${/^#[0-9a-f]{6}$/i.test(pt.color) ? pt.color : "#888888"}" aria-label="Custom color"></label></div>
         <button type="button" class="btn small danger-text" data-c="part-delete">Delete section</button>
       </div>
     </div>`).join("")
@@ -4408,6 +4413,11 @@ function renderPartsList() {
   renderSuggest();
 }
 var openPartId = null;
+document.addEventListener("change", e => {
+  const inp = e.target.closest && e.target.closest(".part-color-input"); if (!inp) return;
+  const row = inp.closest(".part-row"), sec = row && getSection(row.dataset.sectionId);
+  if (!sec) return; sec.color = inp.value; scheduleSave(); renderDraftContent();
+});
 var suggestMap = {};
 function renderSuggest() {
   const sg = activeSong(), box = $("suggestBox");
@@ -4981,7 +4991,7 @@ document.addEventListener("click", e => {
     }
     case "sug-dismiss": { const sg = activeSong(); if (sg) delete suggestMap[sg.id]; renderSuggest(); break; }
     case "part-more": { if (!sec) return; openPartId = openPartId === sec.id ? null : sec.id; renderPartsList(); break; }
-    case "part-color": { if (!sec) return; sec.color = PALETTE[(PALETTE.indexOf(sec.color) + 1) % PALETTE.length]; scheduleSave(); renderDraftContent(); break; }
+    case "part-set-color": { if (!sec) return; sec.color = b.dataset.color; scheduleSave(); renderDraftContent(); break; }
     case "part-paste": { const tc = pastePlayhead(); if (tc && sec) { sec.time = tc; scheduleSave(); renderDraftContent(); } break; }
     case "part-cue": if (sec) playCue(sec.time); break;
     case "part-delete": {
