@@ -217,7 +217,7 @@ label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13
   font-weight: 600;
   white-space: nowrap;
 }
-.ws-tab:hover { background-color: rgba(255,255,255,.07); color: #fff; }
+@media (hover: hover) { .ws-tab:hover { background-color: rgba(255,255,255,.07); color: #fff; } }
 .ws-tabs .ws-tab.active, .ws-tabs .ws-tab.active:hover { background-color: var(--bg); color: var(--text); }
 .ws-num {
   display: inline-block;
@@ -786,8 +786,13 @@ button:disabled { opacity: .4; }
 /* workspace tabs */
 .ws-tabs { padding: 4px 16px 10px; gap: 4px; }
 .ws-tab { border-radius: 999px; padding: 8px 16px; font-size: 13.5px; font-weight: 600; color: var(--muted); background-color: transparent; }
-.ws-tab:hover { background-color: var(--surface-2); color: var(--text); }
-.ws-tabs .ws-tab.active, .ws-tabs .ws-tab.active:hover { background-color: var(--primary-bg); color: var(--primary-fg); }
+@media (hover: hover) { .ws-tab:hover { background-color: var(--surface-2); color: var(--text); } }
+.ws-tabs { position: relative; }
+.appbar .ws-tabs .ws-tab, .appbar .ws-tabs .ws-tab:hover, .appbar .ws-tabs .ws-tab:active { background-color: transparent; }
+.ws-tab { position: relative; z-index: 1; -webkit-tap-highlight-color: transparent; transition: color .3s ease; }
+.ws-ind { position: absolute; top: 5px; bottom: 5px; left: 0; width: 0; border-radius: 999px; background-color: var(--primary-bg); z-index: 0; pointer-events: none; will-change: transform, width; }
+.ws-ind.anim { transition: transform .38s cubic-bezier(.2,.8,.2,1), width .38s cubic-bezier(.2,.8,.2,1); }
+.ws-tabs .ws-tab.active, .ws-tabs .ws-tab.active:hover { background-color: transparent; color: var(--primary-fg); }
 .ws-num { display: none; }
 
 /* layout + cards */
@@ -1098,6 +1103,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <button id="settingsBtn" class="btn small">Settings</button>
   </div>
   <nav id="wsTabs" class="ws-tabs hidden" aria-label="Workspaces">
+    <span id="wsInd" class="ws-ind" aria-hidden="true"></span>
     <button class="ws-tab" data-ws="draft"><span class="ws-num">1</span> Draft</button>
     <button class="ws-tab" data-ws="plan"><span class="ws-num">2</span> Plan</button>
     <button class="ws-tab" data-ws="shoot"><span class="ws-num">3</span> Shoot</button>
@@ -3312,6 +3318,7 @@ $("cutPlayBtn").addEventListener("click", togglePlay);
     const W = window.innerWidth, off = neighbor(dx) ? dx : dx * 0.22;
     main.style.transform = `translate3d(${off}px,0,0)`;
     main.style.opacity = String(1 - Math.min(Math.abs(off) / (W * 1.1), 0.55));
+    const nb = neighbor(dx); if (nb) placeInd(false, nb, Math.min(Math.abs(dx) / (W * 0.6), 1)); else placeInd(false);
   }
   function clear() { main.style.transform = ""; main.style.opacity = ""; main.style.willChange = ""; }
   document.addEventListener("touchstart", e => {
@@ -3339,7 +3346,7 @@ $("cutPlayBtn").addEventListener("click", togglePlay);
     if (!go) {
       if (reduce() || !main.animate) { clear(); return; }
       main.animate([{ transform: cur, opacity: curOp }, { transform: "translate3d(0,0,0)", opacity: 1 }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
-      clear(); return;
+      placeInd(true); clear(); return;
     }
     try { window.nativeHaptic && window.nativeHaptic("light"); } catch (x) {}
     if (reduce() || !main.animate) { clear(); tab.click(); window.scrollTo(0, 0); return; }
@@ -3990,6 +3997,7 @@ async function openProject(id) {
   $("projectsView").classList.add("hidden");
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.remove("hidden"));
   $("wsTabs").classList.toggle("hidden", project.type === "artist");
+  requestAnimationFrame(() => placeInd(false)); setTimeout(() => placeInd(false), 300);
   document.querySelector('.ws-tab[data-ws="draft"]').classList.toggle("hidden", project.type === "content");
   $("draftIntro").classList.toggle("hidden", project.type !== "artist");
   setSaveStatus(DEMO_MODE ? "Demo — not saved" : "Saved");
@@ -4026,11 +4034,22 @@ $("docTitleInput").addEventListener("change", async () => {
 
 /* ================= workspaces ================= */
 function viewIdFor(ws) { return ws === "cut" ? "cutView" : ws + (isContent() ? "CView" : "View"); }
+/* the white selector slides between tabs (and follows the finger while swiping) */
+function placeInd(animate, toTab, progress) {
+  const ind = $("wsInd"), nav = $("wsTabs"); if (!ind || nav.classList.contains("hidden")) return;
+  const a = nav.querySelector(".ws-tab.active"); if (!a || !a.offsetWidth) return;
+  let x = a.offsetLeft, w = a.offsetWidth;
+  if (toTab && toTab.offsetWidth) { x += (toTab.offsetLeft - x) * progress; w += (toTab.offsetWidth - w) * progress; }
+  ind.classList.toggle("anim", !!animate);
+  ind.style.width = w + "px"; ind.style.transform = `translateX(${x}px)`;
+}
+window.addEventListener("resize", () => placeInd(false));
 function switchWs(ws, initial) {
   currentWs = ws;
   if (ws === "shoot") lastShootSong = null;
   project.workspace = ws;
   document.querySelectorAll(".ws-tab").forEach(t => { t.classList.toggle("active", t.dataset.ws === ws); t.setAttribute("aria-current", t.dataset.ws === ws ? "page" : "false"); });
+  placeInd(!initial);
   const vid = viewIdFor(ws);
   document.querySelectorAll(".ws-view").forEach(v => v.classList.toggle("hidden", v.id !== vid));
   if (!initial) scheduleSave();
