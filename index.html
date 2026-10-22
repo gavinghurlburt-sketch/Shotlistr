@@ -2478,6 +2478,58 @@ function cueTarget(t) {
   }
   return t;
 }
+/* Slower / faster playback without changing the pitch: WSOLA (waveform-similarity overlap-add) time stretch.
+   Only the stretch of the part about to play is rendered (up to 90 s of song), then reused while it is still in range. */
+function wsolaStretch(buf, rate, a, b) {
+  const sr = buf.sampleRate, nCh = buf.numberOfChannels, i0 = Math.floor(a * sr), i1 = Math.min(buf.length, Math.floor(b * sr));
+  const inLen = i1 - i0, N = 2048, Hs = N / 2, tol = 512, D = 4;
+  const outLen = Math.max(N, Math.floor(inLen / rate));
+  const chans = []; for (let c = 0; c < nCh; c++) chans.push(buf.getChannelData(c));
+  const mono = new Float32Array(Math.ceil(inLen / D));
+  for (let i = 0; i < mono.length; i++) { let sum = 0, n = 0; for (let j = 0; j < D; j++) { const k = i0 + i * D + j; if (k >= i1) break; for (let c = 0; c < nCh; c++) sum += chans[c][k]; n += nCh; } mono[i] = n ? sum / n : 0; }
+  const win = new Float32Array(N); for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+  const out = []; for (let c = 0; c < nCh; c++) out.push(new Float32Array(outLen + N));
+  const W = Hs / D, Hd = Hs / D;
+  let prev = 0, k = 0;
+  return new Promise((resolve, reject) => {
+    const step = () => {
+      try {
+        const t0 = Date.now();
+        while (k * Hs < outLen) {
+          let start = Math.round(k * Hs * rate);
+          if (k > 0) {
+            const natural = Math.floor((prev + Hs) / D), lo = Math.max(0, Math.floor((start - tol) / D)), hi = Math.min(Math.floor((inLen - N) / D), Math.floor((start + tol) / D));
+            let best = -Infinity, bs = lo;
+            if (natural + W < mono.length) for (let s2 = lo; s2 <= hi; s2++) {
+              let dot = 0, e = 1e-9; for (let j = 0; j < W; j += 2) { const x = mono[s2 + j]; dot += x * mono[natural + j]; e += x * x; }
+              const sc = dot / Math.sqrt(e); if (sc > best) { best = sc; bs = s2; }
+            }
+            start = bs * D;
+          }
+          start = Math.max(0, Math.min(start, Math.max(0, inLen - N)));
+          const o = k * Hs, n = Math.min(N, inLen - start);
+          for (let c = 0; c < nCh; c++) { const src = chans[c], dst = out[c]; for (let i = 0; i < n; i++) dst[o + i] += src[i0 + start + i] * win[i]; }
+          prev = start; k++;
+          if (Date.now() - t0 > 40) { setTimeout(step, 0); return; }
+        }
+        const ab = new AudioBuffer({ length: outLen, numberOfChannels: nCh, sampleRate: sr });
+        for (let c = 0; c < nCh; c++) ab.copyToChannel(out[c].subarray(0, outLen), c);
+        resolve(ab);
+      } catch (e) { reject(e); }
+    };
+    step();
+  });
+}
+var stretchWin = null;
+async function stretchedFor(rate, from) {
+  const w = stretchWin, dur = audioBuffer.duration;
+  if (w && w.url === currentTrackUrl && w.rate === rate && from >= w.a && (from <= w.b - 4 || w.b >= dur - 0.01)) return w;
+  const a = Math.max(0, from - 0.5), b = Math.min(dur, a + 90);
+  const slow = setTimeout(() => showNotice(`Preparing the ${speedLabel(rate)} version…`), 350);
+  try { const buf = await wsolaStretch(audioBuffer, rate, a, b); stretchWin = { url: currentTrackUrl, rate, a, b, buf }; return stretchWin; }
+  catch (e) { console.error("stretch failed", e); return null; }
+  finally { clearTimeout(slow); }
+}
 let playToken = 0;
 async function playFrom(target, withCountIn, rate) {
   const token = ++playToken;
@@ -2487,7 +2539,7 @@ async function playFrom(target, withCountIn, rate) {
   playStartPos = target;
   pausePos = target;
   if (!audioBuffer) {                      // fallback: plain element, no count-in precision
-    try { player.currentTime = target; player.playbackRate = rt; } catch (e) {}
+    try { player.currentTime = target; player.preservesPitch = true; player.webkitPreservesPitch = true; player.playbackRate = rt; } catch (e) {}
     player.play().catch(() => showNotice("The browser blocked playback. Press play again."));
     startRaf(); updateTransportUI();
     return;
@@ -2495,6 +2547,12 @@ async function playFrom(target, withCountIn, rate) {
   const c = await readyEngine();
   if (token !== playToken) return;         // another press superseded this one
   if (!c) { showNotice("Audio is blocked right now — another app or tab may have it. Press play again."); return; }
+  let buf = audioBuffer, bufStart = 0, srcRate = 1;
+  if (rt !== 1) {
+    const w = await stretchedFor(rt, target);
+    if (token !== playToken) return;
+    if (w) { buf = w.buf; bufStart = w.a; } else srcRate = rt;   // stretch failed: fall back to plain (pitch-shifting) rate
+  }
   const tp = curTempo();
   const beat = 60 / ((tp.bpm || 120) * rt);
   const beats = withCountIn ? (tp.bars || 1) * 4 : 0;
@@ -2507,10 +2565,10 @@ async function playFrom(target, withCountIn, rate) {
   const songAt = t0 + beats * beat;
   const offset = Math.min(target, Math.max(0, audioBuffer.duration - 0.05));
   const src = c.createBufferSource();
-  src.buffer = audioBuffer;
-  src.playbackRate.value = rt;
+  src.buffer = buf;
+  src.playbackRate.value = srcRate;
   src.connect(c.destination);
-  src.start(songAt, offset);
+  src.start(songAt, buf === audioBuffer ? offset : Math.max(0, (offset - bufStart) / rt));
   cue = { src, ctxStart: songAt, offset, clicks, timers, rate: rt };
   startClickPump();
   src.onended = () => { if (cue && cue.src === src) { cue = null; pausePos = playStartPos; updateTransportUI(); drawWaveform(); } };
