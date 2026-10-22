@@ -3962,8 +3962,8 @@ function renderCalendar(projects) {
   let cells = "";
   for (let i = 0; i < rows * 7; i++) {
     const dt = new Date(y, m, 1 - lead + i), s = ymd(dt), pr = (byDay[s] || [])[0];
-    const st = pr ? ` style="${coverStyle(pr.id)}${pr.cover ? `;background-image:url(${pr.cover})` : ""}"` : "";
-    cells += `<button type="button" class="cal-day ${dt.getMonth() === m ? "" : "out"} ${pr ? "shoot" + (pr.cover ? " img" : "") : ""} ${s === today ? "today" : ""} ${s === calSel ? "sel" : ""}" data-day="${s}"${st}><span>${dt.getDate()}</span></button>`;
+    const st = pr ? ` style="${coverStyle(pr.id)}${pr.shownCover ? `;background-image:url(${pr.shownCover})` : ""}"` : "";
+    cells += `<button type="button" class="cal-day ${dt.getMonth() === m ? "" : "out"} ${pr ? "shoot" + (pr.shownCover ? " img" : "") : ""} ${s === today ? "today" : ""} ${s === calSel ? "sel" : ""}" data-day="${s}"${st}><span>${dt.getDate()}</span></button>`;
   }
   $("calCard").innerHTML = `<div class="cal-head"><button type="button" data-cal="-1" aria-label="Previous month">‹</button><b>${calMonth.toLocaleDateString(undefined, { month: "short", year: "numeric" })}</b><button type="button" data-cal="1" aria-label="Next month">›</button></div>
     <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(x => `<span class="cal-dow">${x}</span>`).join("")}${cells}</div>`;
@@ -3977,7 +3977,7 @@ function projectCardHTML(p) {
       <button type="button" class="pc-del" data-delete-id="${p.id}">Delete</button>
       <div class="project-card">
       <div class="project-card-main" data-open-id="${p.id}" role="button" tabindex="0">
-        <div class="cover ${p.cover ? "img" : ""}" style="${coverStyle(p.id)}${p.cover ? `;background-image:url(${p.cover})` : ""}"></div>
+        <div class="cover ${p.shownCover ? "img" : ""}" style="${coverStyle(p.id)}${p.shownCover ? `;background-image:url(${p.shownCover})` : ""}"></div>
         <div class="pc-text">
           <div class="project-card-name">${esc(p.docTitle || "Untitled project")}</div>
           <div class="muted small">${bits}</div>
@@ -4169,6 +4169,7 @@ async function renderProjectsList() {
   if (await migrateArtists(all)) { try { all = await listProjects(); } catch (e) {} }
   const artistRecs = all.filter(isArtistRec).map(normalizeRecord).sort(byArtistName);
   all = all.filter(r => !isArtistRec(r));
+  all.forEach(p => { p.shownCover = p.cover || ""; if (!p.shownCover && p.type === "content") { const a = artistRecs.find(x => x.id === p.artistId) || artistRecs.find(x => artistKey(x.docTitle) === artistKey(p.artist)); if (a && a.cover) p.shownCover = a.cover; } });
   const artists = artistRecs.map(a => a.docTitle);
   renderArtists(artistRecs, all);
   if (artistFilter && !artists.includes(artistFilter)) artistFilter = null;
@@ -4723,7 +4724,7 @@ async function renderArtistShoots() {
     .sort((a, b) => (a.d || "9999").localeCompare(b.d || "9999"));
   const tile = (r, d) => {
     const [y, m, dd] = (d || "").split("-").map(Number), mon = d ? new Date(y, m - 1, dd).toLocaleDateString(undefined, { month: "short" }) : "";
-    return `<span class="day-tile ${r.cover ? "img" : ""}" style="${coverStyle(r.id)}${r.cover ? `;background-image:url(${r.cover})` : ""}">${d ? `<small>${esc(mon)}</small><b>${dd}</b>` : `<b>–</b>`}</span>`;
+    return `<span class="day-tile ${r.shownCover ? "img" : ""}" style="${coverStyle(r.id)}${r.shownCover ? `;background-image:url(${r.shownCover})` : ""}">${d ? `<small>${esc(mon)}</small><b>${dd}</b>` : `<b>–</b>`}</span>`;
   };
   el.innerHTML = `<div class="sec-line" style="margin-top:26px"><h2 class="sec-title">Upcoming shoots</h2><span class="spacer"></span><button type="button" class="btn small" data-artist-new-shoot="1">+ New shoot</button></div>`
     + (mine.length ? mine.map(({ r, d }) => `<button type="button" class="day-card" data-open-shoot="${r.id}">${tile(r, d)}<span class="day-text"><span class="day-title">${esc(r.docTitle || "Untitled project")}</span><span class="muted small">${d ? esc(dayLabel(d, true)) : "No date yet"}</span></span></button>`).join("") : `<p class="muted small" style="margin:6px 2px">No shoots scheduled yet.</p>`);
