@@ -677,7 +677,9 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-body .part-head .muted { flex: 1 1 100%; }
 .play-row { flex: 1 1 100%; display: flex; gap: 8px; align-items: stretch; }
 .play-row .play-part { flex: 1; }
-.rate-btn { flex: none; min-width: 58px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background-color: color-mix(in srgb, var(--sec) 22%, var(--surface-2)); color: var(--text); }
+.pc-body .btn.rate-btn.on { background-color: var(--sec); color: #fff; box-shadow: 0 4px 14px color-mix(in srgb, var(--sec) 40%, transparent); }
+.part-card.complete .pc-body .btn.rate-btn.on { background-color: var(--good-fill); box-shadow: none; }
+.rate-btn { flex: none; min-width: 64px; transition: background-color .15s, color .15s; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background-color: color-mix(in srgb, var(--sec) 22%, var(--surface-2)); color: var(--text); }
 .pc-body .btn.play-part.primary { background-color: var(--sec); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--sec) 40%, transparent); }
 .part-card.complete .btn.play-part.primary { background-color: var(--good-fill); box-shadow: none; }
 .pc-body .shot-tiles { grid-template-columns: 1fr; gap: 8px; }
@@ -4202,6 +4204,7 @@ $("settingsModal").addEventListener("click", e => { if (e.target === $("settings
 let cPlanSub = "shoots";
 let shootPartId = null;
 var shootOpenId = null;
+var partRate = {};
 const tileActiveTake = {};
 let tplSortable = null, cBoardSortables = [];
 
@@ -4214,8 +4217,8 @@ function addSong(name) {
 function songOf(sec) { return project.songs.find(x => x.id === sec.songId) || null; }
 function sectionTitle(sec) { const sg = isContent() ? songOf(sec) : null; return sg ? `${sg.name} — ${sec.name}` : sec.name; }
 function speedRank(sp) { return sp === 1 ? 0 : sp === 0.5 ? 1 : 2; }
-var ICON_TURTLE = `<svg viewBox="0 0 32 24" width="30" height="22" aria-hidden="true" fill="currentColor"><path d="M4.5 18C4.5 9.5 9.5 5 16 5s11.5 4.5 11.5 13z"/><circle cx="29" cy="14.2" r="3"/><rect x="7.5" y="17" width="5" height="4.5" rx="2"/><rect x="19.5" y="17" width="5" height="4.5" rx="2"/><path d="M4.8 17.5 1 19.2l4-4z"/><path d="M11 17.5c-.4-4 .6-8 5-8.7M21 17.5c.4-4-.6-8-5-8.7M16 18V9" fill="none" stroke="var(--surface-2)" stroke-opacity=".55" stroke-width="1.2" stroke-linecap="round"/></svg>`;
-var ICON_RABBIT = `<svg viewBox="0 0 32 24" width="30" height="22" aria-hidden="true" fill="currentColor"><ellipse cx="14" cy="15" rx="9.5" ry="5.6"/><circle cx="25" cy="11.5" r="4"/><ellipse cx="23.6" cy="4.2" rx="1.6" ry="4.6" transform="rotate(-14 23.6 4.2)"/><ellipse cx="27.6" cy="4.6" rx="1.5" ry="4.2" transform="rotate(12 27.6 4.6)"/><circle cx="4.4" cy="13.2" r="2.4"/><ellipse cx="9" cy="20" rx="4.6" ry="2.1"/><rect x="18.5" y="17" width="8" height="3.2" rx="1.6"/></svg>`;
+var ICON_TURTLE = `<svg viewBox="0 0 40 28" width="42" height="29" aria-hidden="true" fill="currentColor"><defs><mask id="tmask" maskUnits="userSpaceOnUse" x="0" y="0" width="40" height="28"><rect width="40" height="28" fill="#fff"/><g fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 9.5 24.3 12v5L20 19.5 15.7 17v-5zM20 9.5V4M24.3 12 31 9.5M24.3 17 32.5 20M15.7 12 9 9.5M15.7 17 7.5 20M20 19.5V24"/></g></mask></defs><path mask="url(#tmask)" d="M5.5 22C5.5 12 11.5 5.5 20 5.5S34.5 12 34.5 22z"/><path d="M31 19c2-3 3.5-4.5 6-4.5 2.2 0 3.3 1.6 3.3 3.2 0 1.8-1.4 3.3-3.4 3.3H31z"/><rect x="26" y="20" width="6" height="6" rx="2.4"/><rect x="8" y="20" width="6" height="6" rx="2.4"/><path d="M5.8 20.5 1.2 24l4.8.2z"/></svg>`;
+var ICON_RABBIT = `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" fill="currentColor"><defs><mask id="rmask" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32"><rect width="32" height="32" fill="#fff"/><circle cx="23.4" cy="11.4" r="1.1" fill="#000"/></mask></defs><g mask="url(#rmask)"><ellipse cx="18.6" cy="4.6" rx="1.7" ry="5" transform="rotate(-9 18.6 4.6)"/><ellipse cx="23.4" cy="4.2" rx="1.6" ry="4.8" transform="rotate(9 23.4 4.2)"/><path d="M15.5 13.2c0-3 2.4-5.2 5.4-5.2 3.4 0 6.4 2.4 7 5.6.2 1.2-.6 2-1.6 2.2l-2.4.5c.6 1.5 1 3.4 1 5.6V27h-5.2c0-1-.4-1.7-1.2-2.2-1.6-.9-2.4-2.5-2.4-4.6 0-2 .4-3.6 1.1-4.7z"/><ellipse cx="12.5" cy="22.2" rx="8.6" ry="6.4"/><circle cx="4.8" cy="23.4" r="2.8"/><ellipse cx="11.5" cy="28.6" rx="6.6" ry="2.1"/><rect x="19" y="26.2" width="9" height="3.2" rx="1.6"/></g></svg>`;
 function speedLabel(sp) { return sp === 0.5 ? "½×" : sp === 2 ? "2×" : "1×"; }
 function partLabel(sec) { return sec.name + ((sec.speed || 1) !== 1 ? " · " + speedLabel(sec.speed) : ""); }
 function sortByTime(list) {
@@ -4894,7 +4897,7 @@ function renderShootContent() {
         <div class="part-head">
           ${p.time ? "" : `<div class="muted small">No start time set. Add one on the artist page.</div>`}
           <span class="spacer"></span>
-          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn" data-c="play-part" data-rate="0.5" aria-label="Play ${esc(p.name)} at half speed" title="Half speed">${ICON_TURTLE}</button><button type="button" class="btn primary big-btn play-part" data-c="play-part" data-rate="${p.speed || 1}">▶ Play ${esc(partLabel(p))}</button><button type="button" class="btn rate-btn" data-c="play-part" data-rate="2" aria-label="Play ${esc(p.name)} at double speed" title="Double speed">${ICON_RABBIT}</button></div>` : ""}
+          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn${partRate[p.id] === 0.5 ? " on" : ""}" data-c="rate-toggle" data-rate="0.5" aria-pressed="${partRate[p.id] === 0.5}" aria-label="Half speed" title="Half speed">${ICON_TURTLE}</button><button type="button" class="btn primary big-btn play-part" data-c="play-part">▶ Play ${esc(partLabel(p))}</button><button type="button" class="btn rate-btn${partRate[p.id] === 2 ? " on" : ""}" data-c="rate-toggle" data-rate="2" aria-pressed="${partRate[p.id] === 2}" aria-label="Double speed" title="Double speed">${ICON_RABBIT}</button></div>` : ""}
         </div>
         <div class="shot-tiles">${p.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
         <div class="part-nav">
@@ -5003,7 +5006,13 @@ document.addEventListener("click", e => {
       if (!closing) { const el = document.querySelector(`#partPanel .part-card[data-section-id="${sec.id}"]`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
     } break;
     case "next-song": setActiveSong(b.dataset.song); break;
-    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time, +b.dataset.rate || p.speed || 1); break; }
+    case "rate-toggle": {
+      const p = currentShootPart(); if (!p) break;
+      const r = +b.dataset.rate; partRate[p.id] = partRate[p.id] === r ? null : r;
+      (b.closest(".play-row") || document).querySelectorAll(".rate-btn").forEach(x => { const on = partRate[p.id] === +x.dataset.rate; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
+      break;
+    }
+    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time, partRate[p.id] || p.speed || 1); break; }
     case "tile-done": if (row) { row.checked = !row.checked; row.doneAt = row.checked ? new Date().toISOString() : null; scheduleSave(); renderShootContent(); } break;
     case "tile-take": {
       if (!row) return;
