@@ -1061,6 +1061,14 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .float-pill { position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content; z-index: 55; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); min-height: 54px; padding: 0 28px; font-size: 16px; font-weight: 700; background-color: var(--pill); color: var(--text); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-shadow: 0 10px 34px rgba(0,0,0,.34), inset 0 0 0 1px var(--border); }
 .float-pill::before { content: "+"; font-size: 24px; font-weight: 400; line-height: 1; margin-right: 8px; margin-top: -2px; }
 @media (max-width: 760px) { .float-pill { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); } }
+/* one glass look for every floating pill: New, New artist, New shoot, change photo, toasts */
+#newBtn, #newBtn:hover, button.float-pill, button.float-pill:hover, .banner > .btn, .banner > .btn:hover, .toast {
+  background-color: var(--bar); color: var(--text);
+  -webkit-backdrop-filter: blur(12px) saturate(1.6); backdrop-filter: blur(12px) saturate(1.6);
+  box-shadow: 0 14px 40px rgba(0,0,0,.38), 0 2px 8px rgba(0,0,0,.2), inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px var(--ind-edge), inset 1.5px 0 1px -1px var(--bar-edge), inset -1.5px 0 1px -1px var(--bar-edge);
+}
+.banner > .btn { box-shadow: 0 6px 20px rgba(0,0,0,.3), inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px var(--ind-edge); }
+.banner > .btn, .banner > .btn:hover { color: #fff; background-color: rgba(40,40,44,.28); }
 /* home calendar: rounded squares; shoot days show the project photo */
 .cal { padding: 14px 14px 12px; }
 .cal-head b { font-size: 17px; }
