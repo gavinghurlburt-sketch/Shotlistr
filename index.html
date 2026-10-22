@@ -675,7 +675,10 @@ table.sched tr.done-row td { background-color: var(--done); }
 .part-card.complete .pc-chev { border-color: var(--good); }
 .pc-body .part-head { margin-bottom: 12px; }
 .pc-body .part-head .muted { flex: 1 1 100%; }
-.pc-body .btn.play-part.primary { width: 100%; background-color: var(--sec); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--sec) 40%, transparent); }
+.play-row { flex: 1 1 100%; display: flex; gap: 8px; align-items: stretch; }
+.play-row .play-part { flex: 1; }
+.rate-btn { flex: none; min-width: 58px; font-size: 15px; font-weight: 800; background-color: color-mix(in srgb, var(--sec) 22%, var(--surface-2)); color: var(--text); }
+.pc-body .btn.play-part.primary { background-color: var(--sec); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--sec) 40%, transparent); }
 .part-card.complete .btn.play-part.primary { background-color: var(--good-fill); box-shadow: none; }
 .pc-body .shot-tiles { grid-template-columns: 1fr; gap: 8px; }
 .pc-body .tile { background-color: var(--surface-2); border: 1px solid var(--border); border-radius: 18px; padding: 14px; gap: 10px; transition: background-color .3s ease, border-color .3s ease; }
@@ -1408,7 +1411,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     </div>
     <div data-csub-panel="shoots">
       <h2 class="sec-title">Songs</h2>
-      <p class="muted small sp-hint">Select the sections and versions of the song you want to shoot. 2× plays the song fast, for filming slow motion. ½× plays it slow, for sped-up footage.</p>
+      <p class="muted small sp-hint">Select the sections of each song you want to shoot. You can play any section at ½× or 2× on the Shoot page.</p>
       <div id="setPick"></div>
       <div id="setOrder"></div>
       <h2 class="sec-title" style="margin-top:22px">Shot template</h2>
@@ -4575,7 +4578,7 @@ function renderSetPick() {
     return `<div class="sp-card"><button type="button" class="sp-song" data-sp-song="${sg.id}"><span class="pp-box ${st}">${st === "on" ? "✓" : st === "some" ? "–" : ""}</span><span>${esc(sg.name)}</span><small>${secs.length ? `${n} of ${secs.length}` : ""}</small></button>`
       + (secs.length ? secs.map(as => {
           const on = srcEntries(as.id).length > 0;
-          return `<div class="sp-row"><button type="button" class="sp-check" data-sp-toggle="${as.id}"><span class="pp-box ${on ? "on" : ""}">${on ? "✓" : ""}</span><span>${esc(as.name)}</span>${as.time ? `<small>${esc(as.time)}</small>` : ""}</button><span class="sp-vers">${[0.5, 1, 2].map(sp => `<button type="button" class="vchip ${srcEntry(as.id, sp) ? "on" : ""}" data-sp-speed="${sp}" data-src="${as.id}" aria-label="${speedLabel(sp)} version">${speedLabel(sp)}</button>`).join("")}</span></div>`;
+          return `<div class="sp-row"><button type="button" class="sp-check" data-sp-toggle="${as.id}"><span class="pp-box ${on ? "on" : ""}">${on ? "✓" : ""}</span><span>${esc(as.name)}</span>${as.time ? `<small>${esc(as.time)}</small>` : ""}</button></div>`;
         }).join("") : `<p class="muted small" style="margin:2px 4px 12px">No sections marked yet. Mark them on ${esc(artistRec.docTitle)}'s page.</p>`)
       + `</div>`;
   }).join("");
@@ -4889,7 +4892,7 @@ function renderShootContent() {
         <div class="part-head">
           <div class="muted small">${esc(sg.name)} · ${p.time ? `every shot starts at ${esc(p.time)}` : "no start time set — add one on the artist page"}</div>
           <span class="spacer"></span>
-          ${p.time ? `<button type="button" class="btn primary big-btn play-part" data-c="play-part">▶ Play ${esc(partLabel(p))}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
+          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn" data-c="play-part" data-rate="0.5" aria-label="Play ${esc(p.name)} at half speed">½×</button><button type="button" class="btn primary big-btn play-part" data-c="play-part" data-rate="${p.speed || 1}">▶ Play ${esc(partLabel(p))}</button><button type="button" class="btn rate-btn" data-c="play-part" data-rate="2" aria-label="Play ${esc(p.name)} at double speed">2×</button></div>` : ""}
         </div>
         <div class="shot-tiles">${p.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
         <div class="part-nav">
@@ -4998,7 +5001,7 @@ document.addEventListener("click", e => {
       if (!closing) { const el = document.querySelector(`#partPanel .part-card[data-section-id="${sec.id}"]`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
     } break;
     case "next-song": setActiveSong(b.dataset.song); break;
-    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time, p.speed || 1); break; }
+    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time, +b.dataset.rate || p.speed || 1); break; }
     case "tile-done": if (row) { row.checked = !row.checked; row.doneAt = row.checked ? new Date().toISOString() : null; scheduleSave(); renderShootContent(); } break;
     case "tile-take": {
       if (!row) return;
