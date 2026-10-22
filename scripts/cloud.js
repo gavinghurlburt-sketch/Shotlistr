@@ -108,7 +108,7 @@ async function removeCloudTrack(key) {
   if (error) throw error;
 }
 function isUntouchedExample(rec) {
-  return !!rec && /^Example (project|content shoot)$/.test(rec.docTitle || "") && rec.createdAt === rec.updatedAt;
+  return !!rec && /^Example (project|content shoot|band)$/.test(rec.docTitle || "") && rec.createdAt === rec.updatedAt;
 }
 
 /* ---- pulling ---- */

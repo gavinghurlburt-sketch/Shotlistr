@@ -909,7 +909,15 @@ details.more > :not(summary) { margin-top: 8px; }
 .banner-img { position: absolute; inset: 0; background: linear-gradient(145deg, var(--c1, #888), var(--c2, #555)) center / cover no-repeat; }
 .banner.has-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.35), transparent 55%); pointer-events: none; }
 .banner > .btn { position: absolute; right: 12px; bottom: 12px; z-index: 2; background-color: var(--pill); color: var(--text); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
-.banner > #bannerInfo { display: none; }
+.banner-meta { position: absolute; left: 18px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.55); max-width: 62%; }
+.banner-date { background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; color: #fff; font-size: 34px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; text-align: left; }
+.banner-date:hover { background: none; }
+.banner-sub { font-size: 13px; font-weight: 600; opacity: .95; }
+.banner-sub:empty { display: none; }
+.banner:not(.has-img)::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.28), transparent 60%); pointer-events: none; }
+.banner.compact { height: 104px; cursor: default; }
+.banner.compact #bannerBtn { display: none; }
+.banner.compact .banner-date { font-size: 28px; }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 4px; }
 .detail-grid label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
 .detail-grid .field { width: 100%; min-width: 0; font-weight: 400; color: var(--text); }
@@ -964,24 +972,30 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .banner { cursor: pointer; }
 #bannerBtn { opacity: 0; pointer-events: none; transition: opacity .3s ease; }
 .banner.show #bannerBtn, .banner:not(.has-img) #bannerBtn { opacity: 1; pointer-events: auto; }
-/* shoot dates + section picker */
-.sd-head { font-size: 13px; color: var(--muted); margin: 2px 2px 14px; }
-.sd-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; padding: 22px 22px 20px; min-height: 0; border-radius: 28px; background-color: var(--surface); margin-bottom: 12px; }
-.sd-card:hover { background-color: var(--surface-2); }
-.sd-card.past { opacity: .6; }
-.sd-big { font-size: 44px; font-weight: 800; letter-spacing: -0.045em; line-height: 1.05; }
-.sd-sub { font-size: 14px; color: var(--muted); font-weight: 500; }
-.sd-card.all { padding: 16px 22px; }
-.sd-card.all .sd-big { font-size: 20px; letter-spacing: -0.025em; }
-.pp-song { margin: 14px 0 4px; }
-.pp-song-name { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; justify-content: flex-start; font-weight: 700; font-size: 16px; padding: 10px 12px; min-height: 0; border-radius: 14px; background-color: var(--surface-2); }
+.rate-badge { font-size: 12.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background-color: var(--accent); color: var(--accent-fg); }
+/* setlist (Plan) */
+.sp-hint { margin: 0 2px 12px; line-height: 1.5; }
+.sp-card { background-color: var(--surface); border-radius: 26px; padding: 14px 14px 8px; margin-bottom: 12px; }
+.sp-song { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; justify-content: flex-start; min-height: 0; padding: 4px 4px 10px; background: none; border-radius: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; box-shadow: none; }
+.sp-song:hover { background: none; }
+.sp-song small { font-size: 12.5px; font-weight: 600; color: var(--muted); letter-spacing: 0; margin-left: auto; }
+.sp-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-top: 1px solid var(--border); }
+.sp-check { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-align: left; justify-content: flex-start; background: none; min-height: 0; padding: 4px 0; border-radius: 0; box-shadow: none; font-size: 16px; font-weight: 600; }
+.sp-check:hover { background: none; }
+.sp-check small { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+.sp-vers { display: flex; gap: 6px; flex: none; }
+.vchip { min-height: 0; padding: 6px 11px; border-radius: 999px; font-size: 13px; font-weight: 700; background-color: var(--surface-2); color: var(--muted); }
+.vchip.on { background-color: var(--primary-bg); color: var(--primary-fg); }
 .pp-box { width: 22px; height: 22px; flex: none; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: transparent; }
-.on > .pp-box, .pp-box.on { background-color: var(--primary-bg); box-shadow: none; color: var(--primary-fg); }
+.pp-box.on { background-color: var(--primary-bg); box-shadow: none; color: var(--primary-fg); }
 .pp-box.some { box-shadow: inset 0 0 0 2px var(--primary-bg); color: var(--primary-bg); }
-.pp-parts { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 2px 0; }
-.pp-part { display: inline-flex; align-items: center; gap: 8px; min-height: 0; padding: 8px 12px; border-radius: 999px; font-size: 14px; }
-.pp-part.on { background-color: var(--primary-bg); color: var(--primary-fg); }
-.pp-part small { opacity: .65; font-size: 12px; }
+.order-card { background-color: var(--surface); border-radius: 26px; padding: 14px 16px; margin: 6px 0 4px; }
+.order-card h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.order-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-weight: 600; }
+.order-row .n { color: var(--muted); font-weight: 700; width: 20px; }
+.order-row .sp { color: var(--muted); font-size: 13px; font-weight: 500; }
+.order-row .spd { margin-left: auto; font-size: 12.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background-color: var(--accent); color: var(--accent-fg); }
+.pick-artist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 /* v2.3 plan */
 .tpl-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; text-align: left; padding: 18px 20px; min-height: 0; border-radius: 26px; background-color: var(--surface); margin: 6px 0 16px; }
 .tpl-card:hover { background-color: var(--surface-2); }
@@ -1071,7 +1085,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 <main>
 <div id="projectBanner" class="banner hidden">
   <div class="banner-img" id="bannerImg"></div>
-  <button type="button" id="bannerInfo" class="btn small">Add artist and date</button>
+  <div class="banner-meta"><button type="button" id="bannerDate" class="banner-date hidden"></button><span id="bannerSub" class="banner-sub"></span></div>
   <button type="button" id="bannerBtn" class="btn small">Add photo</button>
   <input type="file" id="bannerFile" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden>
 </div>
@@ -1260,6 +1274,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
           <div class="shoot-transport">
             <button id="shootPlayBtn" class="playsq" aria-label="Play"></button>
             <span class="tc-display">0:00.0</span>
+            <span id="rateBadge" class="rate-badge hidden"></span>
             <button id="clickToggle" class="btn small" aria-pressed="false" title="Play a click along with the track">Click</button>
             <span id="shootTrackInfo" class="muted small"></span>
             <span class="spacer"></span>
@@ -1286,7 +1301,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 
   <!-- ===== content shoot: draft ===== -->
   <section id="draftCView" class="ws-view hidden">
-    <p class="ws-intro">You can upload and store all your artist songs here. Mark the sections you want to shoot, and collect reference shots and links. Shot templates live in Plan.</p>
+    <p class="ws-intro" id="draftIntro">Upload each song once and mark its sections. When you plan a shoot, you pick which sections to film.</p>
     <div id="draftSongTabs" class="song-tabs"></div>
     <div id="draftSongEmpty" class="panel hidden">
       <p style="margin-top:0">Start with the first song — you'll upload its track right after.</p>
@@ -1306,43 +1321,45 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
           <button type="button" class="btn small danger-text" data-c="delete-song">Delete song</button>
         </details>
       </div>
-      <div class="draft-top-stack">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Reference shots</h2>
-            <span class="spacer"></span>
-            <button type="button" id="addSongRefBtn" class="btn small">+ Add images</button>
-            <input type="file" id="songRefInput" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.gif,.webp" multiple hidden>
-          </div>
-          <div id="songRefs" class="vision-grid"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h2>Links</h2></div>
-          <div class="link-add">
-            <input type="text" id="songLinkInput" class="field" placeholder="Paste an Instagram, TikTok or YouTube link">
-            <button type="button" id="addSongLinkBtn" class="btn">Add</button>
-          </div>
-          <div id="songLinks"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h2>Notes for this song</h2></div>
-          <textarea id="songNotes" class="field notes-area" placeholder="Energy, wardrobe, what the artist wants from this one."></textarea>
-        </div>
-      </div>
     </div>
+    <div id="artistShoots" class="hidden"></div>
   </section>
 
   <!-- ===== content shoot: plan ===== -->
   <section id="planCView" class="ws-view hidden">
     <div class="subtabs">
-      <button class="subtab" data-csub="shoots">Shoots</button>
+      <button class="subtab" data-csub="shoots">Setlist</button>
       <button class="subtab" data-csub="board">Shots by part</button>
     </div>
     <div data-csub-panel="shoots">
+      <h2 class="sec-title">Songs</h2>
+      <p class="muted small sp-hint">Select the sections and versions of the song you want to shoot. 2× plays the song fast, for filming slow motion. ½× plays it slow, for sped-up footage.</p>
+      <div id="setPick"></div>
+      <div id="setOrder"></div>
+      <h2 class="sec-title" style="margin-top:22px">Shot template</h2>
+      <p class="muted small sp-hint">Choose or create the set of shots every section gets.</p>
       <button type="button" id="tplCard" class="tpl-card" aria-label="Shot template"></button>
-      <div class="sec-line"><h2 class="sec-title">Upcoming shoots</h2><span class="spacer"></span><button type="button" id="allToCalBtn" class="btn small hidden">Add all to calendar</button></div>
-      <div id="shootDayList"></div>
-      <button type="button" id="newDayBtn" class="btn float-pill">New…</button>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Reference shots</h2>
+          <span class="spacer"></span>
+          <button type="button" id="addSongRefBtn" class="btn small">+ Add images</button>
+          <input type="file" id="songRefInput" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.gif,.webp" multiple hidden>
+        </div>
+        <div id="songRefs" class="vision-grid"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Links</h2></div>
+        <div class="link-add">
+          <input type="text" id="songLinkInput" class="field" placeholder="Paste an Instagram, TikTok or YouTube link">
+          <button type="button" id="addSongLinkBtn" class="btn">Add</button>
+        </div>
+        <div id="songLinks"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Notes</h2></div>
+        <textarea id="songNotes" class="field notes-area" placeholder="Energy, wardrobe, what the artist wants from this shoot."></textarea>
+      </div>
     </div>
     <div data-csub-panel="board" class="hidden">
       <p class="muted small" style="margin-top:0">Each column is a song section. Drag shots to reorder or move them, add one-off extras, or remove what you don't need.</p>
@@ -1352,14 +1369,11 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 
   <!-- ===== content shoot: shoot ===== -->
   <section id="shootCView" class="ws-view hidden">
-    <div id="shootDates" class="hidden"></div>
-    <div id="shootDayBody">
     <div id="cShootStatus" class="status-banner"></div>
     <div id="shootSongTabs" class="song-tabs"></div>
     <div class="transport-slot"></div>
     <div id="partStrip" class="part-strip"></div>
     <div id="partPanel" class="panel"></div>
-    </div>
   </section>
 
   <!-- ===== cut ===== -->
@@ -1426,39 +1440,15 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <div class="modal-actions"><button type="button" id="tplDelete" class="btn small danger-text">Delete template</button><button type="button" id="tplDone" class="btn primary">Done</button></div>
   </div>
 </div>
-<div id="dayModal" class="modal hidden">
+<div id="detailsModal" class="modal hidden">
   <div class="modal-inner">
     <h3>Shoot day</h3>
     <div class="detail-grid">
-      <label>Date <input type="date" id="dayDate" class="field"></label>
-      <label>Start time <input type="time" id="dayStart" class="field"></label>
-      <label style="grid-column:1/-1">Location <input type="text" id="dayLoc" class="field" placeholder="Studio, address, or venue" autocapitalize="words"></label>
-      <label>Length (hours) <input type="number" id="dayHours" class="field" min="1" max="24" step="0.5"></label>
+      <label>Date <input type="date" id="detDate" class="field"></label>
+      <label>Start time <input type="time" id="detStart" class="field"></label>
+      <label style="grid-column:1/-1">Location <input type="text" id="detLoc" class="field" placeholder="Studio, address, or venue" autocapitalize="words"></label>
     </div>
-    <div class="detail-grid" style="grid-template-columns:1fr;margin-top:4px"><label>Notes <textarea id="dayNotes" class="field" rows="2" placeholder="Call time, parking, who's coming"></textarea></label></div>
-    <p class="modal-hint" style="margin:14px 0 8px">Songs &amp; sections to shoot</p>
-    <button type="button" id="dayPartsBtn" class="tpl-card compact"></button>
-    <p class="modal-hint" style="margin:14px 0 8px">Shot template</p>
-    <button type="button" id="dayTplCard" class="tpl-card compact"></button>
-    <div class="modal-actions"><button type="button" id="dayDelete" class="btn small danger-text">Delete day</button><span class="spacer"></span><button type="button" id="dayCal" class="btn small">Add to calendar</button><button type="button" id="dayDone" class="btn primary">Done</button></div>
-  </div>
-</div>
-<div id="partsModal" class="modal hidden">
-  <div class="modal-inner">
-    <h3>Songs &amp; sections</h3>
-    <p class="modal-hint">Pick just what you are shooting this day. Leave everything unchecked to shoot it all.</p>
-    <div id="partsPick"></div>
-    <div class="modal-actions"><button type="button" id="partsClear" class="btn small">Clear</button><button type="button" id="partsDone" class="btn primary">Done</button></div>
-  </div>
-</div>
-<div id="detailsModal" class="modal hidden">
-  <div class="modal-inner">
-    <h3>Project details</h3>
-    <div class="detail-grid">
-      <label>Artist <input type="text" id="detArtist" class="field" list="artistList" placeholder="Who is it for?" autocapitalize="words"></label>
-      <label>Shoot date <input type="date" id="detDate" class="field"></label>
-    </div>
-    <div class="modal-actions"><button type="button" id="detClear" class="btn small">Clear date</button><button type="button" id="detDone" class="btn primary">Done</button></div>
+    <div class="modal-actions"><button type="button" id="detClear" class="btn small">Clear date</button><span class="spacer"></span><button type="button" id="detCal" class="btn small">Add to calendar</button><button type="button" id="detDone" class="btn primary">Done</button></div>
   </div>
 </div>
 <div id="columnsModal" class="modal hidden">
@@ -1690,12 +1680,18 @@ function normalizeRecord(rec) {
   p.docTitle = p.docTitle || "Untitled project";
   p.cover = typeof p.cover === "string" ? p.cover : "";
   p.artist = typeof p.artist === "string" ? p.artist.trim() : "";
-  p.shootDays = (Array.isArray(p.shootDays) ? p.shootDays : []).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date || "")).map(d => ({ id: d.id || uid(), date: d.date, start: d.start || "", location: d.location || "", notes: d.notes || "", hours: Number(d.hours) || 6, parts: Array.isArray(d.parts) ? d.parts.filter(x => typeof x === "string") : [] }));
+  { /* a content shoot is one day: keep the next upcoming day (or the latest past one) */
+    let days = (Array.isArray(p.shootDays) ? p.shootDays : []).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date || "")).map(d => ({ id: d.id || uid(), date: d.date, start: d.start || "", location: d.location || "", notes: d.notes || "", hours: Number(d.hours) || 6 }));
+    if (days.length > 1) { const t = ymd(new Date()); days.sort((a, b) => a.date.localeCompare(b.date)); const up = days.filter(d => d.date >= t); days = [up.length ? up[0] : days[days.length - 1]]; }
+    p.shootDays = days;
+  }
   p.templateName = typeof p.templateName === "string" && p.templateName ? p.templateName : "Standard Shoot";
   p.templateLibId = typeof p.templateLibId === "string" ? p.templateLibId : "";
-  p.shootDate = /^\d{4}-\d{2}-\d{2}$/.test(p.shootDate || "") ? p.shootDate : "";
-  p.type = p.type === "content" ? "content" : "production";
-  const secs = Array.isArray(p.sections) && p.sections.length ? p.sections : (p.type === "content" ? [] : [defaultSection("Unsorted", 0)]);
+  p.shootDate = p.shootDays.length ? p.shootDays[0].date : (/^\d{4}-\d{2}-\d{2}$/.test(p.shootDate || "") ? p.shootDate : "");
+  p.type = p.type === "content" ? "content" : p.type === "artist" ? "artist" : "production";
+  p.artistId = typeof p.artistId === "string" ? p.artistId : "";
+  { const b = p.brief || {}; p.brief = { refs: Array.isArray(b.refs) ? b.refs : [], links: Array.isArray(b.links) ? b.links : [], notes: typeof b.notes === "string" ? b.notes : "" }; }
+  const secs = Array.isArray(p.sections) && p.sections.length ? p.sections : (p.type !== "production" ? [] : [defaultSection("Unsorted", 0)]);
   p.sections = secs.map((s, i) => ({
     id: s.id || uid(),
     name: s.name == null ? "Unsorted" : s.name,
@@ -1703,6 +1699,8 @@ function normalizeRecord(rec) {
     address: s.address || "",
     songId: s.songId || null,
     time: s.time || "",
+    srcId: typeof s.srcId === "string" ? s.srcId : "",
+    speed: Number(s.speed) === 0.5 ? 0.5 : Number(s.speed) === 2 ? 2 : 1,
     rows: (s.rows || []).map(normalizeRow)
   }));
   p.columnConfigs = normalizeColumnConfigs(p.columnConfigs, p.columnConfig);
@@ -1712,7 +1710,7 @@ function normalizeRecord(rec) {
   delete p.scheduleStart; delete p.scheduleBuffer;
   p.tempo = Object.assign(defaultTempo(), p.tempo || {});
   p.songs = Array.isArray(p.songs) ? p.songs.map(normalizeSong) : [];
-  p.shotTemplates = (Array.isArray(p.shotTemplates) ? p.shotTemplates : DEFAULT_TEMPLATES).map(t => ({ id: t.id || uid(), name: t.name || "Shot", detail: t.detail || "" }));
+  p.shotTemplates = (p.type === "artist" ? [] : (Array.isArray(p.shotTemplates) ? p.shotTemplates : DEFAULT_TEMPLATES)).map(t => ({ id: t.id || uid(), name: t.name || "Shot", detail: t.detail || "" }));
   p.visionBoard = Array.isArray(p.visionBoard) ? p.visionBoard : [];
   p.producerNotes = p.producerNotes || "";
   p.callSheet = Object.assign({ productionCo: "", director: "", producer: "", crewCall: "", talentCall: "", contacts: "", parking: "", hospital: "", weather: "", notes: "" }, p.callSheet || {});
@@ -2353,8 +2351,10 @@ function sortedTakes(row, hideBad) {
 /* ================= audio transport ================= */
 const player = $("player");
 let audioCtx = null, audioBuffer = null, peaks = null, currentTrackUrl = null, decodeToken = 0;
-let cue = null; // cue playback through Web Audio: { src, ctxStart, offset }
-function isContent() { return !!project && project.type === "content"; }
+let cue = null; // cue playback through Web Audio: { src, ctxStart, offset, rate }
+var playRate = 1;   // 0.5 / 1 / 2: the song plays slower or faster so the artist can perform in sync with sped-up or slow-motion footage
+function isContent() { return !!project && (project.type === "content" || project.type === "artist"); }
+function trackOwnerId() { return project.type === "content" && project.artistId ? project.artistId : project.id; }
 let activeSongId = null;
 function activeSong() { return project && project.songs.find(x => x.id === activeSongId) || null; }
 function curTempo() {
@@ -2362,7 +2362,7 @@ function curTempo() {
   if (isContent()) { const sg = activeSong(); return sg ? sg.tempo : defaultTempo(); }
   return project.tempo;
 }
-function trackKey() { return isContent() ? `${project.id}::${activeSongId}` : project.id; }
+function trackKey() { return isContent() ? `${trackOwnerId()}::${activeSongId}` : project.id; }
 function mountTransport(slotSelector) {
   const el = $("shootTransport"), slot = document.querySelector(slotSelector);
   if (slot && el.parentElement !== slot) slot.appendChild(el);
@@ -2375,7 +2375,7 @@ function updateShootTrackInfo() {
   const tp = curTempo();
   $("shootTrackInfo").textContent = player.src
     ? `${$("trackName").textContent}${tp.bpm ? ` · ${tp.bpm} BPM` : ""}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}`
-    : (isContent() && !activeSong() ? "No song selected." : "No track — upload it in Draft.");
+    : (isContent() && !activeSong() ? "No song selected." : (isContent() ? "No track — upload it on the artist page." : "No track — upload it in Draft."));
 }
 /* One engine plays everything — normal playback, seeking, count-ins and cues all run through
    Web Audio, so there is never a second player competing for the device. The <audio> element is
@@ -2399,7 +2399,7 @@ function newContext() {
 function ctx() { if (!audioCtx || audioCtx.state === "closed") audioCtx = newContext(); return audioCtx; }
 function trackDuration() { return (audioBuffer && audioBuffer.duration) || player.duration || 0; }
 function transportTime() {
-  if (cue && audioCtx) return Math.max(0, cue.offset + Math.max(0, audioCtx.currentTime - cue.ctxStart));
+  if (cue && audioCtx) return Math.max(0, cue.offset + Math.max(0, audioCtx.currentTime - cue.ctxStart) * (cue.rate || 1));
   if (audioBuffer) return pausePos;
   return player.currentTime || 0;
 }
@@ -2479,13 +2479,15 @@ function cueTarget(t) {
   return t;
 }
 let playToken = 0;
-async function playFrom(target, withCountIn) {
+async function playFrom(target, withCountIn, rate) {
   const token = ++playToken;
+  if (rate) playRate = rate;
+  const rt = playRate || 1;
   stopCue(false);
   playStartPos = target;
   pausePos = target;
   if (!audioBuffer) {                      // fallback: plain element, no count-in precision
-    try { player.currentTime = target; } catch (e) {}
+    try { player.currentTime = target; player.playbackRate = rt; } catch (e) {}
     player.play().catch(() => showNotice("The browser blocked playback. Press play again."));
     startRaf(); updateTransportUI();
     return;
@@ -2494,7 +2496,7 @@ async function playFrom(target, withCountIn) {
   if (token !== playToken) return;         // another press superseded this one
   if (!c) { showNotice("Audio is blocked right now — another app or tab may have it. Press play again."); return; }
   const tp = curTempo();
-  const beat = 60 / (tp.bpm || 120);
+  const beat = 60 / ((tp.bpm || 120) * rt);
   const beats = withCountIn ? (tp.bars || 1) * 4 : 0;
   const t0 = c.currentTime + 0.15;
   const clicks = [], timers = [];
@@ -2506,9 +2508,10 @@ async function playFrom(target, withCountIn) {
   const offset = Math.min(target, Math.max(0, audioBuffer.duration - 0.05));
   const src = c.createBufferSource();
   src.buffer = audioBuffer;
+  src.playbackRate.value = rt;
   src.connect(c.destination);
   src.start(songAt, offset);
-  cue = { src, ctxStart: songAt, offset, clicks, timers };
+  cue = { src, ctxStart: songAt, offset, clicks, timers, rate: rt };
   startClickPump();
   src.onended = () => { if (cue && cue.src === src) { cue = null; pausePos = playStartPos; updateTransportUI(); drawWaveform(); } };
   startRaf();
@@ -2532,7 +2535,7 @@ function startClickPump() {
     if (cue !== k0) { clearInterval(k0.pump); return; }
     const horizon = c.currentTime + 2.5;
     for (;;) {
-      const songT = tp.offset + k * beat, when = k0.ctxStart + (songT - k0.offset);
+      const songT = tp.offset + k * beat, when = k0.ctxStart + (songT - k0.offset) / (k0.rate || 1);
       if (when > horizon) break;
       if (songT > audioBuffer.duration) { clearInterval(k0.pump); break; }
       if (when >= c.currentTime - 0.01 && songT >= 0) {
@@ -2545,13 +2548,13 @@ function startClickPump() {
   pump();
   k0.pump = setInterval(pump, 800);
 }
-function playCue(ts) {
+function playCue(ts, rate) {
   const t = parseTC(ts);
   if (t == null) { alert(`"${ts || ""}" isn't a timestamp yet. Use a format like 1:05 or 0:42.5.`); return; }
   if (!player.src) { alert("Load the track first (Draft → Track & tempo)."); return; }
   const tp = curTempo();
   const target = Math.max(0, cueTarget(t) - (tp.lead || 0) * 4 * (60 / (tp.bpm || 120)));
-  playFrom(target, !!tp.countIn);
+  playFrom(target, !!tp.countIn, rate || 1);
 }
 function stopAndReturn() {
   playToken++;
@@ -2580,6 +2583,7 @@ function updateTimecodes() {
   const text = cueCountingIn() ? "count-in" : fmtTC(transportTime());
   document.querySelectorAll(".tc-display").forEach(el => { el.textContent = text; });
 }
+function paintRate() { const rb = $("rateBadge"); if (!rb) return; rb.textContent = speedLabel(playRate) + " speed"; rb.classList.toggle("hidden", playRate === 1); }
 function updateTransportUI() {
   ["draftPlayBtn", "shootPlayBtn", "cutPlayBtn"].forEach(id => {
     const btn = $(id);
@@ -2589,6 +2593,7 @@ function updateTransportUI() {
     btn.disabled = !player.src;
   });
   paintTrackUI(); paintTempo();
+  paintRate();
   updateTimecodes();
 }
 let rafOn = false;
@@ -3226,7 +3231,7 @@ $("cutPlayBtn").addEventListener("click", togglePlay);
   function clear() { main.style.transform = ""; main.style.opacity = ""; main.style.willChange = ""; }
   document.addEventListener("touchstart", e => {
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false; crossed = false;
-    ok = e.touches.length === 1 && !!project && $("projectsView").classList.contains("hidden") && !blocked(e.target);
+    ok = e.touches.length === 1 && !!project && project.type !== "artist" && $("projectsView").classList.contains("hidden") && !blocked(e.target);
   }, { passive: true });
   document.addEventListener("touchmove", e => {
     if (!ok) return;
@@ -3514,27 +3519,86 @@ function projectCardHTML(p) {
       </div>
     </div>`;
 }
-var ART_KEY = "producrr_artists_v1";
+var ART_KEY = "producrr_artists_v1";   // older builds kept artist names here; migrateArtists turns them into records
 function storedArtists() { try { const a = JSON.parse(localStorage.getItem(ART_KEY)); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-function saveArtists(a) { try { localStorage.setItem(ART_KEY, JSON.stringify(a)); } catch (e) {} }
-function allArtistNames(all) {
-  const seen = new Map();
-  storedArtists().concat(all.map(p => p.artist)).forEach(n => { n = (n || "").trim(); if (n && !seen.has(n.toLowerCase())) seen.set(n.toLowerCase(), n); });
-  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+const isArtistRec = r => !!r && r.type === "artist";
+const artistKey = n => String(n || "").trim().toLowerCase();
+const byArtistName = (a, b) => (a.docTitle || "").localeCompare(b.docTitle || "");
+async function ensureArtist(name) {
+  name = (name || "").trim(); if (!name) return null;
+  const hit = (await listProjects()).find(r => isArtistRec(r) && artistKey(r.docTitle) === artistKey(name));
+  if (hit) return hit;
+  const now = new Date().toISOString();
+  const a = normalizeRecord({ id: uid(), type: "artist", docTitle: name, workspace: "draft", createdAt: now, updatedAt: now });
+  await putProjectRecord(a);
+  return a;
 }
-function renderArtists(all, names) {
+/* One-time (and idempotent) move to artist records. Songs, sections and tracks live with the artist; a shoot keeps the
+   songs and sections it will film. Anything that still names an artist but has no artistId gets linked here. */
+async function migrateArtists(all) {
+  const need = all.filter(r => r.type !== "artist" && !r.artistId && (r.artist || (r.type === "content" && (r.songs || []).length)));
+  const names = storedArtists();
+  if (!need.length && !names.length) return false;
+  const arts = new Map(all.filter(isArtistRec).map(a => [artistKey(a.docTitle), normalizeRecord(a)]));
+  const touched = new Set();
+  const get = async name => {
+    const k = artistKey(name); if (!k) return null;
+    let a = arts.get(k);
+    if (!a) { const now = new Date().toISOString(); a = normalizeRecord({ id: uid(), type: "artist", docTitle: name.trim(), workspace: "draft", createdAt: now, updatedAt: now }); arts.set(k, a); touched.add(a.id); }
+    return a;
+  };
+  for (const n of names) await get(n);
+  for (const raw of need) {
+    const p = normalizeRecord(raw), isEx = /^Example/i.test(p.docTitle || "") && p.createdAt === p.updatedAt;
+    const a = await get(p.artist || (isEx ? "Example band" : p.docTitle));
+    if (!a) continue;
+    if (p.type === "content") {
+      const idMap = {}, keep = [];
+      for (const sg of p.songs) {
+        let ex = a.songs.find(x => artistKey(x.name) === artistKey(sg.name));
+        if (!ex) { ex = normalizeSong({ id: sg.id, name: sg.name, tempo: JSON.parse(JSON.stringify(sg.tempo)) }); a.songs.push(ex); touched.add(a.id); }
+        idMap[sg.id] = ex.id;
+        p.brief.refs.push(...sg.refs); p.brief.links.push(...sg.links);
+        if (sg.notes) p.brief.notes = (p.brief.notes ? p.brief.notes + "\n\n" : "") + sg.notes;
+        if (!keep.some(x => x.id === ex.id)) keep.push(Object.assign({}, sg, { id: ex.id, name: ex.name, refs: [], links: [], notes: "" }));
+      }
+      for (const sec of p.sections) {
+        if (!sec.songId) continue;
+        const sid = idMap[sec.songId] || sec.songId;
+        let as = a.sections.find(x => x.songId === sid && artistKey(x.name) === artistKey(sec.name) && x.time === sec.time);
+        if (!as) { as = { id: uid(), name: sec.name, color: sec.color, address: "", songId: sid, time: sec.time, srcId: "", speed: 1, rows: [] }; a.sections.push(as); touched.add(a.id); }
+        sec.srcId = as.id; sec.songId = sid; sec.speed = 1;
+      }
+      p.songs = keep;
+      for (const old of Object.keys(idMap)) {
+        const oldKey = `${p.id}::${old}`, newKey = `${a.id}::${idMap[old]}`;
+        try {
+          if (!(await loadTrack(newKey))) { const t = await loadTrack(oldKey); if (t && t.blob) await saveTrack(newKey, t.blob, t.name); }
+          if (await loadTrack(newKey)) await clearTrack(oldKey);
+        } catch (e) { console.error("track move skipped", e); }
+      }
+    }
+    p.artistId = a.id; p.artist = a.docTitle;
+    if (!isEx) p.updatedAt = new Date().toISOString();
+    await putProjectRecord(p);
+  }
+  for (const a of arts.values()) if (touched.has(a.id)) await putProjectRecord(a);
+  try { localStorage.removeItem(ART_KEY); } catch (e) {}
+  return true;
+}
+function renderArtists(recs, projects) {
   const box = $("artistsList"), today = ymd(new Date());
-  if (!names.length) { box.innerHTML = `<div class="projects-empty">No artists yet. Add one with New artist…</div>`; return; }
-  box.innerHTML = names.map(n => {
-    const ps = all.filter(p => (p.artist || "").toLowerCase() === n.toLowerCase());
-    const withCover = ps.filter(p => p.cover).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+  if (!recs.length) { box.innerHTML = `<div class="projects-empty">No artists yet. Add one with New artist…</div>`; return; }
+  box.innerHTML = recs.map(a => {
+    const ps = projects.filter(p => p.artistId === a.id);
+    const withCover = a.cover ? a : ps.filter(p => p.cover).sort((x, y) => new Date(y.updatedAt) - new Date(x.updatedAt))[0];
     const next = ps.map(p => primaryDate(p, today)).filter(d => d && d >= today).sort()[0];
-    const sub = [`${ps.length} project${ps.length === 1 ? "" : "s"}`, next ? "Next shoot " + dayLabel(next, false) : ""].filter(Boolean).join(" · ");
+    const sub = [`${a.songs.length} song${a.songs.length === 1 ? "" : "s"}`, `${ps.length} shoot${ps.length === 1 ? "" : "s"}`, next ? "Next " + dayLabel(next, false) : ""].filter(Boolean).join(" · ");
     return `<div class="pc-wrap">
-      <button type="button" class="pc-del" data-delete-artist="${esc(n)}">Remove</button>
-      <div class="project-card"><div class="project-card-main" data-artist-open="${esc(n)}" role="button" tabindex="0">
-        <div class="cover ${withCover ? "img" : "init"}" style="${coverStyle(n)}${withCover ? `;background-image:url(${withCover.cover})` : ""}">${withCover ? "" : esc(n.trim().charAt(0).toUpperCase())}</div>
-        <div class="pc-text"><div class="project-card-name">${esc(n)}</div><div class="muted small">${esc(sub)}</div></div>
+      <button type="button" class="pc-del" data-delete-artist="${a.id}">Remove</button>
+      <div class="project-card"><div class="project-card-main" data-artist-open="${a.id}" role="button" tabindex="0">
+        <div class="cover ${withCover ? "img" : "init"}" style="${coverStyle(a.id)}${withCover ? `;background-image:url(${withCover.cover})` : ""}">${withCover ? "" : esc((a.docTitle || "?").trim().charAt(0).toUpperCase())}</div>
+        <div class="pc-text"><div class="project-card-name">${esc(a.docTitle)}</div><div class="muted small">${esc(sub)}</div></div>
       </div></div></div>`;
   }).join("");
 }
@@ -3543,13 +3607,13 @@ function paintHomeMode() {
   document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === homeMode));
   $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
 }
-function setHomeMode(m) {
-  if (m === homeMode) return;
+function setHomeMode(m, instant) {
+  if (m === homeMode && !instant) return;
   const slider = $("homeSlider"), pp = $("paneProjects"), pa = $("paneArtists"), toA = m === "artists";
   homeMode = m; paintHomeMode(); closeSwipedCards();
   try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {}
   const done = () => { (toA ? pp : pa).classList.add("off"); slider.style.transform = ""; slider.style.willChange = ""; };
-  if (!slider.animate || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { pp.classList.toggle("off", toA); pa.classList.toggle("off", !toA); slider.style.transform = ""; return; }
+  if (instant || !slider.animate || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { pp.classList.toggle("off", toA); pa.classList.toggle("off", !toA); slider.style.transform = ""; return; }
   const cur = homeDragX(slider);
   pp.classList.remove("off"); pa.classList.remove("off");
   const W = $("homeClip").clientWidth, to = toA ? -W : 0;
@@ -3608,15 +3672,11 @@ async function renderProjectsList() {
   let all = [];
   try { all = await listProjects(); }
   catch (e) { list.innerHTML = ""; $("projectsStatus").textContent = "This browser is blocking the storage Producrr needs. Private browsing modes often do this."; return; }
-  /* a project with no artist whose name matches an artist you added belongs to that artist */
-  const known = allArtistNames(all);
-  for (const p of all) {
-    if (p.artist) continue;
-    const m = known.find(n => n.toLowerCase() === (p.docTitle || "").trim().toLowerCase());
-    if (m) { p.artist = m; p.updatedAt = new Date().toISOString(); try { await putProjectRecord(p); } catch (e) {} }
-  }
-  const artists = allArtistNames(all);
-  renderArtists(all, artists);
+  if (await migrateArtists(all)) { try { all = await listProjects(); } catch (e) {} }
+  const artistRecs = all.filter(isArtistRec).map(normalizeRecord).sort(byArtistName);
+  all = all.filter(r => !isArtistRec(r));
+  const artists = artistRecs.map(a => a.docTitle);
+  renderArtists(artistRecs, all);
   if (artistFilter && !artists.includes(artistFilter)) artistFilter = null;
   $("artistList").innerHTML = artists.map(a => `<option value="${esc(a)}"></option>`).join("");
   $("artistChips").innerHTML = artists.length ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
@@ -3722,44 +3782,52 @@ $("projectsList").addEventListener("click", async e => {
 $("projectsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.openId) openProject(e.target.dataset.openId); });
 $("artistsList").addEventListener("click", async e => {
   const o = e.target.closest("[data-artist-open]");
-  if (o) { artistFilter = o.dataset.artistOpen; calSel = null; await renderProjectsList(); setHomeMode("projects"); return; }
+  if (o) { await openProject(o.dataset.artistOpen); return; }
   const d = e.target.closest("[data-delete-artist]");
   if (d) {
-    const n = d.dataset.deleteArtist;
-    const all = await listProjects(), mine = all.filter(p => (p.artist || "").toLowerCase() === n.toLowerCase());
-    if (!confirm(`Remove "${n}"?` + (mine.length ? ` Their ${mine.length} project${mine.length === 1 ? "" : "s"} stay, just without an artist.` : ""))) { closeSwipedCards(); return; }
-    saveArtists(storedArtists().filter(x => x.toLowerCase() !== n.toLowerCase()));
-    try { for (const p of mine) { p.artist = ""; p.updatedAt = new Date().toISOString(); await putProjectRecord(p); } } catch (err) { alert("Couldn't update that artist's projects. Try again."); }
-    if (artistFilter && artistFilter.toLowerCase() === n.toLowerCase()) artistFilter = null;
+    const id = d.dataset.deleteArtist, all = await listProjects(), art = all.find(r => r.id === id); if (!art) return;
+    const mine = all.filter(r => r.type !== "artist" && r.artistId === id);
+    if (!confirm(`Remove "${art.docTitle}"? Their songs and tracks are deleted.` + (mine.length ? ` Their ${mine.length} shoot${mine.length === 1 ? "" : "s"} stay, but lose the track audio.` : ""))) { closeSwipedCards(); return; }
+    try {
+      for (const r of mine) { r.artist = ""; r.artistId = ""; r.updatedAt = new Date().toISOString(); await putProjectRecord(r); }
+      await deleteProjectRecord(id);
+    } catch (err) { alert("Couldn't remove that artist. Try again."); }
+    if (artistFilter && artistFilter.toLowerCase() === (art.docTitle || "").toLowerCase()) artistFilter = null;
     renderProjectsList();
   }
 });
 $("projectsList").addEventListener("click", async e => {
   const b = e.target.closest("[data-link-project]"); if (!b || !artistFilter) return;
   const rec = await getProjectRecord(b.dataset.linkProject); if (!rec) return;
-  rec.artist = artistFilter; rec.updatedAt = new Date().toISOString();
+  rec.artist = artistFilter; rec.updatedAt = new Date().toISOString();   /* migrateArtists links it and brings its songs over */
   await putProjectRecord(rec); renderProjectsList();
 });
 $("artistsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.artistOpen) e.target.click(); });
-function openArtistModal() { $("artistNameInput").value = ""; $("artistModal").classList.remove("hidden"); $("artistNameInput").focus(); }
-function addArtist() {
+var artistModalFor = "home";
+function openArtistModal(forWhat) { artistModalFor = forWhat || "home"; $("artistNameInput").value = ""; $("artistModal").classList.remove("hidden"); $("artistNameInput").focus(); }
+async function addArtist() {
   const n = $("artistNameInput").value.trim(); if (!n) return;
-  const a = storedArtists(); if (!a.some(x => x.toLowerCase() === n.toLowerCase())) { a.push(n); saveArtists(a); }
-  $("artistModal").classList.add("hidden"); renderProjectsList();
+  $("artistModal").classList.add("hidden");
+  const a = await ensureArtist(n);
+  if (artistModalFor === "plan" && project && project.type === "content") { await linkArtist(a); return; }
+  await openProject(a.id);
 }
 $("artistAdd").addEventListener("click", addArtist);
 $("artistCancel").addEventListener("click", () => $("artistModal").classList.add("hidden"));
 $("artistNameInput").addEventListener("keydown", e => { if (e.key === "Enter") addArtist(); });
 $("artistModal").addEventListener("click", e => { if (e.target.id === "artistModal") $("artistModal").classList.add("hidden"); });
 async function createProject(name, type, artist, date) {
+  await persistNow();
+  const art = await ensureArtist(artist);
   const now = new Date().toISOString();
-  const base = { id: uid(), type, artist: artist || "", shootDate: date || "", shootDays: (type === "content" && date) ? [{ id: uid(), date, start: "", location: "", notes: "", hours: 6 }] : [], docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
+  const base = { id: uid(), type, artist: art ? art.docTitle : "", artistId: art ? art.id : "", shootDate: date || "", shootDays: (type === "content" && date) ? [{ id: uid(), date, start: "", location: "", notes: "", hours: 6 }] : [], docTitle: name || (type === "content" ? "Untitled content shoot" : "Untitled project"), createdAt: now, updatedAt: now };
   if (type === "production") base.sections = [defaultSection("Unsorted", 0)];
   const rec = normalizeRecord(base);
   await putProjectRecord(rec);
   await openProject(rec.id);
 }
-$("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal(); return; } $("newProjectName").value = ""; $("newArtist").value = artistFilter || ""; $("newShootDate").value = calSel || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); });
+function openNewModal(artistName, date) { $("newProjectName").value = ""; $("newArtist").value = artistName || ""; $("newShootDate").value = date || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); }
+$("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal("home"); return; } openNewModal(artistFilter || "", calSel || ""); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
 $("newModal").addEventListener("click", e => {
   if (e.target.id === "newModal") { $("newModal").classList.add("hidden"); return; }
@@ -3780,13 +3848,16 @@ $("importProjectInput").addEventListener("change", async e => {
     $("projectsStatus").textContent = "Imported as a new project."; ["settingsModal", "accountModal"].forEach(m => { const el = $(m); if (el) el.classList.add("hidden"); });
   } catch (err) { $("projectsStatus").textContent = "That file isn't a Producrr backup."; }
 });
+var loadedTrackKey = null;
 async function loadActiveTrack() {
   resetPlayer();
+  loadedTrackKey = null;
   if (!project) return;
   if (isContent() && !activeSong()) { renderAfterTrackChange(); return; }
   const key = trackKey(), pid = project.id;
   const saved = await loadTrack(key);
   if (!project || project.id !== pid || trackKey() !== key) return;
+  loadedTrackKey = key;
   if (saved && saved.blob) loadTrackIntoPlayer(saved.blob, saved.name, true);
   renderAfterTrackChange();
 }
@@ -3796,43 +3867,76 @@ function renderAfterTrackChange() {
   if (currentWs === "shoot" || currentWs === "cut") renderCurrent();
   else requestAnimationFrame(drawWaveform);
 }
+var artistRec = null;
+/* the artist who owns the songs a content shoot draws from. Keep the shoot's copies of those songs in step with the artist's. */
+async function loadArtistRec() {
+  artistRec = null;
+  if (!project || project.type !== "content" || !project.artistId) return;
+  try { const r = await getProjectRecord(project.artistId); if (r && r.type === "artist") artistRec = normalizeRecord(r); } catch (e) {}
+  if (!artistRec) return;
+  let changed = false;
+  if (project.artist !== artistRec.docTitle) { project.artist = artistRec.docTitle; changed = true; }
+  project.songs.forEach(sg => {
+    const as = artistRec.songs.find(x => x.id === sg.id); if (!as) return;
+    if (sg.name !== as.name) { sg.name = as.name; changed = true; }
+    const nt = Object.assign({}, as.tempo, { click: sg.tempo.click, lead: sg.tempo.lead });
+    if (JSON.stringify(nt) !== JSON.stringify(sg.tempo)) { sg.tempo = nt; changed = true; }
+  });
+  project.sections.forEach(sec => {
+    const as = sec.srcId && artistRec.sections.find(x => x.id === sec.srcId); if (!as) return;
+    if (sec.name !== as.name || sec.time !== as.time || sec.color !== as.color) { sec.name = as.name; sec.time = as.time; sec.color = as.color; changed = true; }
+  });
+  if (changed) scheduleSave();
+}
 async function openProject(id) {
   const rec = await getProjectRecord(id);
   if (!rec) { alert("Couldn't find that project."); return; }
   project = normalizeRecord(rec);
   focusedRowId = null; shootGridScrolled = false; planSub = "arrange"; cPlanSub = "shoots";
+  if (project.type === "artist") project.workspace = "draft";
+  else if (project.type === "content" && project.workspace === "draft") project.workspace = "plan";
   activeSongId = project.songs.length ? project.songs[0].id : null;
-  cutTime = 0; shootPartId = null; shootDayId = null;
+  cutTime = 0; shootPartId = null; playRate = 1;
   resetPlayer();
   setTempoStatus("");
+  await loadArtistRec();
   $("docTitleInput").value = project.docTitle;
   document.title = `${project.docTitle} · Producrr`;
   $("projectsView").classList.add("hidden");
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.remove("hidden"));
+  $("wsTabs").classList.toggle("hidden", project.type === "artist");
+  document.querySelector('.ws-tab[data-ws="draft"]').classList.toggle("hidden", project.type === "content");
+  $("draftIntro").classList.toggle("hidden", project.type !== "artist");
   setSaveStatus(DEMO_MODE ? "Demo — not saved" : "Saved");
   switchWs(project.workspace, true);
   await loadActiveTrack();
 }
 async function goToProjects() {
+  const wasArtist = !!project && project.type === "artist";
   await persistNow();
   resetPlayer();
-  project = null; shootDayId = null; renderBanner();
+  project = null; artistRec = null; renderBanner();
   document.title = "Producrr";
   document.querySelectorAll(".ws-view").forEach(v => v.classList.add("hidden"));
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.add("hidden"));
   setSaveStatus("");
   $("projectsView").classList.remove("hidden");
+  if (wasArtist) setHomeMode("artists", true);
   renderProjectsList();
 }
-$("backToProjectsBtn").addEventListener("click", () => {
-  /* on a content shoot day, Back returns to the list of dates first */
-  if (project && isContent() && currentWs === "shoot" && shootDayId) { shootDayId = null; renderCurrent(); window.scrollTo(0, 0); return; }
-  goToProjects();
-});
+$("backToProjectsBtn").addEventListener("click", goToProjects);
 $("docTitleInput").addEventListener("input", e => {
   project.docTitle = e.target.value;
   document.title = `${e.target.value || "Untitled project"} · Producrr`;
   scheduleSave();
+});
+/* renaming an artist renames it on every project that belongs to them */
+$("docTitleInput").addEventListener("change", async () => {
+  if (!project || project.type !== "artist") return;
+  const id = project.id, name = (project.docTitle || "").trim() || "Untitled artist";
+  project.docTitle = name; $("docTitleInput").value = name;
+  await persistNow();
+  try { for (const r of await listProjects()) if (r.type !== "artist" && r.artistId === id && r.artist !== name) { r.artist = name; r.updatedAt = new Date().toISOString(); await putProjectRecord(r); } } catch (e) {}
 });
 
 /* ================= workspaces ================= */
@@ -3844,6 +3948,10 @@ function switchWs(ws, initial) {
   const vid = viewIdFor(ws);
   document.querySelectorAll(".ws-view").forEach(v => v.classList.toggle("hidden", v.id !== vid));
   if (!initial) scheduleSave();
+  if (project.type === "content" && (ws === "shoot" || ws === "cut") && project.songs.length) {
+    if (!activeSong()) { activeSongId = project.songs[0].id; shootPartId = null; }
+    if (trackKey() !== loadedTrackKey) { renderCurrent(); loadActiveTrack(); window.scrollTo(0, 0); return; }
+  }
   renderCurrent();
   window.scrollTo(0, 0);
 }
@@ -3908,15 +4016,19 @@ function addSong(name) {
 }
 function songOf(sec) { return project.songs.find(x => x.id === sec.songId) || null; }
 function sectionTitle(sec) { const sg = isContent() ? songOf(sec) : null; return sg ? `${sg.name} — ${sec.name}` : sec.name; }
-function songParts(songId) {
-  return project.sections.filter(x => x.songId === songId).sort((a, b) => {
-    const ta = parseTC(a.time), tb = parseTC(b.time);
-    if (ta == null && tb == null) return 0;
+function speedRank(sp) { return sp === 1 ? 0 : sp === 0.5 ? 1 : 2; }
+function speedLabel(sp) { return sp === 0.5 ? "½×" : sp === 2 ? "2×" : "1×"; }
+function partLabel(sec) { return sec.name + ((sec.speed || 1) !== 1 ? " · " + speedLabel(sec.speed) : ""); }
+function sortByTime(list) {
+  return list.slice().sort((a, b) => {
+    const ta = parseTC(a.time), tb = parseTC(b.time), sr = speedRank(a.speed || 1) - speedRank(b.speed || 1);
+    if (ta == null && tb == null) return sr;
     if (ta == null) return 1;
     if (tb == null) return -1;
-    return ta - tb;
+    return (ta - tb) || sr;
   });
 }
+function songParts(songId) { return sortByTime(project.sections.filter(x => x.songId === songId)); }
 function templateRow(t) { return Object.assign(defaultRow(), { subject: t.name, notes: t.detail, templateId: t.id }); }
 function addPart(sg, preset) {
   const sec = defaultSection(preset ? preset.name : "New part", project.sections.length);
@@ -3948,17 +4060,34 @@ $("draftSongTabs").addEventListener("keydown", e => {
   else if (e.key === "Escape") { endSongEdit(false); }
 });
 $("draftSongTabs").addEventListener("focusout", e => { if (e.target.hasAttribute && e.target.hasAttribute("data-edit-song")) endSongEdit(true); });
+function ordinal(n) { const v = n % 100; if (v >= 11 && v <= 13) return n + "th"; return n + (["th", "st", "nd", "rd"][n % 10] || "th"); }
+function bigDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short" }) + " " + ordinal(d); }
+/* a content shoot is one day: its date, start time and location live on the project's single shoot day */
+function projectDay(create) {
+  if (!project) return null;
+  let d = project.shootDays[0];
+  if (!d && create) { d = { id: uid(), date: project.shootDate || ymd(new Date()), start: "", location: "", notes: "", hours: 6 }; project.shootDays = [d]; if (!project.shootDate) project.shootDate = d.date; }
+  return d || null;
+}
 function renderBanner() {
-  const b = $("projectBanner");
-  const show = !!project && (currentWs === "draft" || currentWs === "plan");
-  b.classList.toggle("hidden", !show);
-  if (!show) return;
-  b.classList.toggle("has-img", !!project.cover);
+  const b = $("projectBanner"), t = project && project.type;
+  const view = !project ? "" : t === "artist" ? "artist" : t === "content" ? ((currentWs === "plan" || currentWs === "shoot") ? "content" : "") : ((currentWs === "draft" || currentWs === "plan") ? "prod" : "");
+  b.classList.toggle("hidden", !view);
+  if (!view) return;
+  const img = project.cover || (view === "content" && artistRec && artistRec.cover) || "";
+  b.classList.toggle("has-img", !!img);
+  b.classList.toggle("compact", view === "content" && currentWs === "shoot");
   b.setAttribute("style", coverStyle(project.id));
-  $("bannerImg").style.backgroundImage = project.cover ? `url(${project.cover})` : "";
-  $("bannerBtn").textContent = project.cover ? "Change photo" : "Add photo";
-  const info = [project.artist, project.shootDate ? dayLabel(project.shootDate, true) : ""].filter(Boolean).join(" · ");
-  $("bannerInfo").textContent = info || "Add artist and date";
+  $("bannerImg").style.backgroundImage = img ? `url(${img})` : "";
+  $("bannerBtn").textContent = img ? "Change photo" : "Add photo";
+  const bd = $("bannerDate");
+  bd.classList.toggle("hidden", view !== "content");
+  if (view === "content") {
+    const d = projectDay(false), dt = project.shootDate;
+    bd.textContent = dt ? bigDate(dt) : "Add a date";
+    const wk = dt ? (() => { const [y, m, dd] = dt.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: "long" }); })() : "";
+    $("bannerSub").textContent = [project.artist, wk, d && fmt12(d.start), d && d.location].filter(Boolean).join(" · ");
+  } else $("bannerSub").textContent = "";
 }
 $("bannerBtn").addEventListener("click", () => $("bannerFile").click());
 var bannerTimer = null;
@@ -3967,14 +4096,24 @@ $("projectBanner").addEventListener("click", e => {
   const b = $("projectBanner"); b.classList.add("show");
   clearTimeout(bannerTimer); bannerTimer = setTimeout(() => b.classList.remove("show"), 3500);
 });
-$("bannerInfo").addEventListener("click", () => {
-  if (!project) return;
-  $("detArtist").value = project.artist || ""; $("detDate").value = project.shootDate || "";
+function openDateModal() {
+  if (!project || project.type !== "content") return;
+  const d = projectDay(false);
+  $("detDate").value = project.shootDate || ""; $("detStart").value = d ? d.start : ""; $("detLoc").value = d ? d.location : "";
   $("detailsModal").classList.remove("hidden");
-});
-$("detArtist").addEventListener("input", e => { if (project) { project.artist = e.target.value.trim(); scheduleSave(); renderBanner(); } });
-$("detDate").addEventListener("change", e => { if (project) { project.shootDate = e.target.value; scheduleSave(); renderBanner(); } });
-$("detClear").addEventListener("click", () => { if (project) { project.shootDate = ""; $("detDate").value = ""; scheduleSave(); renderBanner(); } });
+}
+$("bannerDate").addEventListener("click", openDateModal);
+function setShootDate(v) {
+  if (!project) return;
+  project.shootDate = v || "";
+  if (v) { const d = projectDay(true); d.date = v; } else project.shootDays = [];
+  scheduleSave(); renderBanner();
+}
+$("detDate").addEventListener("change", e => setShootDate(e.target.value));
+$("detStart").addEventListener("input", e => { if (!project) return; const d = projectDay(true); d.start = e.target.value; $("detDate").value = project.shootDate; scheduleSave(); renderBanner(); });
+$("detLoc").addEventListener("input", e => { if (!project) return; const d = projectDay(true); d.location = e.target.value; $("detDate").value = project.shootDate; scheduleSave(); renderBanner(); });
+$("detClear").addEventListener("click", () => { setShootDate(""); $("detDate").value = ""; $("detStart").value = ""; $("detLoc").value = ""; });
+$("detCal").addEventListener("click", () => { const d = projectDay(false); if (!d) { alert("Pick a date first."); return; } exportDays([d], `${project.docTitle}-${d.date}`); });
 $("detDone").addEventListener("click", () => $("detailsModal").classList.add("hidden"));
 $("detailsModal").addEventListener("click", e => { if (e.target === $("detailsModal")) $("detailsModal").classList.add("hidden"); });
 $("bannerFile").addEventListener("change", async e => {
@@ -3995,7 +4134,7 @@ function songTabsHTML(withAdd, songs, partsFn) {
     if (withAdd && editingSongId === sg.id) return `<input type="text" class="song-tab-edit" data-edit-song="${sg.id}" value="${esc(sg.name)}" aria-label="Song name" autocapitalize="words">`;
     const parts = (partsFn || songParts)(sg.id);
     const total = parts.reduce((n, p) => n + p.rows.length, 0), done = parts.reduce((n, p) => n + p.rows.filter(r => r.checked).length, 0);
-    return `<button type="button" class="song-tab ${sg.id === activeSongId ? "active" : ""}" data-song-id="${sg.id}">${esc(sg.name)} <span class="song-tab-meta">${total ? `${done}/${total}` : "no shots"}</span></button>`;
+    return `<button type="button" class="song-tab ${sg.id === activeSongId ? "active" : ""}" data-song-id="${sg.id}">${esc(sg.name)} ${project.type === "artist" ? "" : `<span class="song-tab-meta">${total ? `${done}/${total}` : "no shots"}</span>`}</button>`;
   }).join("") + (withAdd ? `<button type="button" class="song-tab song-tab-add" data-c="add-song">+ Add song</button>` : "");
 }
 function prettyLink(u) {
@@ -4004,6 +4143,7 @@ function prettyLink(u) {
 
 /* ================= content: draft ================= */
 function renderDraftContent() {
+  renderArtistShoots();
   $("draftSongTabs").innerHTML = songTabsHTML(true);
   const sg = activeSong();
   $("draftSongEmpty").classList.toggle("hidden", !!sg);
@@ -4011,13 +4151,33 @@ function renderDraftContent() {
   if (!sg) return;
   const slot = document.querySelector("#draftCView .track-slot");
   if ($("trackPanel").parentElement !== slot) slot.appendChild($("trackPanel"));
-  if (document.activeElement !== $("songNotes")) $("songNotes").value = sg.notes;
   syncTempoInputs();
   renderPartsList();
-  renderSongRefs();
-  renderSongLinks();
   requestAnimationFrame(drawWaveform);
 }
+async function renderArtistShoots() {
+  const el = $("artistShoots"), show = !!project && project.type === "artist";
+  el.classList.toggle("hidden", !show);
+  if (!show) return;
+  const id = project.id, name = project.docTitle;
+  let all = []; try { all = await listProjects(); } catch (e) {}
+  if (!project || project.id !== id) return;
+  const today = ymd(new Date());
+  const mine = all.filter(r => r.type !== "artist" && (r.artistId === id || (!r.artistId && artistKey(r.artist) === artistKey(name))))
+    .map(r => ({ r, d: primaryDate(r, today) })).filter(x => !x.d || x.d >= today)
+    .sort((a, b) => (a.d || "9999").localeCompare(b.d || "9999"));
+  const tile = (r, d) => {
+    const [y, m, dd] = (d || "").split("-").map(Number), mon = d ? new Date(y, m - 1, dd).toLocaleDateString(undefined, { month: "short" }) : "";
+    return `<span class="day-tile ${r.cover ? "img" : ""}" style="${coverStyle(r.id)}${r.cover ? `;background-image:url(${r.cover})` : ""}">${d ? `<small>${esc(mon)}</small><b>${dd}</b>` : `<b>–</b>`}</span>`;
+  };
+  el.innerHTML = `<div class="sec-line" style="margin-top:26px"><h2 class="sec-title">Upcoming shoots</h2><span class="spacer"></span><button type="button" class="btn small" data-artist-new-shoot="1">+ New shoot</button></div>`
+    + (mine.length ? mine.map(({ r, d }) => `<button type="button" class="day-card" data-open-shoot="${r.id}">${tile(r, d)}<span class="day-text"><span class="day-title">${esc(r.docTitle || "Untitled project")}</span><span class="muted small">${d ? esc(dayLabel(d, true)) : "No date yet"}</span></span></button>`).join("") : `<p class="muted small" style="margin:6px 2px">No shoots scheduled yet.</p>`);
+}
+$("artistShoots").addEventListener("click", async e => {
+  if (e.target.closest("[data-artist-new-shoot]")) { openNewModal(project.docTitle, ""); return; }
+  const o = e.target.closest("[data-open-shoot]");
+  if (o) { await persistNow(); await openProject(o.dataset.openShoot); }
+});
 function renderPartsList() {
   const sg = activeSong();
   const parts = songParts(sg.id);
@@ -4066,21 +4226,22 @@ function addSuggested(sg, s) {
   const sec = addPart(sg, preset); sec.name = s.name; sec.time = t;
   return sec;
 }
+function briefObj() { return project && project.type === "content" ? project.brief : null; }
 function renderSongRefs() {
-  const sg = activeSong();
+  const sg = project.brief;
   $("songRefs").innerHTML = sg.refs.length
     ? sg.refs.map((src, i) => `<button type="button" class="vb-item" data-ref-index="${i}"><img src="${src}" alt="Reference ${i + 1}"></button>`).join("")
-    : `<p class="muted small" style="margin:0;grid-column:1/-1">Screenshots of shots you want to recreate for this song.</p>`;
+    : `<p class="muted small" style="margin:0;grid-column:1/-1">Screenshots of shots you want to recreate.</p>`;
 }
 function renderSongLinks() {
-  const sg = activeSong();
+  const sg = project.brief;
   $("songLinks").innerHTML = sg.links.length
     ? sg.links.map((u, i) => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a><button type="button" class="icon-btn" data-c="del-link" data-i="${i}" aria-label="Remove link">×</button></div>`).join("")
     : `<p class="muted small" style="margin:0">Reels, TikToks, or videos to reference.</p>`;
 }
 $("partPresets").innerHTML = PART_PRESETS.map((p, i) => `<button type="button" class="btn small preset-btn" data-c="add-part" data-preset="${i}" style="--sec:${p.color}"><span class="dot"></span>${p.name}</button>`).join("")
   + `<button type="button" class="btn small" data-c="add-part" data-preset="-1">+ Custom</button>`;
-$("songNotes").addEventListener("input", e => { const sg = activeSong(); if (sg) { sg.notes = e.target.value; scheduleSave(); } });
+$("songNotes").addEventListener("input", e => { const sg = briefObj(); if (sg) { sg.notes = e.target.value; scheduleSave(); } });
 $("partsList").addEventListener("input", e => {
   if (!e.target.hasAttribute("data-part-name")) return;
   const sec = getSection(e.target.closest("[data-section-id]").dataset.sectionId);
@@ -4088,7 +4249,7 @@ $("partsList").addEventListener("input", e => {
 });
 $("addSongRefBtn").addEventListener("click", () => $("songRefInput").click());
 $("songRefInput").addEventListener("change", e => {
-  const files = Array.from(e.target.files || []), sg = activeSong();
+  const files = Array.from(e.target.files || []), sg = briefObj();
   e.target.value = "";
   if (!files.length || !sg) return;
   Promise.all(files.map(f => fileToDataURL(f, 1400).catch(() => null))).then(urls => {
@@ -4098,12 +4259,12 @@ $("songRefInput").addEventListener("change", e => {
   });
 });
 $("songRefs").addEventListener("click", e => {
-  const b = e.target.closest("[data-ref-index]"), sg = activeSong();
+  const b = e.target.closest("[data-ref-index]"), sg = briefObj();
   if (!b || !sg) return;
   openLightbox(() => sg.refs, +b.dataset.refIndex, i => { sg.refs.splice(i, 1); scheduleSave(); renderSongRefs(); });
 });
 function addLink() {
-  const sg = activeSong(), input = $("songLinkInput");
+  const sg = briefObj(), input = $("songLinkInput");
   let v = input.value.trim();
   if (!sg || !v) return;
   if (!/^https?:\/\//i.test(v)) v = "https://" + v;
@@ -4165,81 +4326,103 @@ function dayTileHTML(d) {
   const [y, m, dd] = d.date.split("-").map(Number), mon = new Date(y, m - 1, dd).toLocaleDateString(undefined, { month: "short" });
   return `<span class="day-tile ${project.cover ? "img" : ""}" style="${coverStyle(project.id)}${project.cover ? `;background-image:url(${project.cover})` : ""}"><small>${esc(mon)}</small><b>${dd}</b></span>`;
 }
-function dayCardHTML(d, past) {
-  const nSel = dayPartIds(d).length;
-  const bits = [fmt12(d.start) ? fmt12(d.start) + " start" : "", d.location, nSel ? `${nSel} section${nSel === 1 ? "" : "s"}` : ""].filter(Boolean).map(esc).join(" · ");
-  return `<button type="button" class="day-card ${past ? "past" : ""}" data-day-id="${d.id}">${dayTileHTML(d)}<span class="day-text"><span class="day-title">${esc(dayLabel(d.date, true))}</span><span class="muted small">${bits || "Tap to add a time and location"}</span></span></button>`;
+/* ---- setlist: pick sections (and speed versions) from the artist's songs ---- */
+function hasWork(sec) { return sec.rows.some(r => r.checked || r.takes.length); }
+function srcEntry(srcId, speed) { return project.sections.find(x => x.srcId === srcId && (x.speed || 1) === speed); }
+function srcEntries(srcId) { return project.sections.filter(x => x.srcId === srcId); }
+function addEntry(as, speed) {
+  const asg = artistRec.songs.find(x => x.id === as.songId); if (!asg) return;
+  if (!project.songs.some(x => x.id === as.songId)) {
+    project.songs.push(normalizeSong({ id: as.songId, name: asg.name, tempo: JSON.parse(JSON.stringify(asg.tempo)) }));
+    project.songs.sort((a, b) => artistRec.songs.findIndex(x => x.id === a.id) - artistRec.songs.findIndex(x => x.id === b.id));
+  }
+  const sec = defaultSection(as.name, project.sections.length);
+  Object.assign(sec, { color: as.color, songId: as.songId, srcId: as.id, time: as.time, speed });
+  sec.rows = project.shotTemplates.map(templateRow);
+  project.sections.push(sec);
+  if (!activeSongId) activeSongId = as.songId;
 }
+function removeEntry(sec) {
+  project.sections = project.sections.filter(x => x.id !== sec.id);
+  if (!project.sections.some(x => x.songId === sec.songId)) {
+    project.songs = project.songs.filter(x => x.id !== sec.songId);
+    if (activeSongId === sec.songId) { activeSongId = project.songs.length ? project.songs[0].id : null; shootPartId = null; }
+  }
+}
+function toggleEntry(as, speed) {
+  const ex = srcEntry(as.id, speed);
+  if (ex) { if (hasWork(ex) && !confirm(`${partLabel(ex)} already has takes logged. Remove it anyway?`)) return false; removeEntry(ex); }
+  else addEntry(as, speed);
+  return true;
+}
+function clearEntries(list) {
+  const es = list.flatMap(as => srcEntries(as.id));
+  if (es.some(hasWork) && !confirm("Some of these already have takes logged. Remove them anyway?")) return false;
+  es.forEach(removeEntry); return true;
+}
+function renderSetPick() {
+  const box = $("setPick");
+  if (!project.artistId || !artistRec) {
+    box.innerHTML = `<div class="panel"><p style="margin-top:0">Who is this shoot for? Their songs show up here.</p><div class="pick-artist" id="pickArtist"></div></div>`;
+    listProjects().then(all => {
+      const el = $("pickArtist"); if (!el) return;
+      el.innerHTML = all.filter(isArtistRec).sort(byArtistName).map(a => `<button type="button" class="btn" data-pick-artist="${a.id}">${esc(a.docTitle)}</button>`).join("") + `<button type="button" class="btn" data-pick-artist="__new">+ New artist</button>`;
+    });
+    return;
+  }
+  if (!artistRec.songs.length) {
+    box.innerHTML = `<div class="panel"><p style="margin-top:0">${esc(artistRec.docTitle)} has no songs yet. Add them on the artist page, then come back.</p><button type="button" class="btn primary" data-open-artist="1">Open ${esc(artistRec.docTitle)}</button></div>`;
+    return;
+  }
+  box.innerHTML = artistRec.songs.map(sg => {
+    const secs = sortByTime(artistRec.sections.filter(x => x.songId === sg.id));
+    const n = secs.filter(x => srcEntries(x.id).length).length;
+    const st = secs.length && n === secs.length ? "on" : n ? "some" : "";
+    return `<div class="sp-card"><button type="button" class="sp-song" data-sp-song="${sg.id}"><span class="pp-box ${st}">${st === "on" ? "✓" : st === "some" ? "–" : ""}</span><span>${esc(sg.name)}</span><small>${secs.length ? `${n} of ${secs.length}` : ""}</small></button>`
+      + (secs.length ? secs.map(as => {
+          const on = srcEntries(as.id).length > 0;
+          return `<div class="sp-row"><button type="button" class="sp-check" data-sp-toggle="${as.id}"><span class="pp-box ${on ? "on" : ""}">${on ? "✓" : ""}</span><span>${esc(as.name)}</span>${as.time ? `<small>${esc(as.time)}</small>` : ""}</button><span class="sp-vers">${[0.5, 1, 2].map(sp => `<button type="button" class="vchip ${srcEntry(as.id, sp) ? "on" : ""}" data-sp-speed="${sp}" data-src="${as.id}" aria-label="${speedLabel(sp)} version">${speedLabel(sp)}</button>`).join("")}</span></div>`;
+        }).join("") : `<p class="muted small" style="margin:2px 4px 12px">No sections marked yet. Mark them on ${esc(artistRec.docTitle)}'s page.</p>`)
+      + `</div>`;
+  }).join("");
+}
+function renderSetOrder() {
+  const el = $("setOrder"), rows = [];
+  project.songs.forEach(sg => songParts(sg.id).forEach(p => rows.push({ sg, p })));
+  el.innerHTML = rows.length ? `<div class="order-card"><h3>Shoot order</h3>${rows.map((r, i) => `<div class="order-row"><span class="n">${i + 1}</span><span>${esc(r.p.name)}</span><span class="sp">${esc(r.sg.name)}</span>${(r.p.speed || 1) !== 1 ? `<span class="spd">${speedLabel(r.p.speed)}</span>` : ""}</div>`).join("")}</div>` : "";
+}
+async function linkArtist(a) {
+  project.artistId = a.id; project.artist = a.docTitle;
+  await loadArtistRec(); scheduleSave(); renderBanner(); renderPlanContent();
+}
+$("setPick").addEventListener("click", async e => {
+  const pa = e.target.closest("[data-pick-artist]");
+  if (pa) { if (pa.dataset.pickArtist === "__new") { openArtistModal("plan"); return; } const r = await getProjectRecord(pa.dataset.pickArtist); if (r) await linkArtist(normalizeRecord(r)); return; }
+  if (e.target.closest("[data-open-artist]")) { if (project.artistId) { await persistNow(); await openProject(project.artistId); } return; }
+  if (!artistRec) return;
+  const sp = e.target.closest("[data-sp-speed]"), tg = e.target.closest("[data-sp-toggle]"), sg = e.target.closest("[data-sp-song]");
+  const asOf = id => artistRec.sections.find(x => x.id === id);
+  let changed = false;
+  if (sp) { const as = asOf(sp.dataset.src); changed = !!as && toggleEntry(as, +sp.dataset.spSpeed); }
+  else if (tg) { const as = asOf(tg.dataset.spToggle); if (as) changed = srcEntries(as.id).length ? clearEntries([as]) : toggleEntry(as, 1); }
+  else if (sg) {
+    const secs = artistRec.sections.filter(x => x.songId === sg.dataset.spSong);
+    if (secs.length && secs.every(x => srcEntries(x.id).length)) changed = clearEntries(secs);
+    else { secs.forEach(as => { if (!srcEntries(as.id).length) addEntry(as, 1); }); changed = secs.length > 0; }
+  }
+  if (!changed) return;
+  scheduleSave(); renderPlanContent();
+  try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {}
+});
 function renderPlanContent() {
   document.querySelectorAll("#planCView [data-csub]").forEach(b => b.classList.toggle("active", b.dataset.csub === cPlanSub));
   document.querySelectorAll("#planCView [data-csub-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.csubPanel !== cPlanSub));
-  $("newDayBtn").classList.toggle("hidden", cPlanSub !== "shoots");
   if (cPlanSub !== "shoots") { renderContentBoard(); return; }
+  renderSetPick(); renderSetOrder();
   $("tplCard").innerHTML = tplCardHTML();
-  const today = ymd(new Date()), days = sortedDays();
-  const up = days.filter(d => d.date >= today), past = days.filter(d => d.date < today).reverse();
-  $("allToCalBtn").classList.toggle("hidden", !up.length);
-  $("shootDayList").innerHTML = (up.length ? up.map(d => dayCardHTML(d, false)).join("") : `<p class="muted small" style="margin:6px 2px 14px">No shoots scheduled yet. Tap New… to add a day.</p>`)
-    + (past.length ? `<div class="pl-head"><span>Past shoots</span></div>` + past.map(d => dayCardHTML(d, true)).join("") : "");
+  if (document.activeElement !== $("songNotes")) $("songNotes").value = project.brief.notes;
+  renderSongRefs(); renderSongLinks();
 }
-var editingDayId = null;
-function openDay(id) {
-  const d = project.shootDays.find(x => x.id === id); if (!d) return;
-  editingDayId = id;
-  $("dayDate").value = d.date; $("dayStart").value = d.start; $("dayLoc").value = d.location; $("dayNotes").value = d.notes; $("dayHours").value = d.hours;
-  $("dayTplCard").innerHTML = tplCardHTML();
-  paintDayParts();
-  $("dayModal").classList.remove("hidden");
-}
-function paintDayParts() {
-  const d = curDay(); if (!d) return;
-  const sm = daySummary(d);
-  $("dayPartsBtn").innerHTML = `<span class="tpl-card-title">${esc(sm.title)}</span><span class="tpl-card-sub">${esc(sm.sub)}</span>`;
-}
-function paintPartsPick() {
-  const d = curDay(); if (!d) return;
-  const sel = new Set(dayPartIds(d));
-  $("partsPick").innerHTML = project.songs.length ? project.songs.map(sg => {
-    const ps = songParts(sg.id), n = ps.filter(x => sel.has(x.id)).length;
-    const st = ps.length && n === ps.length ? "on" : n ? "some" : "";
-    return `<div class="pp-song"><button type="button" class="pp-song-name ${st === "on" ? "on" : ""}" data-pp-song="${sg.id}"><span class="pp-box ${st}">${st === "on" ? "✓" : st === "some" ? "–" : ""}</span>${esc(sg.name)}</button>
-      <div class="pp-parts">${ps.length ? ps.map(x => `<button type="button" class="pp-part ${sel.has(x.id) ? "on" : ""}" data-pp-part="${x.id}">${esc(x.name)}${x.time ? ` <small>${esc(x.time)}</small>` : ""}</button>`).join("") : `<span class="muted small">No sections marked in Draft yet.</span>`}</div></div>`;
-  }).join("") : `<p class="muted">Add songs in Draft first.</p>`;
-}
-$("dayPartsBtn").addEventListener("click", () => { paintPartsPick(); $("partsModal").classList.remove("hidden"); });
-$("partsPick").addEventListener("click", e => {
-  const d = curDay(); if (!d) return;
-  const sel = new Set(dayPartIds(d));
-  const sb = e.target.closest("[data-pp-song]"), pb = e.target.closest("[data-pp-part]");
-  if (sb) { const ps = songParts(sb.dataset.ppSong); const all = ps.length && ps.every(x => sel.has(x.id)); ps.forEach(x => all ? sel.delete(x.id) : sel.add(x.id)); }
-  else if (pb) { const id = pb.dataset.ppPart; sel.has(id) ? sel.delete(id) : sel.add(id); }
-  else return;
-  d.parts = project.sections.filter(x => sel.has(x.id)).map(x => x.id);
-  scheduleSave(); paintPartsPick(); paintDayParts();
-  try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {}
-});
-$("partsClear").addEventListener("click", () => { const d = curDay(); if (d) { d.parts = []; scheduleSave(); paintPartsPick(); paintDayParts(); } });
-$("partsDone").addEventListener("click", () => $("partsModal").classList.add("hidden"));
-$("partsModal").addEventListener("click", e => { if (e.target === $("partsModal")) $("partsModal").classList.add("hidden"); });
-function closeDay() { $("dayModal").classList.add("hidden"); editingDayId = null; renderPlanContent(); }
-$("newDayBtn").addEventListener("click", () => {
-  const last = sortedDays().pop(), today = ymd(new Date());
-  const d = { id: uid(), date: (project.shootDate && project.shootDate >= today) ? project.shootDate : today, start: last ? last.start : "", location: last ? last.location : "", notes: "", hours: 6 };
-  project.shootDays.push(d); scheduleSave(); renderPlanContent(); openDay(d.id);
-});
-$("shootDayList").addEventListener("click", e => { const b = e.target.closest("[data-day-id]"); if (b) openDay(b.dataset.dayId); });
-function curDay() { return project && project.shootDays.find(x => x.id === editingDayId); }
-[["dayDate", "date"], ["dayStart", "start"], ["dayLoc", "location"], ["dayNotes", "notes"]].forEach(([id, k]) => {
-  $(id).addEventListener("input", e => { const d = curDay(); if (!d) return; if (k === "date" && !e.target.value) return; d[k] = e.target.value; scheduleSave(); });
-});
-$("dayHours").addEventListener("input", e => { const d = curDay(), v = parseFloat(e.target.value); if (d && v > 0) { d.hours = v; scheduleSave(); } });
-$("dayDone").addEventListener("click", closeDay);
-$("dayModal").addEventListener("click", e => { if (e.target === $("dayModal")) closeDay(); });
-$("dayDelete").addEventListener("click", () => {
-  const d = curDay(); if (!d || !confirm(`Delete the ${dayLabel(d.date, true)} shoot day?`)) return;
-  project.shootDays = project.shootDays.filter(x => x.id !== d.id); scheduleSave(); closeDay();
-});
-$("dayTplCard").addEventListener("click", () => openTplModal());
 $("tplCard").addEventListener("click", () => openTplModal());
 
 /* calendar export (.ics opens in Apple Calendar, Google Calendar, Outlook) */
@@ -4268,8 +4451,6 @@ function icsFor(days) {
   return L.join("\r\n");
 }
 function exportDays(days, name) { downloadBlob(new Blob([icsFor(days)], { type: "text/calendar" }), safeName(name) + ".ics"); }
-$("dayCal").addEventListener("click", () => { const d = curDay(); if (d) exportDays([d], `${project.docTitle}-${d.date}`); });
-$("allToCalBtn").addEventListener("click", () => { const today = ymd(new Date()), up = sortedDays().filter(d => d.date >= today); if (up.length) exportDays(up, `${project.docTitle}-shoots`); });
 
 /* template popup */
 function openTplModal() { renderTplModal(); $("tplStatus").textContent = ""; $("tplModal").classList.remove("hidden"); }
@@ -4353,7 +4534,6 @@ function closeTplModal() {
   syncLib(); scheduleSave();
   $("tplModal").classList.add("hidden");
   renderPlanContent();
-  if (!$("dayModal").classList.contains("hidden")) $("dayTplCard").innerHTML = tplCardHTML();
 }
 $("tplDone").addEventListener("click", closeTplModal);
 $("tplModal").addEventListener("click", e => { if (e.target === $("tplModal")) closeTplModal(); });
@@ -4369,8 +4549,8 @@ function renderContentBoard() {
             ${r.notes ? `<div class="bc-meta muted small">${esc(r.notes)}</div>` : ""}
           </div>`).join("")}</div>
         <button type="button" class="btn small board-col-add" data-c="add-shot" data-section-id="${pt.id}">+ Add shot</button>
-      </div>`).join("")}</div>` : `<p class="muted small">No parts yet — add them in Draft.</p>`}</div>`;
-  }).join("") || `<div class="panel muted">Add a song in Draft first.</div>`;
+      </div>`).join("")}</div>` : `<p class="muted small">No sections picked yet — choose them on the Setlist tab.</p>`}</div>`;
+  }).join("") || `<div class="panel muted">Pick songs on the Setlist tab first.</div>`;
   cBoardSortables.forEach(x => x.destroy());
   cBoardSortables = [];
   if (typeof Sortable === "undefined") return;
@@ -4383,8 +4563,7 @@ function renderContentBoard() {
 /* ================= content: shoot ================= */
 function renderContentStatus() {
   let total = 0, done = 0, takes = 0, first = null;
-  const f = currentWs === "shoot" ? shootFilter() : null;
-  project.sections.filter(p => !f || f.has(p.id)).forEach(p => p.rows.forEach(r => {
+  project.sections.forEach(p => p.rows.forEach(r => {
     total++;
     if (r.checked) done++;
     r.takes.forEach(t => { takes++; if (t.at && (!first || t.at < first)) first = t.at; });
@@ -4406,86 +4585,52 @@ function tileHTML(r) {
     ${active ? `<div class="tile-rate"><span class="small muted">Take ${active.n}</span><div class="rating-chips">${RATINGS.map(x => `<button type="button" class="rchip r-${x.id} ${active.rating === x.id ? "on" : ""}" data-c="tile-rate" data-take-id="${active.id}" data-rating="${x.id}">${x.label}</button>`).join("")}</div></div><div class="tile-loc">${locSelectHTML(active)}</div>` : ""}
   </div>`;
 }
-var shootDayId = null;
-function dayPartIds(d) { const ids = new Set(project.sections.filter(x => x.songId).map(x => x.id)); return ((d && d.parts) || []).filter(id => ids.has(id)); }
-function shootDay() { return shootDayId && shootDayId !== "all" ? (project.shootDays || []).find(x => x.id === shootDayId) || null : null; }
-function shootFilter() { const d = shootDay(); if (!d) return null; const sel = dayPartIds(d); return sel.length ? new Set(sel) : null; }
-function shootSongs() { const f = shootFilter(); return f ? project.songs.filter(sg => project.sections.some(x => x.songId === sg.id && f.has(x.id))) : project.songs; }
-function shootParts(songId) { const f = shootFilter(); const p = songParts(songId); return f ? p.filter(x => f.has(x.id)) : p; }
-function ordinal(n) { const v = n % 100; if (v >= 11 && v <= 13) return n + "th"; return n + (["th", "st", "nd", "rd"][n % 10] || "th"); }
-function bigDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short" }) + " " + ordinal(d); }
-function daySummary(d) {
-  const sel = dayPartIds(d);
-  if (!sel.length) return { title: "All songs & sections", sub: project.songs.length ? project.songs.map(x => x.name).join(", ") : "No songs yet" };
-  const songs = project.songs.filter(sg => project.sections.some(x => x.songId === sg.id && sel.includes(x.id)));
-  return { title: `${songs.length} song${songs.length === 1 ? "" : "s"} · ${sel.length} section${sel.length === 1 ? "" : "s"}`, sub: songs.map(x => x.name).join(", ") };
-}
-function renderShootDates() {
-  const today = ymd(new Date()), days = sortedDays();
-  const up = days.filter(d => d.date >= today), past = days.filter(d => d.date < today).reverse();
-  const card = (d, isPast) => {
-    const sm = daySummary(d), when = [dayLabel(d.date, true).split(",")[0], fmt12(d.start), d.location].filter(Boolean).map(esc).join(" · ");
-    return `<button type="button" class="sd-card ${isPast ? "past" : ""}" data-sd="${d.id}"><span class="sd-big">${esc(bigDate(d.date))}</span><span class="sd-sub">${when}</span><span class="sd-sub">${esc(sm.title)}</span></button>`;
-  };
-  $("shootDates").innerHTML = `<p class="sd-head">${days.length ? "Pick a shoot day to see just what you are shooting." : "No shoot days yet. Add one in Plan, then choose its songs and sections."}</p>`
-    + up.map(d => card(d, false)).join("") + past.map(d => card(d, true)).join("")
-    + (project.songs.length ? `<button type="button" class="sd-card all" data-sd="all"><span class="sd-big">All songs &amp; sections</span></button>` : "");
-}
-function selectShootDay(id) {
-  shootDayId = id;
-  const ss = shootSongs();
-  if (ss.length && !ss.some(x => x.id === activeSongId)) { activeSongId = ss[0].id; shootPartId = null; renderCurrent(); loadActiveTrack(); }
-  else renderCurrent();
-  window.scrollTo(0, 0);
-}
-$("shootDates").addEventListener("click", e => { const b = e.target.closest("[data-sd]"); if (b) selectShootDay(b.dataset.sd); });
 function currentShootPart() {
   const sg = activeSong();
   if (!sg) return null;
-  const parts = shootParts(sg.id);
+  const parts = songParts(sg.id);
   return parts.find(p => p.id === shootPartId) || parts.find(p => p.rows.some(r => !r.checked)) || parts[0] || null;
 }
 function renderShootContent() {
-  const dates = !shootDayId;
-  $("shootDates").classList.toggle("hidden", !dates); $("shootDayBody").classList.toggle("hidden", dates);
-  if (dates) { renderShootDates(); return; }
   mountTransport("#shootCView .transport-slot");
   renderContentStatus();
-  $("shootSongTabs").innerHTML = songTabsHTML(false, shootSongs(), shootParts);
+  $("shootSongTabs").innerHTML = songTabsHTML(false);
   const sg = activeSong(), panel = $("partPanel"), strip = $("partStrip");
   if (!sg) {
     strip.innerHTML = "";
-    panel.innerHTML = `<p style="margin-top:0">Add songs and the parts you want to shoot in Draft first.</p><button type="button" class="btn primary" data-c="go-draft">Open Draft</button>`;
+    panel.innerHTML = `<p style="margin-top:0">Pick the songs and sections you want to shoot in Plan first.</p><button type="button" class="btn primary" data-c="go-draft">Open Plan</button>`;
     return;
   }
-  const parts = shootParts(sg.id);
+  const parts = songParts(sg.id);
   if (!parts.length) {
     strip.innerHTML = "";
-    panel.innerHTML = `<p style="margin-top:0">${esc(sg.name)} has no parts yet. Mark them in Draft.</p><button type="button" class="btn primary" data-c="go-draft">Open Draft</button>`;
+    panel.innerHTML = `<p style="margin-top:0">${esc(sg.name)} has no sections picked yet. Choose them in Plan.</p><button type="button" class="btn primary" data-c="go-draft">Open Plan</button>`;
     return;
   }
   const pt = currentShootPart();
   shootPartId = pt.id;
+  if (!isPlaying()) playRate = pt.speed || 1;
+  paintRate();
   strip.innerHTML = parts.map(p => {
     const d = p.rows.filter(r => r.checked).length;
-    return `<button type="button" class="part-chip ${p.id === pt.id ? "active" : ""} ${p.rows.length && d === p.rows.length ? "complete" : ""}" data-c="pick-part" data-section-id="${p.id}" style="--sec:${p.color}"><span class="dot"></span>${esc(p.name)} <span class="part-chip-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span></button>`;
+    return `<button type="button" class="part-chip ${p.id === pt.id ? "active" : ""} ${p.rows.length && d === p.rows.length ? "complete" : ""}" data-c="pick-part" data-section-id="${p.id}" style="--sec:${p.color}"><span class="dot"></span>${esc(partLabel(p))} <span class="part-chip-meta">${p.time ? esc(p.time) + " · " : ""}${d}/${p.rows.length}</span></button>`;
   }).join("");
   const tp = curTempo();
   const idx = parts.indexOf(pt), prev = parts[idx - 1], next = parts[idx + 1];
-  const ss = shootSongs(), nextSong = ss[ss.indexOf(sg) + 1];
+  const nextSong = project.songs[project.songs.indexOf(sg) + 1];
   const doneN = pt.rows.filter(r => r.checked).length;
   const allDone = pt.rows.length > 0 && doneN === pt.rows.length;
   panel.innerHTML = `<div class="part-head" style="--sec:${pt.color}">
-      <div><div class="part-title"><span class="dot"></span>${esc(pt.name)}</div><div class="muted small">${esc(sg.name)} · ${pt.time ? `every shot starts at ${esc(pt.time)}` : "no start time set — add one in Draft"}</div></div>
+      <div><div class="part-title"><span class="dot"></span>${esc(partLabel(pt))}</div><div class="muted small">${esc(sg.name)} · ${pt.time ? `every shot starts at ${esc(pt.time)}` : "no start time set — add one on the artist page"}</div></div>
       <span class="spacer"></span>
-      ${pt.time ? `<button type="button" class="btn primary big-btn" data-c="play-part">▶ Play ${esc(pt.name)}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
+      ${pt.time ? `<button type="button" class="btn primary big-btn" data-c="play-part">▶ Play ${esc(partLabel(pt))}${tp.countIn ? ` · ${tp.bars}-bar count-in` : ""}</button>` : ""}
     </div>
     <div class="shot-tiles">${pt.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
     <div class="part-nav">
-      ${allDone ? `<span class="all-done">All ${pt.rows.length} shots in ${esc(pt.name)} are done.</span>` : `<span class="muted small">${doneN} of ${pt.rows.length} done in this part</span>`}
+      ${allDone ? `<span class="all-done">All ${pt.rows.length} shots in ${esc(partLabel(pt))} are done.</span>` : `<span class="muted small">${doneN} of ${pt.rows.length} done in this part</span>`}
       <span class="spacer"></span>
-      ${prev ? `<button type="button" class="btn" data-c="goto-part" data-section-id="${prev.id}">‹ ${esc(prev.name)}</button>` : ""}
-      ${next ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="goto-part" data-section-id="${next.id}">Next: ${esc(next.name)} ›</button>`
+      ${prev ? `<button type="button" class="btn" data-c="goto-part" data-section-id="${prev.id}">‹ ${esc(partLabel(prev))}</button>` : ""}
+      ${next ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="goto-part" data-section-id="${next.id}">Next: ${esc(partLabel(next))} ›</button>`
         : nextSong ? `<button type="button" class="btn ${allDone ? "primary" : ""}" data-c="next-song" data-song="${nextSong.id}">Next song: ${esc(nextSong.name)} ›</button>` : ""}
     </div>`;
 }
@@ -4557,7 +4702,7 @@ document.addEventListener("click", e => {
       scheduleSave(); renderDraftContent();
       break;
     }
-    case "del-link": { const sg = activeSong(); if (sg) { sg.links.splice(+b.dataset.i, 1); scheduleSave(); renderSongLinks(); } break; }
+    case "del-link": { const sg = briefObj(); if (sg) { sg.links.splice(+b.dataset.i, 1); scheduleSave(); renderSongLinks(); } break; }
     case "del-shot": {
       const r = b.closest("[data-row-id]") && findRow(b.closest("[data-row-id]").dataset.rowId);
       if (!r || !r.row) return;
@@ -4574,10 +4719,10 @@ document.addEventListener("click", e => {
       changed();
       break;
     }
-    case "go-draft": switchWs("draft"); break;
+    case "go-draft": switchWs("plan"); break;
     case "pick-part": case "goto-part": if (sec) { shootPartId = sec.id; renderShootContent(); } break;
     case "next-song": setActiveSong(b.dataset.song); break;
-    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time); break; }
+    case "play-part": { const p = currentShootPart(); if (p) playCue(p.time, p.speed || 1); break; }
     case "tile-done": if (row) { row.checked = !row.checked; row.doneAt = row.checked ? new Date().toISOString() : null; scheduleSave(); renderShootContent(); } break;
     case "tile-take": {
       if (!row) return;
@@ -4702,7 +4847,7 @@ function renderCutMoment() {
   cutMomentKey = regs.map(r => (r.row || r.sec).id).join(",");
   const el = $("cutMoment");
   const head = `<div class="panel-head"><h2>At ${fmtTC(cutTime)}</h2><span class="muted small">Follows the playhead while the song plays.</span></div>`;
-  if (!regs.length) { el.innerHTML = head + `<p class="muted small" style="margin:0">${cutLanes().length ? "Nothing planned at this point in the song." : (isContent() ? "Give this song's parts a start time in Draft to see them here." : "Give shots a timestamp in Draft to see them here.")}</p>`; return; }
+  if (!regs.length) { el.innerHTML = head + `<p class="muted small" style="margin:0">${cutLanes().length ? "Nothing planned at this point in the song." : (isContent() ? "Give this song's parts a start time on the artist page to see them here." : "Give shots a timestamp in Draft to see them here.")}</p>`; return; }
   if (isContent()) {
     const pt = regs[regs.length - 1].sec;
     el.innerHTML = head + `<div class="cut-section-head" style="--sec:${pt.color}"><span class="dot"></span>${esc(pt.name)} <span class="muted small" style="font-weight:400">from ${esc(pt.time)}</span></div>` + (pt.rows.map(r => cutCardHTML(r, pt, false)).join("") || `<p class="muted small">No shots in this part.</p>`);
