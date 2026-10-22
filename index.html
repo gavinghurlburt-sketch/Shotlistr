@@ -638,11 +638,17 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-meta { margin-left: auto; font-size: 12px; color: var(--muted); }
 .pc-chev { width: 9px; height: 9px; margin: 0 4px 0 4px; border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted); transform: rotate(-45deg); transition: transform .2s ease; flex: 0 0 auto; }
 .part-card.open .pc-chev { transform: rotate(45deg) translate(-2px, -2px); }
-.song-titles { display: flex; align-items: baseline; gap: 20px; overflow-x: auto; white-space: nowrap; margin: 6px 0 4px; scrollbar-width: none; }
+.song-titles { display: flex; align-items: baseline; gap: 18px; overflow-x: auto; white-space: nowrap; margin: 6px 0 4px; scrollbar-width: none; perspective: 520px; }
+.song-titles::before, .song-titles::after { content: ""; flex: 0 0 38%; }
+@keyframes cardDrop { from { opacity: 0; transform: translateY(-22px); } to { opacity: 1; transform: none; } }
+.part-card.drop { animation: cardDrop .38s cubic-bezier(.2,.8,.2,1) both; }
 .song-titles::-webkit-scrollbar { display: none; }
-.song-titles .st { flex: 0 0 auto; background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; font-size: 36px; font-weight: 800; letter-spacing: -0.045em; color: var(--muted); opacity: .55; transition: color .25s ease, opacity .25s ease; }
+.song-titles .st { flex: 0 0 auto; background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; font-size: 22px; font-weight: 800; letter-spacing: -0.04em; color: var(--muted); opacity: .5; transform-origin: center; transition: font-size .35s cubic-bezier(.2,.8,.2,1), color .3s ease, opacity .3s ease, transform .35s cubic-bezier(.2,.8,.2,1); }
+.song-titles .st.before { transform: translateZ(-60px) rotateY(32deg); transform-origin: right center; }
+.song-titles .st.after { transform: translateZ(-60px) rotateY(-32deg); transform-origin: left center; }
+.song-titles .st:active { transform: none; }
 .song-titles .st:hover { background: none; }
-.song-titles .st.on { color: var(--text); opacity: 1; }
+.song-titles .st.on { color: var(--text); opacity: 1; font-size: 36px; letter-spacing: -0.045em; transform: none; }
 .shoot-date { font-size: 14px; margin: 0 0 12px; }
 .pc-body { padding: 0 18px 18px; }
 .part-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -4669,10 +4675,22 @@ function currentShootPart() {
   const parts = songParts(sg.id);
   return parts.find(p => p.id === shootPartId) || parts.find(p => p.rows.some(r => !r.checked)) || parts[0] || null;
 }
+var lastShootSong = null, stFollow = 0;
+function paintSongTitles() {
+  const box = $("shootSongTabs"), songs = project.songs, ai = songs.findIndex(x => x.id === activeSongId);
+  const same = box.children.length === songs.length && songs.every((x, i) => box.children[i].dataset.songId === x.id && box.children[i].textContent === x.name);
+  if (!same) box.innerHTML = songs.map(sg => `<button type="button" class="st" data-song-id="${sg.id}">${esc(sg.name)}</button>`).join("");
+  [...box.children].forEach((el, i) => { el.classList.toggle("on", i === ai); el.classList.toggle("before", i < ai); el.classList.toggle("after", i > ai); });
+  const center = () => { const el = box.children[ai]; if (el) box.scrollLeft = el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2; };
+  cancelAnimationFrame(stFollow);
+  const t0 = performance.now();
+  const tick = () => { center(); if (performance.now() - t0 < 450) stFollow = requestAnimationFrame(tick); };
+  tick();
+}
 function renderShootContent() {
   mountTransport("#shootCView .transport-slot");
   renderContentStatus();
-  $("shootSongTabs").innerHTML = project.songs.map(sg => `<button type="button" class="st ${sg.id === activeSongId ? "on" : ""}" data-song-id="${sg.id}">${esc(sg.name)}</button>`).join("");
+  paintSongTitles();
   const dl = $("shootDateLine"), dt = project.shootDate;
   dl.textContent = dt ? (() => { const [y, m, d] = dt.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); })() : "";
   dl.classList.toggle("hidden", !dt);
@@ -4719,6 +4737,10 @@ function renderShootContent() {
         </div>
       </div></div>`;
   }).join("");
+  if (lastShootSong !== activeSongId) {
+    lastShootSong = activeSongId;
+    panel.querySelectorAll(".part-card").forEach((el, i) => { el.classList.add("drop"); el.style.animationDelay = (i * 70) + "ms"; });
+  }
 }
 
 /* ================= content: shared actions ================= */
