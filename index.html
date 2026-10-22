@@ -1157,7 +1157,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
           <div id="projectsList" class="projects-list"></div>
         </div>
         <div id="paneArtists" class="home-pane off">
-          <p class="muted">Everyone you shoot for. Tap an artist to see their projects.</p>
+          <p class="muted" id="artistsHint">Everyone you shoot for. Tap an artist to see their projects.</p>
           <div id="artistsList" class="projects-list"></div>
         </div>
       </div></div>
@@ -1176,6 +1176,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <h3>Settings</h3>
       <p class="modal-hint" style="margin-bottom:10px">Appearance</p>
       <div class="theme-seg"><button type="button" class="btn small" data-theme-pref="system">Device</button><button type="button" class="btn small" data-theme-pref="light">Light</button><button type="button" class="btn small" data-theme-pref="dark">Dark</button></div>
+      <p class="modal-hint" style="margin:16px 0 8px">Plan <span class="muted small">(for testing, purchases come later)</span></p>
+      <div class="theme-seg"><button type="button" class="btn small" data-tier-pref="artist">Artist</button><button type="button" class="btn small" data-tier-pref="plus">Plus</button><button type="button" class="btn small" data-tier-pref="pro">Pro</button></div>
       <p class="modal-hint" style="margin:16px 0 8px">Backups</p>
       <label for="importProjectInput" class="btn small file-label">Import a backup file</label>
       <div class="modal-actions"><span></span><button id="settingsDone" class="btn primary">Done</button></div>
@@ -1463,15 +1465,15 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <p class="modal-hint">Name it (you can change this later), then pick what kind of shoot it is.</p>
     <input type="text" id="newProjectName" class="field" style="width:100%" placeholder="e.g. Smalljoy fall campaign">
     <div class="detail-grid">
-      <label>Artist <input type="text" id="newArtist" class="field" list="artistList" placeholder="Who is it for?" autocapitalize="words"></label>
+      <label id="newArtistLabel">Artist <input type="text" id="newArtist" class="field" list="artistList" placeholder="Who is it for?" autocapitalize="words"></label>
       <label>Shoot date <input type="date" id="newShootDate" class="field"></label>
     </div>
     <datalist id="artistList"></datalist>
-    <div class="type-choices">
+    <div class="type-choices" id="newTypeChoices">
       <button type="button" class="type-choice" data-type="production"><strong>Video production</strong><span>One song. Locations and setups, a timed schedule, a call sheet, and a live on-set tracker.</span></button>
       <button type="button" class="type-choice" data-type="content"><strong>Content shoot</strong><span>Several songs. Mark the parts you want, stamp shot templates on every part, and get lots of coverage fast.</span></button>
     </div>
-    <div class="modal-actions"><span></span><button type="button" id="closeNewBtn" class="btn">Cancel</button></div>
+    <div class="modal-actions"><span></span><button type="button" id="closeNewBtn" class="btn">Cancel</button><button type="button" id="newCreateBtn" class="btn primary hidden">Create</button></div>
   </div>
 </div>
 <div id="tplModal" class="modal hidden">
@@ -3638,6 +3640,26 @@ function storedArtists() { try { const a = JSON.parse(localStorage.getItem(ART_K
 const isArtistRec = r => !!r && r.type === "artist";
 const artistKey = n => String(n || "").trim().toLowerCase();
 const byArtistName = (a, b) => (a.docTitle || "").localeCompare(b.docTitle || "");
+/* ================= plans =================
+   creatrr Artist: one artist, simplified. creatrr Plus: up to 10 artists. creatrr Pro: up to 50.
+   For now the plan is picked in Settings; later the App Store subscription sets it. */
+var TIERS = { artist: { name: "creatrr Artist", limit: 1 }, plus: { name: "creatrr Plus", limit: 10 }, pro: { name: "creatrr Pro", limit: 50 } };
+var TIER = (function () { try { const t = localStorage.getItem("producrr_tier"); return TIERS[t] ? t : "plus"; } catch (e) { return "plus"; } })();
+function isArtistTier() { return TIER === "artist"; }
+function setTier(t) {
+  if (!TIERS[t]) return;
+  TIER = t; try { localStorage.setItem("producrr_tier", t); } catch (e) {}
+  document.querySelectorAll("[data-tier-pref]").forEach(b => b.classList.toggle("primary", b.dataset.tierPref === TIER));
+  paintHomeMode(); renderProjectsList();
+}
+/* can another artist be added? (a name that already exists is always fine) */
+async function artistRoom(name) {
+  const arts = (await listProjects()).filter(isArtistRec), lim = TIERS[TIER].limit;
+  if (name && arts.some(r => artistKey(r.docTitle) === artistKey(name))) return true;
+  if (arts.length < lim) return true;
+  showNotice(isArtistTier() ? `${TIERS.artist.name} includes one artist. Upgrade to add more.` : `${TIERS[TIER].name} includes up to ${lim} artists.`);
+  return false;
+}
 async function ensureArtist(name) {
   name = (name || "").trim(); if (!name) return null;
   const hit = (await listProjects()).find(r => isArtistRec(r) && artistKey(r.docTitle) === artistKey(name));
@@ -3702,6 +3724,9 @@ async function migrateArtists(all) {
 }
 function renderArtists(recs, projects) {
   const box = $("artistsList"), today = ymd(new Date());
+  artistTotal = recs.length; paintHomeMode();
+  if (isArtistTier()) recs = recs.slice(0, 1);
+  if (!recs.length && isArtistTier()) { box.innerHTML = `<div class="projects-empty">Add your artist to get started. Use New artist…</div>`; return; }
   if (!recs.length) { box.innerHTML = `<div class="projects-empty">No artists yet. Add one with New artist…</div>`; return; }
   box.innerHTML = recs.map(a => {
     const ps = projects.filter(p => p.artistId === a.id);
@@ -3709,17 +3734,20 @@ function renderArtists(recs, projects) {
     const next = ps.map(p => primaryDate(p, today)).filter(d => d && d >= today).sort()[0];
     const sub = [`${a.songs.length} song${a.songs.length === 1 ? "" : "s"}`, `${ps.length} shoot${ps.length === 1 ? "" : "s"}`, next ? "Next " + dayLabel(next, false) : ""].filter(Boolean).join(" · ");
     return `<div class="pc-wrap">
-      <button type="button" class="pc-del" data-delete-artist="${a.id}">Remove</button>
+      ${isArtistTier() ? "" : `<button type="button" class="pc-del" data-delete-artist="${a.id}">Remove</button>`}
       <div class="project-card"><div class="project-card-main" data-artist-open="${a.id}" role="button" tabindex="0">
         <div class="cover ${withCover ? "img" : "init"}" style="${coverStyle(a.id)}${withCover ? `;background-image:url(${withCover.cover})` : ""}">${withCover ? "" : esc((a.docTitle || "?").trim().charAt(0).toUpperCase())}</div>
-        <div class="pc-text"><div class="project-card-name">${esc(a.docTitle)}</div><div class="muted small">${esc(sub)}</div></div>
+        <div class="pc-text"><div class="project-card-name">${esc(a.docTitle)}</div><div class="muted small">${esc(sub)}</div>${isArtistTier() && a.songs.length ? `<div class="muted small" style="margin-top:6px">${esc(a.songs.slice(0, 4).map(x => x.name).join(" · "))}${a.songs.length > 4 ? " …" : ""}</div>` : ""}</div>
       </div></div></div>`;
   }).join("");
 }
-var homeMode = "projects";
+var homeMode = "projects", artistTotal = 0;
 function paintHomeMode() {
   document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === homeMode));
+  document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Artist" : "Artists";
+  $("artistsHint").textContent = isArtistTier() ? "Your photo, songs and sections. Tap to open your artist page." : "Everyone you shoot for. Tap an artist to see their projects.";
   $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
+  $("newBtn").classList.toggle("hidden", homeMode === "artists" && isArtistTier() && artistTotal >= 1);
 }
 function setHomeMode(m, instant) {
   if (m === homeMode && !instant) return;
@@ -3793,7 +3821,8 @@ async function renderProjectsList() {
   renderArtists(artistRecs, all);
   if (artistFilter && !artists.includes(artistFilter)) artistFilter = null;
   $("artistList").innerHTML = artists.map(a => `<option value="${esc(a)}"></option>`).join("");
-  $("artistChips").innerHTML = artists.length ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
+  if (isArtistTier()) artistFilter = null;
+  $("artistChips").innerHTML = (artists.length && !isArtistTier()) ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
   const projects = all.filter(p => !artistFilter || p.artist === artistFilter);
   renderCalendar(projects);
   if (!all.length) { list.innerHTML = `<div class="projects-empty">No projects yet. Start one with New…</div>`; return; }
@@ -3922,6 +3951,7 @@ function openArtistModal(forWhat) { artistModalFor = forWhat || "home"; $("artis
 async function addArtist() {
   const n = $("artistNameInput").value.trim(); if (!n) return;
   $("artistModal").classList.add("hidden");
+  if (!(await artistRoom(n))) return;
   const a = await ensureArtist(n);
   if (artistModalFor === "plan" && project && project.type === "content") { await linkArtist(a); return; }
   await openProject(a.id);
@@ -3940,15 +3970,27 @@ async function createProject(name, type, artist, date) {
   await putProjectRecord(rec);
   await openProject(rec.id);
 }
-function openNewModal(artistName, date) { $("newProjectName").value = ""; $("newArtist").value = artistName || ""; $("newShootDate").value = date || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); }
+function openNewModal(artistName, date) {
+  const solo = isArtistTier();
+  $("newArtistLabel").classList.toggle("hidden", solo); $("newTypeChoices").classList.toggle("hidden", solo); $("newCreateBtn").classList.toggle("hidden", !solo);
+  document.querySelector("#newModal h3").textContent = solo ? "New content shoot" : "New";
+  document.querySelector("#newModal .modal-hint").textContent = solo ? "Name it and pick the date. You can change both later." : "Name it (you can change this later), then pick what kind of shoot it is.";
+  $("newProjectName").value = ""; $("newArtist").value = artistName || ""; $("newShootDate").value = date || ""; $("newModal").classList.remove("hidden"); $("newProjectName").focus(); }
 $("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal("home"); return; } openNewModal(artistFilter || "", calSel || ""); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
-$("newModal").addEventListener("click", e => {
+$("newModal").addEventListener("click", async e => {
   if (e.target.id === "newModal") { $("newModal").classList.add("hidden"); return; }
-  const b = e.target.closest("[data-type]");
+  const b = e.target.closest("[data-type], #newCreateBtn");
   if (!b) return;
+  let type = b.dataset.type, artist = $("newArtist").value.trim();
+  if (isArtistTier()) {
+    type = "content";
+    const mine = (await listProjects()).filter(isArtistRec).map(normalizeRecord).sort(byArtistName)[0];
+    if (!mine) { $("newModal").classList.add("hidden"); setHomeMode("artists"); openArtistModal("home"); return; }
+    artist = mine.docTitle;
+  } else if (!(await artistRoom(artist))) return;
   $("newModal").classList.add("hidden");
-  createProject($("newProjectName").value.trim(), b.dataset.type, $("newArtist").value.trim(), $("newShootDate").value);
+  createProject($("newProjectName").value.trim(), type, artist, $("newShootDate").value);
 });
 $("importProjectInput").addEventListener("change", async e => {
   const f = e.target.files[0];
@@ -4123,7 +4165,8 @@ function setThemePref(v) {
   try { localStorage.setItem("producrr_theme_pref", themePref); } catch (e) {}
   applyTheme();
 }
-document.addEventListener("click", e => { const b = e.target.closest("[data-theme-pref]"); if (b) setThemePref(b.dataset.themePref); });
+document.addEventListener("click", e => { const b = e.target.closest("[data-theme-pref]"); if (b) setThemePref(b.dataset.themePref); const t = e.target.closest("[data-tier-pref]"); if (t) setTier(t.dataset.tierPref); });
+document.querySelectorAll("[data-tier-pref]").forEach(b => b.classList.toggle("primary", b.dataset.tierPref === TIER));
 if (window.matchMedia) { const mq = matchMedia("(prefers-color-scheme: dark)"); const f = () => { if (themePref === "system") applyTheme(); }; if (mq.addEventListener) mq.addEventListener("change", f); else if (mq.addListener) mq.addListener(f); }
 $("settingsBtn").addEventListener("click", () => $("settingsModal").classList.remove("hidden"));
 $("settingsDone").addEventListener("click", () => $("settingsModal").classList.add("hidden"));
@@ -4214,7 +4257,7 @@ function renderBanner() {
     const d = projectDay(false), dt = project.shootDate;
     bd.textContent = dt ? bigDate(dt) : "Add a date";
     const wk = dt ? (() => { const [y, m, dd] = dt.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString(undefined, { weekday: "long" }); })() : "";
-    $("bannerSub").textContent = [project.artist, wk, d && fmt12(d.start), d && d.location].filter(Boolean).join(" · ");
+    $("bannerSub").textContent = [isArtistTier() ? "" : project.artist, wk, d && fmt12(d.start), d && d.location].filter(Boolean).join(" · ");
   } else $("bannerSub").textContent = "";
 }
 $("bannerBtn").addEventListener("click", () => $("bannerFile").click());
