@@ -677,7 +677,7 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-body .part-head .muted { flex: 1 1 100%; }
 .play-row { flex: 1 1 100%; display: flex; gap: 8px; align-items: stretch; }
 .play-row .play-part { flex: 1; }
-.rate-btn { flex: none; min-width: 58px; font-size: 15px; font-weight: 800; background-color: color-mix(in srgb, var(--sec) 22%, var(--surface-2)); color: var(--text); }
+.rate-btn { flex: none; min-width: 58px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; background-color: color-mix(in srgb, var(--sec) 22%, var(--surface-2)); color: var(--text); }
 .pc-body .btn.play-part.primary { background-color: var(--sec); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--sec) 40%, transparent); }
 .part-card.complete .btn.play-part.primary { background-color: var(--good-fill); box-shadow: none; }
 .pc-body .shot-tiles { grid-template-columns: 1fr; gap: 8px; }
@@ -4214,6 +4214,8 @@ function addSong(name) {
 function songOf(sec) { return project.songs.find(x => x.id === sec.songId) || null; }
 function sectionTitle(sec) { const sg = isContent() ? songOf(sec) : null; return sg ? `${sg.name} — ${sec.name}` : sec.name; }
 function speedRank(sp) { return sp === 1 ? 0 : sp === 0.5 ? 1 : 2; }
+var ICON_TURTLE = `<svg viewBox="0 0 32 24" width="30" height="22" aria-hidden="true" fill="currentColor"><path d="M4.5 18C4.5 9.5 9.5 5 16 5s11.5 4.5 11.5 13z"/><circle cx="29" cy="14.2" r="3"/><rect x="7.5" y="17" width="5" height="4.5" rx="2"/><rect x="19.5" y="17" width="5" height="4.5" rx="2"/><path d="M4.8 17.5 1 19.2l4-4z"/><path d="M11 17.5c-.4-4 .6-8 5-8.7M21 17.5c.4-4-.6-8-5-8.7M16 18V9" fill="none" stroke="var(--surface-2)" stroke-opacity=".55" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+var ICON_RABBIT = `<svg viewBox="0 0 32 24" width="30" height="22" aria-hidden="true" fill="currentColor"><ellipse cx="14" cy="15" rx="9.5" ry="5.6"/><circle cx="25" cy="11.5" r="4"/><ellipse cx="23.6" cy="4.2" rx="1.6" ry="4.6" transform="rotate(-14 23.6 4.2)"/><ellipse cx="27.6" cy="4.6" rx="1.5" ry="4.2" transform="rotate(12 27.6 4.6)"/><circle cx="4.4" cy="13.2" r="2.4"/><ellipse cx="9" cy="20" rx="4.6" ry="2.1"/><rect x="18.5" y="17" width="8" height="3.2" rx="1.6"/></svg>`;
 function speedLabel(sp) { return sp === 0.5 ? "½×" : sp === 2 ? "2×" : "1×"; }
 function partLabel(sec) { return sec.name + ((sec.speed || 1) !== 1 ? " · " + speedLabel(sec.speed) : ""); }
 function sortByTime(list) {
@@ -4892,7 +4894,7 @@ function renderShootContent() {
         <div class="part-head">
           ${p.time ? "" : `<div class="muted small">No start time set. Add one on the artist page.</div>`}
           <span class="spacer"></span>
-          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn" data-c="play-part" data-rate="0.5" aria-label="Play ${esc(p.name)} at half speed">½×</button><button type="button" class="btn primary big-btn play-part" data-c="play-part" data-rate="${p.speed || 1}">▶ Play ${esc(partLabel(p))}</button><button type="button" class="btn rate-btn" data-c="play-part" data-rate="2" aria-label="Play ${esc(p.name)} at double speed">2×</button></div>` : ""}
+          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn" data-c="play-part" data-rate="0.5" aria-label="Play ${esc(p.name)} at half speed" title="Half speed">${ICON_TURTLE}</button><button type="button" class="btn primary big-btn play-part" data-c="play-part" data-rate="${p.speed || 1}">▶ Play ${esc(partLabel(p))}</button><button type="button" class="btn rate-btn" data-c="play-part" data-rate="2" aria-label="Play ${esc(p.name)} at double speed" title="Double speed">${ICON_RABBIT}</button></div>` : ""}
         </div>
         <div class="shot-tiles">${p.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
         <div class="part-nav">
