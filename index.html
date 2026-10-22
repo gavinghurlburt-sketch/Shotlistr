@@ -998,6 +998,7 @@ details.more > :not(summary) { margin-top: 8px; }
 .beat-dots i { width: 14px; height: 14px; border-radius: 50%; background-color: var(--surface-2); transition: background-color .08s, transform .08s; }
 .beat-dots i.on { background-color: var(--accent); transform: scale(1.25); }
 .beat-dots i:first-child.on { background-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); }
+.snap-row { display: flex; align-items: center; gap: 10px; margin: 12px 2px 0; font-weight: 600; font-size: 15px; }
 .tap-down { width: 100%; min-height: 64px; border-radius: 22px; font-size: 16px; font-weight: 700; touch-action: manipulation; }
 .tap-down.on { background-color: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); }
 .tap-down:disabled { opacity: .45; }
@@ -1281,11 +1282,11 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <div class="tap-top"><div class="tap-readout" id="tapReadout" aria-live="polite">—</div><div class="beat-dots" id="beatDots" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>
       <button type="button" id="tapBtn" class="btn primary tap-big">TAP</button>
       <div class="tempo-ctl"><button type="button" id="tapDown" class="btn tap-down" disabled>Tap on the 1 (start of a measure)</button></div>
+      <label class="check snap-row" title="Scrubbing, new sections and moved markers land on the start of a measure"><input type="checkbox" id="snapToggle"> Snap sections to the 1 (start of each measure)</label>
       <details class="more tempo-more"><summary>More settings</summary>
       <div class="tempo-form">
         <label class="check"><input type="checkbox" id="countInToggle"> Count-in</label>
         <select id="countInBars" class="field" aria-label="Count-in length"><option value="1">1 bar</option><option value="2">2 bars</option></select>
-        <label class="check" title="Scrubbing and cues land on measure starts and markers"><input type="checkbox" id="snapToggle"> Snap cues to the beat</label>
       </div>
       </details>
       <div class="modal-actions"><span></span><button id="tempoDone" class="btn primary">Done</button></div>
@@ -2902,7 +2903,7 @@ async function decodeTrack(blob, autoDetect) {
     if (token !== decodeToken) return;
     audioBuffer = buf;
     peaks = computePeaks(buf);
-    drawWaveform(); paintTempo();
+    drawWaveform(); paintTempo(); paintSectionHints();
     if (autoDetect) runTempoDetect();
   } catch (e) {
     console.error(e);
@@ -3655,7 +3656,7 @@ $("tapDown").addEventListener("pointerdown", e => {
   const beat = 60 / tp.bpm, bar = beat * 4, t0 = transportTime() - outLatency();
   const off = tp.offset + Math.round((t0 - tp.offset) / beat) * beat;           // the nearest beat of the grid is the 1
   tp.offset = Math.round((((off % bar) + bar) % bar) * 1000) / 1000;
-  tap.base = tp.offset; tap.downbeat = true; feel("measure");
+  tap.base = tp.offset; tap.downbeat = true; tp.snap = true; feel("measure");
   const b = $("tapDown"); b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit");
   scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo(); gameClickReset(); paintTapUI(); drawTempoWave();
 });
@@ -4815,16 +4816,28 @@ function selectPart(id) {
 var secDraft = { color: PART_PRESETS[0].color };
 function secClash(t) { const sg = activeSong(); return !!sg && songParts(sg.id).some(x => x.time && Math.abs(parseTC(x.time) - t) < 0.05); }
 function paintSectionModal() {
-  const name = $("secNameInput").value.trim(), t = transportTime(), clash = secClash(t);
-  $("secWhere").textContent = clash ? "There's already a section here. Move the playhead to a different spot first." : "Starts at " + fmtTC(t) + " (where the playhead is). You can drag it later.";
+  const name = $("secNameInput").value.trim(), raw = transportTime(), t = snapToBar(raw), clash = secClash(t), snapped = Math.abs(t - raw) > 0.05;
+  $("secWhere").textContent = clash ? "There's already a section here. Move the playhead to a different spot first." : "Starts at " + fmtTC(t) + (snapped ? " (the nearest start of a measure). " : " (where the playhead is). ") + "You can drag it later.";
   $("secAdd").disabled = !name || clash;
   $("secPresets").innerHTML = PART_PRESETS.map((p, i) => `<button type="button" class="btn small preset-btn" data-sec-preset="${i}" style="--sec:${p.color}"><span class="dot"></span>${p.name}</button>`).join("");
   const cur = String(secDraft.color).toLowerCase(), isPal = PALETTE.some(c => c.toLowerCase() === cur);
   $("secColors").innerHTML = PALETTE.map(c => `<button type="button" class="cp-dot${c.toLowerCase() === cur ? " on" : ""}" data-sec-color="${c}" style="background-color:${c}" aria-label="Color ${c}"></button>`).join("")
     + `<label class="cp-dot cp-custom${isPal ? "" : " on"}" style="${isPal ? "" : "background-color:" + secDraft.color}" title="Pick any color"><input type="color" id="secColorInput" value="${/^#[0-9a-f]{6}$/i.test(secDraft.color) ? secDraft.color : "#888888"}" aria-label="Custom color"></label>`;
 }
+function snapToBar(t) {                                // with snap on, a new section lands on the start of a measure
+  const tp = curTempo(), dur = trackDuration();
+  if (!(tp && tp.snap && tp.bpm > 0 && tp.offset != null)) return t;
+  const bar = (60 / tp.bpm) * 4;
+  let best = tp.offset + Math.round((t - tp.offset) / bar) * bar;
+  while (best < 0) best += bar;
+  if (dur && best > dur) best = Math.max(0, best - bar);
+  return Math.round(best * 10) / 10;
+}
 function openSectionModal() {
-  if (!activeSong() || !player.src) return;
+  if (!project) return;
+  if (!activeSong() && project.songs.length) activeSongId = project.songs[0].id;       // never fail silently
+  if (!activeSong()) { showNotice("Add a song first."); return; }
+  if (!player.src) { showNotice("Upload this song's track first."); return; }
   $("secNameInput").value = ""; secDraft.color = PART_PRESETS[0].color;
   $("sectionModal").classList.remove("hidden"); paintSectionModal(); $("secNameInput").focus();
 }
@@ -4839,7 +4852,7 @@ $("sectionModal").addEventListener("click", e => {
 $("sectionModal").addEventListener("change", e => { if (e.target.id === "secColorInput") { secDraft.color = e.target.value; paintSectionModal(); } });
 $("secCancel").addEventListener("click", () => $("sectionModal").classList.add("hidden"));
 $("secAdd").addEventListener("click", () => {
-  const sg = activeSong(), name = $("secNameInput").value.trim(), t = transportTime();
+  const sg = activeSong(), name = $("secNameInput").value.trim(), t = snapToBar(transportTime());
   if (!sg || !name || secClash(t)) return;
   const sec = addPart(sg, null); sec.name = name; sec.color = secDraft.color; sec.time = fmtTC(t);
   $("sectionModal").classList.add("hidden");
