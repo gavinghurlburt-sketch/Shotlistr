@@ -3296,7 +3296,7 @@ $("cutPlayBtn").addEventListener("click", togglePlay);
   function blocked(el) {
     for (let n = el; n && n !== document.body; n = n.parentElement) {
       if (!n.classList) return true;
-      if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.draggable) return true;
+      if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.id === "shootSongTabs" || n.draggable) return true;
       const cs = getComputedStyle(n);
       if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && n.scrollWidth > n.clientWidth + 2) return true;
     }
@@ -4678,7 +4678,7 @@ function currentShootPart() {
   const parts = songParts(sg.id);
   return parts.find(p => p.id === shootPartId) || parts.find(p => p.rows.some(r => !r.checked)) || parts[0] || null;
 }
-var lastShootSong = null, stFollow = 0;
+var lastShootSong = null, stFollow = 0, dropT0 = 0;
 /* the title row is a wheel fixed on the centre: dragging it follows the finger, release snaps to the nearest song */
 (function () {
   const box = $("shootSongTabs");
@@ -4767,10 +4767,10 @@ function renderShootContent() {
         </div>
       </div></div>`;
   }).join("");
-  if (lastShootSong !== activeSongId) {
-    lastShootSong = activeSongId;
-    panel.querySelectorAll(".part-card").forEach((el, i) => { el.classList.add("drop"); el.style.animationDelay = (120 + i * 190) + "ms"; });
-  }
+  if (lastShootSong !== activeSongId) { lastShootSong = activeSongId; dropT0 = Date.now(); }
+  /* re-renders during the first couple of seconds (e.g. the track finishing loading) carry the animation on instead of restarting it */
+  const el0 = Date.now() - dropT0;
+  if (el0 < 2200) panel.querySelectorAll(".part-card").forEach((el, i) => { el.classList.add("drop"); el.style.animationDelay = (120 + i * 190 - el0) + "ms"; });
 }
 
 /* ================= content: shared actions ================= */
