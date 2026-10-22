@@ -647,6 +647,10 @@ table.sched tr.done-row td { background-color: var(--done); }
 .pc-head .dot { width: 14px; height: 14px; flex: 0 0 auto; }
 .pc-name { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
 .pc-meta { margin-left: auto; font-size: 12px; color: var(--muted); }
+.part-card .pc-head, .part-card .pc-head:hover, .part-card .pc-head:active { background-color: transparent; transform: none; }
+.part-card { transition: transform .15s ease, background-color .2s ease, border-color .3s ease; }
+.part-card:not(.open):not(.complete):has(> .pc-head:active) { background-color: color-mix(in srgb, var(--text) 6%, var(--surface)); }
+.part-card:has(> .pc-head:active) { transform: scale(.985); }
 .pc-chev { width: 9px; height: 9px; margin: 0 4px 0 4px; border-right: 2.5px solid var(--muted); border-bottom: 2.5px solid var(--muted); transform: rotate(-45deg); transition: transform .2s ease; flex: 0 0 auto; }
 .part-card.open .pc-chev { transform: rotate(45deg) translate(-2px, -2px); }
 .song-titles { position: relative; height: 54px; overflow: hidden; touch-action: pan-y; -webkit-user-select: none; user-select: none; margin: 6px 0 4px; perspective: 520px; }
