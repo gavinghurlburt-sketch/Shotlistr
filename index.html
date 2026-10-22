@@ -644,11 +644,11 @@ table.sched tr.done-row td { background-color: var(--done); }
 .part-card.drop { animation: cardDrop .38s cubic-bezier(.2,.8,.2,1) both; }
 .song-titles::-webkit-scrollbar { display: none; }
 .song-titles .st { flex: 0 0 auto; background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; font-size: 22px; font-weight: 800; letter-spacing: -0.04em; color: var(--muted); opacity: .5; transform-origin: center; transition: font-size .35s cubic-bezier(.2,.8,.2,1), color .3s ease, opacity .3s ease, transform .35s cubic-bezier(.2,.8,.2,1); }
-.song-titles .st.before { transform: translateZ(-60px) rotateY(32deg); transform-origin: right center; }
-.song-titles .st.after { transform: translateZ(-60px) rotateY(-32deg); transform-origin: left center; }
+.song-titles .st.before { transform: translateZ(-60px) rotateY(32deg); transform-origin: right center; -webkit-mask-image: linear-gradient(to right, #000 15%, transparent 100%); mask-image: linear-gradient(to right, #000 15%, transparent 100%); }
+.song-titles .st.after { transform: translateZ(-60px) rotateY(-32deg); transform-origin: left center; -webkit-mask-image: linear-gradient(to left, #000 15%, transparent 100%); mask-image: linear-gradient(to left, #000 15%, transparent 100%); }
 .song-titles .st:active { transform: none; }
 .song-titles .st:hover { background: none; }
-.song-titles .st.on { color: var(--text); opacity: 1; font-size: 36px; letter-spacing: -0.045em; transform: none; }
+.song-titles .st.on { color: var(--text); opacity: 1; -webkit-mask-image: none; mask-image: none; font-size: 36px; letter-spacing: -0.045em; transform: none; }
 .shoot-date { font-size: 14px; margin: 0 0 12px; }
 .pc-body { padding: 0 18px 18px; }
 .part-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
