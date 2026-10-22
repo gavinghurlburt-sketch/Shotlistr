@@ -4769,12 +4769,16 @@ function stLayout(dragDx, animate) {
   const c = new Array(els.length).fill(0), gap = -16;
   for (let i = ai + 1; i < els.length; i++) c[i] = c[i - 1] + (w[i - 1] + w[i]) / 2 + gap;
   for (let i = ai - 1; i >= 0; i--) c[i] = c[i + 1] - (w[i + 1] + w[i]) / 2 - gap;
+  /* neighbours stay fully inside the row: the left one starts at its beginning, the right one ends at its end,
+     and the active title covers the inner part */
+  const half = box.clientWidth / 2;
+  for (let i = 0; i < els.length; i++) if (i !== ai) c[i] = Math.max(-half + w[i] / 2, Math.min(half - w[i] / 2, c[i]));
   stX = c;
   box.classList.toggle("noanim", !animate);
   els.forEach((el, i) => {
     const d = i - ai, a = Math.abs(d), rot = d === 0 ? 0 : (d < 0 ? 28 : -28);
     el.style.transform = `translate3d(calc(-50% + ${(c[i] + (dragDx || 0)).toFixed(2)}px), -50%, ${d === 0 ? 0 : -50 * Math.min(a, 2)}px) rotateY(${rot}deg) scale(${sc(d)})`;
-    el.style.opacity = d === 0 ? 1 : Math.max(.1, .62 - (a - 1) * .2);
+    el.style.opacity = d === 0 ? 1 : (a > 1 ? 0 : .62);
     el.style.zIndex = 10 - a;
   });
 }
