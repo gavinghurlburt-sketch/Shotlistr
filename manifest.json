@@ -1,6 +1,6 @@
 {
-  "name": "Producrr",
-  "short_name": "Producrr",
+  "name": "creatrr",
+  "short_name": "creatrr",
   "description": "Plan, shoot and hand off music videos: shot lists, schedules, call sheets, a click-track cue player and a take log.",
   "start_url": "./index.html",
   "scope": "./",

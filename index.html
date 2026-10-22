@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light" id="colorSchemeMeta">
-<title>Producrr</title>
+<title>creatrr</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#121212" id="themeColorMeta">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Producrr">
+<meta name="apple-mobile-web-app-title" content="creatrr">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -998,6 +998,9 @@ details.more > :not(summary) { margin-top: 8px; }
 .beat-dots i { width: 14px; height: 14px; border-radius: 50%; background-color: var(--surface-2); transition: background-color .08s, transform .08s; }
 .beat-dots i.on { background-color: var(--accent); transform: scale(1.25); }
 .beat-dots i:first-child.on { background-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); }
+.tap-down { width: 100%; min-height: 64px; border-radius: 22px; font-size: 16px; font-weight: 700; touch-action: manipulation; }
+.tap-down.on { background-color: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); }
+.tap-down:disabled { opacity: .45; }
 .tap-big.hit { animation: tapHit .18s ease-out; }
 @keyframes tapHit { 0% { transform: scale(.96); filter: brightness(1.25); } 100% { transform: scale(1); filter: none; } }
 .tap-big:active { transform: scale(.985); }
@@ -1277,7 +1280,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <canvas id="tempoWave" class="tempo-wave hidden" aria-hidden="true"></canvas>
       <div class="tap-top"><div class="tap-readout" id="tapReadout" aria-live="polite">—</div><div class="beat-dots" id="beatDots" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>
       <button type="button" id="tapBtn" class="btn primary tap-big">TAP</button>
-      <div class="tempo-ctl"><button type="button" id="tapReset" class="btn small">Start over</button></div>
+      <div class="tempo-ctl"><button type="button" id="tapDown" class="btn tap-down" disabled>Tap on the 1 (start of a measure)</button></div>
       <details class="more tempo-more"><summary>More settings</summary>
       <div class="tempo-form">
         <label class="check"><input type="checkbox" id="countInToggle"> Count-in</label>
@@ -1285,7 +1288,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
         <label class="check" title="Scrubbing and cues land on measure starts and markers"><input type="checkbox" id="snapToggle"> Snap cues to the beat</label>
       </div>
       </details>
-      <div class="modal-actions"><button id="detectTempoBtn" class="btn small" disabled>Detect again</button><button id="tempoDone" class="btn primary">Done</button></div>
+      <div class="modal-actions"><span></span><button id="tempoDone" class="btn primary">Done</button></div>
     </div>
   </div>
 
@@ -1306,7 +1309,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
         <canvas id="waveformCanvas" class="waveform hidden" aria-label="Waveform: drag to scrub"></canvas>
         <div class="tempo-line">
           <span id="tempoStatus" class="tempo-status"></span>
-          <button id="tempoManualBtn" class="btn small hidden">Set tempo by tapping</button>
+          <button id="tempoManualBtn" class="btn small hidden">Set tempo</button>
         </div>
         <details id="trackMore" class="more hidden"><summary>Track options</summary>
           <button id="removeTrackBtn" class="btn small danger-text">Remove track</button>
@@ -2875,7 +2878,6 @@ function resetPlayer() {
   $("removeTrackBtn").classList.add("hidden");
   $("waveformCanvas").classList.add("hidden");
   $("shootWave").classList.add("hidden");
-  $("detectTempoBtn").disabled = true;
   updateTransportUI();
 }
 function loadTrackIntoPlayer(blob, name, restored) {
@@ -2888,7 +2890,7 @@ function loadTrackIntoPlayer(blob, name, restored) {
   $("waveformCanvas").classList.remove("hidden");
   $("shootWave").classList.remove("hidden");
   updateTransportUI();
-  decodeTrack(blob, !restored && !curTempo().detected);
+  decodeTrack(blob, false);
 }
 async function decodeTrack(blob, autoDetect) {
   const token = ++decodeToken;
@@ -2900,8 +2902,7 @@ async function decodeTrack(blob, autoDetect) {
     if (token !== decodeToken) return;
     audioBuffer = buf;
     peaks = computePeaks(buf);
-    $("detectTempoBtn").disabled = false;
-    drawWaveform();
+    drawWaveform(); paintTempo();
     if (autoDetect) runTempoDetect();
   } catch (e) {
     console.error(e);
@@ -3016,13 +3017,9 @@ function paintTrackUI() {
 }
 function paintTempo() {
   const el = $("tempoStatus"), mb = $("tempoManualBtn"), tp = project ? curTempo() : defaultTempo();
-  let txt = "", cls = "", btn = false;
-  if (!player.src) { /* nothing to say yet */ }
-  else if (tempoKind === "busy") { txt = "Detecting tempo and song start…"; cls = "bad"; }
-  else if (tp.bpm && tp.offset != null) { txt = "Tempo and song start set"; cls = "good"; btn = true; }
-  else { txt = tempoMsg || "Tempo not set yet"; cls = "bad"; btn = true; }
-  el.textContent = txt; el.className = "tempo-status " + cls;
-  mb.classList.toggle("hidden", !btn);
+  el.textContent = player.src ? (tempoMsg || "") : ""; el.className = "tempo-status" + (tempoMsg ? " bad" : " hidden");
+  mb.classList.toggle("hidden", !player.src);
+  mb.textContent = tp.bpm && tp.offset != null ? "Tempo " + Math.round(tp.bpm) + " BPM · change" : "Set tempo";
   const sb = $("suggestBtn"); if (sb) sb.classList.toggle("hidden", !(isContent() && audioBuffer && tp.bpm && tp.offset != null));
 }
 function runTempoDetect() {
@@ -3505,9 +3502,8 @@ $("removeTrackBtn").addEventListener("click", () => {
   setTempoStatus("");
   if (isContent()) renderCurrent();
 });
-$("detectTempoBtn").addEventListener("click", runTempoDetect);
 /* tap tempo: play the track, tap the beat; taps give the rough tempo and the "1", the track's onsets lock it in */
-var tap = { taps: [], snap: null, base: null, active: false, sched: [], lastSongT: -1, timer: 0, prevClick: false };
+var tap = { taps: [], snap: null, base: null, active: false, sched: [], lastSongT: -1, timer: 0, prevClick: false, downbeat: false };
 function outLatency() { try { return (audioCtx && (audioCtx.outputLatency || audioCtx.baseLatency)) || 0; } catch (e) { return 0; } }
 function quantizeTaps(all) {
   const taps = all.slice(-40);                              // the latest taps decide, so early wobble can't pull it off
@@ -3554,20 +3550,24 @@ function quantizeTaps(all) {
   return { bpm, offset: Math.round(anchor * 1000) / 1000, cv };
 }
 function tapReadout() {
-  const n = tap.taps.length, q = quantizeTaps(tap.taps), tp = curTempo();
+  const n = tap.taps.length, q = quantizeTaps(tap.taps), tp = curTempo(), have = !!(tp.bpm > 0 && tp.offset != null);
   $("tapReadout").textContent = q && q.bpm ? q.bpm + " BPM" : (tp.bpm ? Math.round(tp.bpm) + " BPM" : "—");
   $("tapHint").textContent = !player.src ? "Upload a track first."
+    : tap.downbeat ? "The high click is the 1. When it lines up with the song, press Done."
+    : have ? "When the clicks sit on the beat, tap the big button below on the 1 of a measure."
     : !n ? "Tap along with the beat while the song plays."
     : n < 4 ? "Keep tapping, a few more beats."
-    : q && q.uneven ? "Those taps were uneven. Keep tapping, or tap Start over."
-    : "Once the click lines up perfectly with the song, press Done.";
+    : q && q.uneven ? "Those taps were uneven. Keep tapping with the beat."
+    : "Keep tapping until the clicks line up with the song.";
 }
 function paintTapUI() {
   const b = $("tapBtn"); if (!b) return;
-  const playing = isPlaying();
+  const playing = isPlaying(), tp = curTempo();
   b.textContent = playing ? "TAP" : "▶ Play again";
   b.classList.toggle("tapping", playing); b.disabled = !player.src;
-  $("tapReset").disabled = !tap.taps.length && !tap.snap;
+  const d = $("tapDown"); d.disabled = !(playing && tp.bpm > 0 && tp.offset != null);
+  d.textContent = tap.downbeat ? "Tap again to move the 1" : "Tap on the 1 (start of a measure)";
+  d.classList.toggle("on", !!tap.downbeat);
   if (!$("tempoModal").classList.contains("hidden")) tapReadout();
 }
 function applyTaps() {
@@ -3593,18 +3593,18 @@ function gameClickTick() {
     const songT = tp.offset + k * beat;
     if (songT > horizon) break;
     if (songT <= tap.lastSongT + 1e-6 || songT < 0) continue;
-    const when = cue.ctxStart + (songT - cue.offset) / (cue.rate || 1), accent = (((k % 4) + 4) % 4) === 0;
+    const when = cue.ctxStart + (songT - cue.offset) / (cue.rate || 1), accent = tap.downbeat && (((k % 4) + 4) % 4) === 0;
     if (when < now) continue;
     const osc = scheduleClick(c, when, accent, 0.9), rec = { osc, when };
     tap.sched.push(rec); if (tap.sched.length > 12) tap.sched.shift();
     tap.lastSongT = songT;
-    const idx = ((k % 4) + 4) % 4;
+    const idx = tap.downbeat ? ((k % 4) + 4) % 4 : -1;
     setTimeout(() => { if (!rec.dead) beatPulse(idx); }, Math.max(0, (when - now) * 1000));
   }
 }
 function beatPulse(idx) {
   const dots = $("beatDots").children;
-  for (let i = 0; i < dots.length; i++) dots[i].classList.toggle("on", i === idx);
+  for (let i = 0; i < dots.length; i++) dots[i].classList.toggle("on", idx < 0 ? true : i === idx);   // before the 1 is set, every beat looks the same
 }
 function startGame() {
   if (!player.src) return;
@@ -3640,7 +3640,7 @@ function drawTempoWave() {
 $("tapBtn").addEventListener("pointerdown", e => {
   if (!player.src) return;
   e.preventDefault();
-  if (!isPlaying()) { tap.taps = []; tap.base = null; startGame(); return; }
+  if (!isPlaying()) { tap.taps = []; tap.base = tap.downbeat ? tap.base : null; startGame(); return; }
   const t = transportTime(), last = tap.taps[tap.taps.length - 1];
   if (last != null && t - last < 0.12) return;              // ignore a bounce
   if (!tap.snap) { const tp = curTempo(); tap.snap = { bpm: tp.bpm, offset: tp.offset, songStart: tp.songStart, click: tap.prevClick }; }
@@ -3648,13 +3648,20 @@ $("tapBtn").addEventListener("pointerdown", e => {
   const b = $("tapBtn"); b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit");
   applyTaps(); paintTapUI(); drawTempoWave();
 });
-$("tapReset").addEventListener("click", () => {
-  if (tap.snap) { const tp = curTempo(); tp.bpm = tap.snap.bpm; tp.offset = tap.snap.offset; tp.songStart = tap.snap.songStart; scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo(); gameClickReset(); }
-  tap.taps = []; tap.snap = null; tap.base = null; paintTapUI(); drawTempoWave();
+$("tapDown").addEventListener("pointerdown", e => {
+  const tp = curTempo();
+  if (!isPlaying() || !(tp.bpm > 0) || tp.offset == null) return;
+  e.preventDefault();
+  const beat = 60 / tp.bpm, bar = beat * 4, t0 = transportTime() - outLatency();
+  const off = tp.offset + Math.round((t0 - tp.offset) / beat) * beat;           // the nearest beat of the grid is the 1
+  tp.offset = Math.round((((off % bar) + bar) % bar) * 1000) / 1000;
+  tap.base = tp.offset; tap.downbeat = true; feel("measure");
+  const b = $("tapDown"); b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit");
+  scheduleSave(); syncTempoInputs(); drawWaveform(); paintTempo(); gameClickReset(); paintTapUI(); drawTempoWave();
 });
 function openTapGame() {
   const tp = curTempo();
-  tap.taps = []; tap.snap = null; tap.base = null; tap.active = true; tap.prevClick = !!tp.click; tp.click = false;   // the game plays its own click
+  tap.taps = []; tap.snap = null; tap.base = null; tap.downbeat = false; tap.active = true; tap.prevClick = !!tp.click; tp.click = false;   // the game plays its own click
   $("tempoModal").classList.remove("hidden");
   clearInterval(tap.timer); tap.timer = setInterval(gameClickTick, 80);
   syncTempoInputs(); paintTapUI();
@@ -3665,7 +3672,7 @@ function tapClose() {
   clearInterval(tap.timer); tap.active = false;
   if (isPlaying()) stopAndReturn();
   curTempo().click = !!tap.prevClick; scheduleSave();
-  tap.taps = []; tap.snap = null; tap.base = null; tap.sched = [];
+  tap.taps = []; tap.snap = null; tap.base = null; tap.downbeat = false; tap.sched = [];
   $("tempoModal").classList.add("hidden"); paintTapUI(); syncTempoInputs();
 }
 player.addEventListener("pause", () => setTimeout(() => { paintTapUI(); drawTempoWave(); }, 50));
@@ -3923,7 +3930,7 @@ function recordFromBackup(data) {
   if (data && data.format === "shotlist-backup" && Array.isArray(data.sections)) {
     return { docTitle: data.title, sections: data.sections, columnConfig: data.columnConfig, lensOptions: data.lensOptions };
   }
-  throw new Error("Not a Producrr backup");
+  throw new Error("Not a creatrr backup");
 }
 function readJSONFile(file) {
   return new Promise((resolve, reject) => {
@@ -3950,7 +3957,7 @@ $("importBackupInput").addEventListener("change", async e => {
     renderCurrent();
     $("backupStatus").textContent = "Backup restored.";
   } catch (err) {
-    $("backupStatus").textContent = "That file isn't a Producrr backup.";
+    $("backupStatus").textContent = "That file isn't a creatrr backup.";
   }
 });
 
@@ -4182,7 +4189,7 @@ async function renderProjectsList() {
   const list = $("projectsList");
   let all = [];
   try { all = await listProjects(); }
-  catch (e) { list.innerHTML = ""; $("projectsStatus").textContent = "This browser is blocking the storage Producrr needs. Private browsing modes often do this."; return; }
+  catch (e) { list.innerHTML = ""; $("projectsStatus").textContent = "This browser is blocking the storage creatrr needs. Private browsing modes often do this."; return; }
   if (await migrateArtists(all)) { try { all = await listProjects(); } catch (e) {} }
   const artistRecs = all.filter(isArtistRec).map(normalizeRecord).sort(byArtistName);
   all = all.filter(r => !isArtistRec(r));
@@ -4392,7 +4399,7 @@ $("importProjectInput").addEventListener("change", async e => {
     await putProjectRecord(normalizeRecord(Object.assign({}, rec, { id: uid(), createdAt: now, updatedAt: now, docTitle: rec.docTitle || "Imported project" })));
     await renderProjectsList();
     $("projectsStatus").textContent = "Imported as a new project."; ["settingsModal", "accountModal"].forEach(m => { const el = $(m); if (el) el.classList.add("hidden"); });
-  } catch (err) { $("projectsStatus").textContent = "That file isn't a Producrr backup."; }
+  } catch (err) { $("projectsStatus").textContent = "That file isn't a creatrr backup."; }
 });
 var loadedTrackKey = null;
 async function loadActiveTrack() {
@@ -4447,7 +4454,7 @@ async function openProject(id) {
   setTempoStatus("");
   await loadArtistRec();
   $("docTitleInput").value = project.docTitle;
-  document.title = `${project.docTitle} · Producrr`;
+  document.title = `${project.docTitle} · creatrr`;
   $("projectsView").classList.add("hidden");
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.remove("hidden"));
   $("wsTabs").classList.toggle("hidden", project.type === "artist");
@@ -4463,7 +4470,7 @@ async function goToProjects() {
   await persistNow();
   resetPlayer();
   project = null; artistRec = null; renderBanner();
-  document.title = "Producrr";
+  document.title = "creatrr";
   document.querySelectorAll(".ws-view").forEach(v => v.classList.add("hidden"));
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.add("hidden"));
   setSaveStatus("");
@@ -4474,7 +4481,7 @@ async function goToProjects() {
 $("backToProjectsBtn").addEventListener("click", goToProjects);
 $("docTitleInput").addEventListener("input", e => {
   project.docTitle = e.target.value;
-  document.title = `${e.target.value || "Untitled project"} · Producrr`;
+  document.title = `${e.target.value || "Untitled project"} · creatrr`;
   scheduleSave();
 });
 /* renaming an artist renames it on every project that belongs to them */

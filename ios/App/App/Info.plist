@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Producrr</string>
+	<string>creatrr</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,9 +27,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Producrr uses the camera when you choose to take a reference photo for a shot.</string>
+	<string>creatrr uses the camera when you choose to take a reference photo for a shot.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Producrr lets you pick reference images from your photo library for shots and vision boards.</string>
+	<string>creatrr lets you pick reference images from your photo library for shots and vision boards.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
