@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "mkdir -p www && cp index.html www/index.html && esbuild scripts/supabase-entry.js --bundle --minify --format=iife --outfile=scripts/supabase.bundle.js --log-level=warning && node scripts/patch.js",
+    "build": "mkdir -p www && cp index.html www/index.html && rm -rf www/assets && cp -r assets www/assets && esbuild scripts/supabase-entry.js --bundle --minify --format=iife --outfile=scripts/supabase.bundle.js --log-level=warning && node scripts/patch.js",
     "sync": "npm run build && npx cap sync ios"
   },
   "dependencies": {
