@@ -6078,9 +6078,17 @@ var TOUR = (function () {
     const rects = els.filter(onScreen).map(e => e.getBoundingClientRect());
     setHoles(rects); paintCard(st, rects);
   }
+  /* a fresh run (first launch or replay) starts from a clean Demo Band, so earlier practice can't make steps look done */
+  async function resetDemo() {
+    const d = demo || readDemo(); if (!d) return;
+    if (project) await goToProjects();
+    for (const r of await listProjects()) if (r.id === d.artist || r.artistId === d.artist) await deleteProjectRecord(r.id);
+    try { localStorage.removeItem(DKEY); } catch (e) {}
+    demo = null; seeded = null;
+  }
   async function start(from) {
     build();
-    try { await ensureDemo(); } catch (e) { console.error("Tour demo failed:", e); showNotice("Couldn't load the demo songs (" + String((e && e.message) || e).slice(0, 80) + "). Open Settings and tap Show the quick tour again to retry."); clearInterval(timer); if (layer) layer.classList.add("hidden"); return; }   // not marked done, so it retries
+    try { if (!from) await resetDemo(); await ensureDemo(); } catch (e) { console.error("Tour demo failed:", e); showNotice("Couldn't load the demo songs (" + String((e && e.message) || e).slice(0, 80) + "). Open Settings and tap Show the quick tour again to retry."); clearInterval(timer); if (layer) layer.classList.add("hidden"); return; }   // not marked done, so it retries
     idx = from || 0; save(); scrolledFor = -1;
     await renderProjectsList();
     clearInterval(timer); timer = setInterval(tick, 450); tick();
