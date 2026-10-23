@@ -1205,6 +1205,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .tour-card h4 { margin: 2px 0 4px; font-size: 17px; }
 .tour-card p { margin: 0 0 10px; font-size: 14px; line-height: 1.4; }
 .tour-card .tc-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.tour-card .tc-foot { display: flex; gap: 18px; }
 .tour-card .tc-skip { background: none; border: none; color: var(--muted); font-size: 12px; padding: 4px 0; text-decoration: underline; }
 .tour-pill { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); max-width: 400px; margin: 0 auto; background: var(--primary-bg); color: var(--primary-fg); border-radius: 999px; padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; pointer-events: auto; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
 .tour-pill[hidden], .tour-card[hidden] { display: none; }
@@ -5870,7 +5871,7 @@ var TOUR = (function () {
   const KEY = "creatrr_tour_v1", DKEY = "creatrr_tour_demo";
   const get = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
   const put = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
-  let idx = -1, timer = 0, layer, hole, rings, card, pill, scrolledFor = -1, demo = null, busy = false, seeded = null;
+  let idx = -1, timer = 0, layer, hole, rings, card, pill, scrolledFor = -1, demo = null, busy = false, seeded = null, hold = -1;
   const q = sel => document.querySelector(sel), qa = sel => [...document.querySelectorAll(sel)];
   const inArtist = () => !!project && project.type === "artist";
   const inContent = () => !!project && project.type === "content";
@@ -5966,6 +5967,7 @@ var TOUR = (function () {
     const b = e.target.closest("[data-t]"); if (!b) return;
     const a = b.dataset.t;
     if (a === "skip") finish("Tour skipped. You can replay it from Settings.");
+    else if (a === "back") { if (idx > 0) { idx--; hold = idx; save(); scrolledFor = -1; tick(); } }
     else if (a === "next") { idx = Math.min(idx + 1, STEPS.length - 1); save(); scrolledFor = -1; tick(); }
     else if (a === "end") finish("Tour finished. The Demo Band is still there to play with.");
     else if (a === "scratch") scratch();
@@ -6030,13 +6032,13 @@ var TOUR = (function () {
   function paintCard(st, rects, hint) {
     const n = idx + 1, total = STEPS.length;
     let btns = "";
-    if (st.buttons === "next") btns = '<div class="tc-btns"><button class="btn primary" data-t="next">Next</button></div>';
+    if (st.buttons === "next" || (hold === idx && st.buttons !== "end")) btns = '<div class="tc-btns"><button class="btn primary" data-t="next">Next</button></div>';
     if (st.buttons === "end") btns = '<div class="tc-btns"><button class="btn primary" data-t="scratch">I understand how to use this app, let me start from scratch</button><button class="btn" data-t="end">Keep the demo for now</button></div>';
     const ck = idx + "|" + (hint || "");
     if (card.dataset.k !== ck) card.classList.remove("swap");
     if (card.dataset.k !== ck) { void card.offsetWidth; card.classList.add("swap"); }
     card.dataset.k = ck;
-    card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>');
+    card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + ('<div class="tc-foot">' + (idx > 0 ? '<button class="tc-skip" data-t="back">‹ Back</button>' : "") + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>') + '</div>');
     card.hidden = false;
     const h = card.offsetHeight;
     const top = hint ? 12 : placeCard(rects || [], h);
@@ -6048,6 +6050,7 @@ var TOUR = (function () {
     if (idx === 0 && !project && demo === null) return;
     for (let guard = 0; guard < STEPS.length && idx >= 0 && idx < STEPS.length - 1; guard++) {
       const st = STEPS[idx];
+      if (hold === idx) break;
       let ok = false;
       try { ok = !!st.done && (st.any || (st.ctx === ctx && (!st.ws || currentWs === st.ws))) && st.done(); } catch (e) {}
       if (ok) { idx++; save(); scrolledFor = -1; } else break;
