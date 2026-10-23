@@ -1195,8 +1195,11 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 /* first-time tour */
 #tourLayer { position: fixed; inset: 0; z-index: 9000; pointer-events: none; }
 #tourLayer.hidden { display: none; }
-.tour-hole { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(0,0,0,.58); outline: 2px solid var(--accent); transition: all .25s ease; pointer-events: none; }
-.tour-hole.none { box-shadow: 0 0 0 9999px rgba(0,0,0,.58); outline: none; left: 50%; top: 50%; width: 0; height: 0; }
+.tour-dim { position: fixed; inset: 0; background: rgba(0,0,0,.58); pointer-events: none; }
+.tour-card { transition: top .42s cubic-bezier(.4,0,.2,1); }
+.tour-card.swap { animation: tourIn .38s cubic-bezier(.2,.7,.2,1); }
+@keyframes tourIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.tour-ring { position: fixed; border-radius: 14px; outline: 2px solid var(--accent); pointer-events: none; }
 .tour-card { position: fixed; left: 12px; right: 12px; max-width: 400px; margin: 0 auto; background: var(--surface); color: var(--text); border-radius: 16px; padding: 14px 16px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.35); pointer-events: auto; }
 .tour-card .tc-step { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .tour-card h4 { margin: 2px 0 4px; font-size: 17px; }
@@ -5867,7 +5870,7 @@ var TOUR = (function () {
   const KEY = "creatrr_tour_v1", DKEY = "creatrr_tour_demo";
   const get = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
   const put = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
-  let idx = -1, timer = 0, layer, hole, card, pill, scrolledFor = -1, demo = null, busy = false;
+  let idx = -1, timer = 0, layer, hole, rings, card, pill, scrolledFor = -1, demo = null, busy = false, seeded = null;
   const q = sel => document.querySelector(sel), qa = sel => [...document.querySelectorAll(sel)];
   const inArtist = () => !!project && project.type === "artist";
   const inContent = () => !!project && project.type === "content";
@@ -5880,9 +5883,9 @@ var TOUR = (function () {
     /* 2 */ { ctx: "artist", target: () => $("bannerBtn"), title: "The artist page", body: "Upload songs for your band, or for several artists on Plus or Pro. Add a photo to personalize it, upload tracks, and mark sections like intro, verse and chorus. Set an artist up here before you create a project. Use our demo songs, or upload any track to test it.", buttons: "next" },
     /* 3 */ { ctx: "artist", target: () => demo ? q('#draftSongTabs .song-tab[data-song-id="' + demo.s2 + '"]') : null, title: "Open Practice Song 2", body: "Practice Song 1 is already set up with its tempo and sections. Song 2 is blank. Tap it to set it up yourself.", done: () => demo && activeSongId === demo.s2 },
     /* 4 */ { ctx: "artist", song: "s2", target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo, tap along with the beat, then tap on the 1 (the first beat of a bar).", done: () => { const t = curTempo(); return !!(demo && activeSongId === demo.s2 && t.bpm && t.offset != null); } },
-    /* 5 */ { ctx: "artist", song: "s2", target: () => $("addSectionBtn"), title: "Mark a section", body: "Parts of the song snap to the start of the beat automatically. Drag the playhead to where the verse begins, then tap + Add section.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
+    /* 5 */ { ctx: "artist", song: "s2", align: "top", target: () => [$("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to where the verse begins, then tap + Add section. It snaps to the start of the beat automatically.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
-    /* 7 */ { ctx: "content", ws: "plan", target: () => $("setPick"), title: "Pick songs and sections", body: "Tick the sections you want to film. Choose Practice Song 1, 2, or both. You can tick a whole song at once.", done: () => project.sections.length > 0 },
+    /* 7 */ { ctx: "content", ws: "plan", target: () => { const b = demo && q('[data-sp-song="' + demo.s2 + '"]'); return b ? b.closest(".sp-card") : null; }, title: "Pick your songs", body: "Practice Song 1 is already ticked. Tick Practice Song 2 too, so your setlist has two songs. You can tick a whole song or just the sections you want.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. The Standard Shoot template stamps those shots on every section you picked. Tap it to edit shots or build your own.", buttons: "next" },
     /* 9 */ { ctx: "content", ws: "plan", target: () => ["songRefs", "songLinks", "songNotes"].map(panelOf).filter(Boolean), title: "References, links and notes", body: "Add reference images, paste Instagram, TikTok or YouTube links, and jot down notes about energy and wardrobe.", buttons: "next" },
     /* 10 */ { ctx: "content", ws: "plan", target: () => $("wsTabs"), title: "Swipe between tabs", body: "Swipe left and right between Plan, Shoot and Cut, or tap a tab. Swipe left to go to Shoot.", done: () => inContent() && currentWs === "shoot", any: true },
@@ -5936,9 +5939,9 @@ var TOUR = (function () {
   function build() {
     if (layer) return;
     layer = document.createElement("div"); layer.id = "tourLayer"; layer.className = "hidden";
-    layer.innerHTML = '<div class="tour-hole none"></div><div class="tour-card" hidden></div><div class="tour-pill" hidden></div>';
+    layer.innerHTML = '<div class="tour-dim"></div><div class="tour-rings"></div><div class="tour-card" hidden></div><div class="tour-pill" hidden></div>';
     document.body.appendChild(layer);
-    hole = layer.children[0]; card = layer.children[1]; pill = layer.children[2];
+    hole = layer.children[0]; rings = layer.children[1]; card = layer.children[2]; pill = layer.children[3];
     layer.addEventListener("click", onClick);
   }
   function save() { put(String(idx)); }
@@ -5973,20 +5976,70 @@ var TOUR = (function () {
     const l = Math.min(...rs.map(r => r.left)), t = Math.min(...rs.map(r => r.top)), rr = Math.max(...rs.map(r => r.right)), bb = Math.max(...rs.map(r => r.bottom));
     return { left: l, top: t, right: rr, bottom: bb, width: rr - l, height: bb - t };
   }
-  function paintCard(st, r, hint) {
+  /* dim everything except the highlighted rects (even-odd cutouts), ring each one */
+  function drawHoles(rects) {
+    const W = innerWidth, H = innerHeight, pad = 6, rad = 14;
+    let d = "M0 0H" + W + "V" + H + "H0Z";
+    rings.innerHTML = "";
+    rects.forEach(r => {
+      const x = Math.max(0, r.left - pad), y = Math.max(0, r.top - pad), w = Math.min(W, r.right + pad) - x, h = Math.min(H, r.bottom + pad) - y;
+      d += "M" + (x + rad) + " " + y + "H" + (x + w - rad) + "A" + rad + " " + rad + " 0 0 1 " + (x + w) + " " + (y + rad) + "V" + (y + h - rad) + "A" + rad + " " + rad + " 0 0 1 " + (x + w - rad) + " " + (y + h) + "H" + (x + rad) + "A" + rad + " " + rad + " 0 0 1 " + x + " " + (y + h - rad) + "V" + (y + rad) + "A" + rad + " " + rad + " 0 0 1 " + (x + rad) + " " + y + "Z";
+      const ring = document.createElement("div"); ring.className = "tour-ring";
+      ring.style.cssText = "left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px";
+      rings.appendChild(ring);
+    });
+    hole.style.clipPath = hole.style.webkitClipPath = rects.length ? 'path(evenodd, "' + d + '")' : "none";
+  }
+  /* ease the highlight from wherever it is to the new target (cubic in-out) instead of snapping */
+  let curRects = [], animId = 0, lastTarget = "";
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const rk = r => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  function setHoles(rects) {
+    rects = rects.map(rk);
+    const key = rects.map(r => [r.left, r.top, r.right, r.bottom].map(Math.round).join(",")).join("|");
+    if (key === lastTarget) return;
+    lastTarget = key;
+    cancelAnimationFrame(animId);
+    const from = curRects.slice();
+    const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!rects.length || !from.length || reduce) { curRects = rects; drawHoles(rects); return; }
+    const start = performance.now(), dur = 420;
+    const src = rects.map((r, i) => from[Math.min(i, from.length - 1)]);
+    const step = now => {
+      const k = Math.min(1, (now - start) / dur), e = ease(k);
+      curRects = rects.map((r, i) => { const a = src[i]; return { left: a.left + (r.left - a.left) * e, top: a.top + (r.top - a.top) * e, right: a.right + (r.right - a.right) * e, bottom: a.bottom + (r.bottom - a.bottom) * e }; });
+      drawHoles(curRects);
+      if (k < 1) animId = requestAnimationFrame(step);
+    };
+    animId = requestAnimationFrame(step);
+  }
+  /* where the card goes so it never sits on a highlighted thing: below, above, in a gap between highlights, else the bottom */
+  function placeCard(rects, h) {
+    const pad = 14, top0 = 56, safeB = 16;
+    if (!rects.length) return Math.max(60, (innerHeight - h) / 2);
+    const rs = rects.slice().sort((a, b) => a.top - b.top);
+    const lo = rs[0].top, hi = Math.max(...rs.map(r => r.bottom));
+    if (hi + pad + h < innerHeight - safeB) return hi + pad;
+    if (lo - h - pad >= top0) return lo - h - pad;
+    for (let i = 0; i < rs.length - 1; i++) {
+      const a = rs[i].bottom, b = rs[i + 1].top;
+      if (b - a >= h + pad * 2) return a + pad;
+    }
+    return innerHeight - h - safeB;
+  }
+  function paintCard(st, rects, hint) {
     const n = idx + 1, total = STEPS.length;
     let btns = "";
     if (st.buttons === "next") btns = '<div class="tc-btns"><button class="btn primary" data-t="next">Next</button></div>';
     if (st.buttons === "end") btns = '<div class="tc-btns"><button class="btn primary" data-t="scratch">I understand how to use this app, let me start from scratch</button><button class="btn" data-t="end">Keep the demo for now</button></div>';
+    const ck = idx + "|" + (hint || "");
+    if (card.dataset.k !== ck) card.classList.remove("swap");
+    if (card.dataset.k !== ck) { void card.offsetWidth; card.classList.add("swap"); }
+    card.dataset.k = ck;
     card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>');
     card.hidden = false;
-    const h = card.offsetHeight, pad = 14, safeB = 16;
-    let top;
-    if (hint) top = 12;
-    else if (!r) top = Math.max(60, (innerHeight - h) / 2);
-    else if (r.bottom + pad + h < innerHeight - safeB) top = r.bottom + pad;
-    else if (r.top - h - pad >= 56) top = r.top - h - pad;
-    else top = innerHeight - h - safeB;
+    const h = card.offsetHeight;
+    const top = hint ? 12 : placeCard(rects || [], h);
     card.style.top = top + "px";
   }
   function tick() {
@@ -5999,9 +6052,12 @@ var TOUR = (function () {
       try { ok = !!st.done && (st.any || (st.ctx === ctx && (!st.ws || currentWs === st.ws))) && st.done(); } catch (e) {}
       if (ok) { idx++; save(); scrolledFor = -1; } else break;
     }
+    if (idx === 7 && inContent() && currentWs === "plan" && demo && seeded !== project.id && !project.sections.length) {   // start the demo shoot with song 1 already picked
+      const b1 = q('[data-sp-song="' + demo.s1 + '"]'); if (b1) { seeded = project.id; b1.click(); }
+    }
     const st = STEPS[idx];
     if (document.querySelector(".modal:not(.hidden), #lightbox.open")) {
-      if (st.modalHint && document.querySelector("#newModal:not(.hidden)")) { layer.classList.remove("hidden"); hole.style.display = "none"; pill.hidden = true; paintCard(st, null, st.modalHint); }
+      if (st.modalHint && document.querySelector("#newModal:not(.hidden)")) { layer.classList.remove("hidden"); setHoles([]); hole.style.display = "none"; pill.hidden = true; paintCard(st, [], st.modalHint); }
       else layer.classList.add("hidden");
       return;
     }
@@ -6009,19 +6065,18 @@ var TOUR = (function () {
     const here = st.ctx === "any" || (st.ctx === ctx && (!st.ws || currentWs === st.ws));
     let t = here && st.target ? st.target() : null;
     const els = (Array.isArray(t) ? t : t ? [t] : []).filter(Boolean);
-    if (st.target && !(els.length && els.every(onScreen))) {
-      hole.className = "tour-hole none"; hole.style.cssText = "display:none"; card.hidden = true;
-      if (here && els.length && scrolledFor !== idx) { scrolledFor = idx; els[0].scrollIntoView({ block: "center", behavior: "smooth" }); }
+    if (st.target && !(els.length && onScreen(els[0]))) {
+      setHoles([]); hole.style.display = "none"; card.hidden = true;
+      if (here && els.length && scrolledFor !== idx) { scrolledFor = idx; els[0].style.scrollMarginTop = "76px"; els[0].scrollIntoView({ block: st.align === "top" ? "start" : "center", behavior: "smooth" }); }
       pill.hidden = false;
       pill.innerHTML = '<span>Quick tour: ' + st.title + '</span><button data-t="show">Show me</button><button class="x" data-t="skip">Skip</button>';
       return;
     }
     pill.hidden = true;
-    if (!st.target) { hole.className = "tour-hole none"; hole.style.cssText = ""; paintCard(st, null); return; }
-    const r = unionRect(els), pad = 6;
-    hole.className = "tour-hole"; hole.style.display = "";
-    hole.style.left = (r.left - pad) + "px"; hole.style.top = (r.top - pad) + "px"; hole.style.width = (r.width + pad * 2) + "px"; hole.style.height = (r.height + pad * 2) + "px";
-    paintCard(st, r);
+    hole.style.display = "";
+    if (!st.target) { setHoles([]); paintCard(st, []); return; }
+    const rects = els.filter(onScreen).map(e => e.getBoundingClientRect());
+    setHoles(rects); paintCard(st, rects);
   }
   async function start(from) {
     build();
