@@ -5864,25 +5864,75 @@ async function firstRunSetup() {
 
 /* ================= first-time tour ================= */
 var TOUR = (function () {
-  const KEY = "creatrr_tour_v1", SAMPLE = "assets/practice-song.mp3";
+  const KEY = "creatrr_tour_v1", DKEY = "creatrr_tour_demo";
   const get = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
   const put = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
-  let idx = -1, timer = 0, layer, hole, card, pill, hasArtist = false, firstArtistId = null, lastArtistTick = 0, scrolledFor = -1;
+  let idx = -1, timer = 0, layer, hole, card, pill, scrolledFor = -1, demo = null, busy = false;
+  const q = sel => document.querySelector(sel), qa = sel => [...document.querySelectorAll(sel)];
   const inArtist = () => !!project && project.type === "artist";
-  const mine = all => all.filter(r => isArtistRec(r) && r.docTitle !== "Example band").map(normalizeRecord).sort(byArtistName);   // the seeded example doesn't count
-  const q = sel => document.querySelector(sel);
+  const inContent = () => !!project && project.type === "content";
+  const mine = all => all.filter(r => isArtistRec(r) && r.docTitle !== "Example band" && !(demo && r.id === demo.artist)).map(normalizeRecord);   // the seeded example and the demo don't count
   const onScreen = el => { if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight && !el.closest(".hidden"); };
+  const panelOf = id => { const e = $(id); return e ? e.closest(".panel") || e : null; };
   const STEPS = [
-    { ctx: "home", target: () => q('.home-tabs .ht[data-home="artists"]'), title: "Start with an artist", body: "Everything in creatrr hangs off an artist: their songs, their shoots. Tap Artists.", done: () => homeMode === "artists" || inArtist(), anyCtx: true },
-    { ctx: "home", target: () => $("newBtn"), title: "Add your artist", body: "Just a name is enough. You can add a photo later.", done: () => hasArtist, anyCtx: true },
-    { ctx: "home", target: () => firstArtistId ? q('#paneArtists [data-open-id="' + firstArtistId + '"]') : null, title: "Open them up", body: "This is where their songs and song parts live.", done: () => inArtist(), anyCtx: true },
-    { ctx: "artist", target: () => [q('.btn.primary[data-c="add-song"]'), q(".song-tab-add")].find(onScreen) || null, title: "Add a song", body: "Tap + Add song. You'll add its track right after.", done: () => project.songs.length > 0 },
-    { ctx: "artist", target: () => $("trackPanel"), title: "Add the track", body: "Try it with our practice song, or use one of your own.", done: () => !!player.src, buttons: "song" },
-    { ctx: "artist", target: () => $("tempoManualBtn"), title: "Set the tempo", body: "Tap along with the beat, then tap on the 1 (the first beat of a bar). This lets the click and the section markers snap to the music.", done: () => !!curTempo().bpm },
-    { ctx: "artist", target: () => $("addSectionBtn"), title: "Mark a section", body: "Add a verse, chorus, anything you'll shoot to. Pick a spot in the song and name it.", done: () => project.sections.length > 0 },
-    { ctx: "artist", target: null, title: "You're set", body: "Next, plan a shoot: go back, open Projects, and tap New…. Pick the artist and the shoot date. Replay this tour any time from Settings.", done: () => false, buttons: "finish" }
+    /* 0 */ { ctx: "home", target: () => $("calCard"), title: "Welcome to creatrr", body: "This is your home base. Scheduled shoots show up on the calendar. Swipe left to see your Artists.", done: () => homeMode === "artists" || inArtist(), any: true },
+    /* 1 */ { ctx: "home", target: () => demo ? q('#paneArtists [data-artist-open="' + demo.artist + '"]') : null, title: "Meet your artists", body: "We added a Demo Band so you can practice. Tap it to open.", done: () => inArtist(), any: true },
+    /* 2 */ { ctx: "artist", target: () => $("bannerBtn"), title: "The artist page", body: "Upload songs for your band, or for several artists on Plus or Pro. Add a photo to personalize it, upload tracks, and mark sections like intro, verse and chorus. Set an artist up here before you create a project. Use our demo songs, or upload any track to test it.", buttons: "next" },
+    /* 3 */ { ctx: "artist", target: () => demo ? q('#draftSongTabs .song-tab[data-song-id="' + demo.s2 + '"]') : null, title: "Open Practice Song 2", body: "Practice Song 1 is already set up with its tempo and sections. Song 2 is blank. Tap it to set it up yourself.", done: () => demo && activeSongId === demo.s2 },
+    /* 4 */ { ctx: "artist", song: "s2", target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo, tap along with the beat, then tap on the 1 (the first beat of a bar).", done: () => { const t = curTempo(); return !!(demo && activeSongId === demo.s2 && t.bpm && t.offset != null); } },
+    /* 5 */ { ctx: "artist", song: "s2", target: () => $("addSectionBtn"), title: "Mark a section", body: "Parts of the song snap to the start of the beat automatically. Drag the playhead to where the verse begins, then tap + Add section.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
+    /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
+    /* 7 */ { ctx: "content", ws: "plan", target: () => $("setPick"), title: "Pick songs and sections", body: "Tick the sections you want to film. Choose Practice Song 1, 2, or both. You can tick a whole song at once.", done: () => project.sections.length > 0 },
+    /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. The Standard Shoot template stamps those shots on every section you picked. Tap it to edit shots or build your own.", buttons: "next" },
+    /* 9 */ { ctx: "content", ws: "plan", target: () => ["songRefs", "songLinks", "songNotes"].map(panelOf).filter(Boolean), title: "References, links and notes", body: "Add reference images, paste Instagram, TikTok or YouTube links, and jot down notes about energy and wardrobe.", buttons: "next" },
+    /* 10 */ { ctx: "content", ws: "plan", target: () => $("wsTabs"), title: "Swipe between tabs", body: "Swipe left and right between Plan, Shoot and Cut, or tap a tab. Swipe left to go to Shoot.", done: () => inContent() && currentWs === "shoot", any: true },
+    /* 11 */ { ctx: "content", ws: "shoot", target: () => [$("shootDateLine"), $("cShootStatus")].filter(e => e && onScreen(e)), title: "Your shoot day card", body: "The date card shows when you're shooting. The banner below shows the time, shots done, and takes logged so far.", buttons: "next" },
+    /* 12 */ { ctx: "content", ws: "shoot", target: () => $("shootSongTabs"), title: "Swipe between songs", body: "Swipe the song titles to jump to the next song in your setlist.", buttons: "next" },
+    /* 13 */ { ctx: "content", ws: "shoot", target: () => q("#partPanel .pc-head"), title: "Open a section", body: "Tap a section to open its shots and take selector.", done: () => !!shootOpenId },
+    /* 14 */ { ctx: "content", ws: "shoot", open: true, target: () => qa("#partPanel .part-card.open .rate-btn"), title: "Slo-mo and speed-up", body: "The rabbit plays the song at 2×. Use it for slow-mo shots: slow the footage down in post and it lines up. The turtle plays the song at ½×, for footage you'll speed up in post.", buttons: "next" },
+    /* 15 */ { ctx: "content", ws: "shoot", open: true, target: () => q("#partPanel .part-card.open .opt-row"), title: "Click, count-in and lead-in", body: "Click plays a metronome with the song. Count-in gives you a bar of clicks before it starts. Lead-in starts the song a bar or two before the section so everyone can get into it.", buttons: "next" },
+    /* 16 */ { ctx: "content", ws: "shoot", open: true, target: () => q("#partPanel .part-card.open .tile"), title: "Log your takes", body: "Tap + Take every time you roll, then rate it. Ratings and locations help your editor find the good ones.", buttons: "next" },
+    /* 17 */ { ctx: "content", ws: "shoot", target: () => q('.ws-tab[data-ws="cut"]'), title: "Head to Cut", body: "Tap Cut, or swipe left.", done: () => inContent() && currentWs === "cut", any: true },
+    /* 18 */ { ctx: "content", ws: "cut", target: () => panelOf("cutCanvas"), title: "The Cut page", body: "Every song's timeline, with each section and every take called on set, in one place.", buttons: "next" },
+    /* 19 */ { ctx: "content", ws: "cut", target: () => $("exportTakeLogBtn"), title: "Export the take log", body: "Export a CSV or PDF of every take, with ratings and notes, to hand to your editor.", buttons: "next" },
+    /* 20 */ { ctx: "any", target: null, title: "You're ready", body: "That's the whole flow. You can replay this tour any time from Settings.", buttons: "end" }
   ];
-  function ctxNow() { return inArtist() ? "artist" : (project ? "other" : "home"); }
+  const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
+  function readDemo() { try { return JSON.parse(localStorage.getItem(DKEY) || "null"); } catch (e) { return null; } }
+  async function ensureDemo() {
+    let d = readDemo();
+    if (d && await getProjectRecord(d.artist)) { demo = d; return d; }
+    const now = new Date().toISOString();
+    const s1 = normalizeSong({ name: "Practice Song 1", tempo: { bpm: 100, offset: 0.6, songStart: 0.6, snap: true } });
+    const s2 = normalizeSong({ name: "Practice Song 2" });
+    const sec = (name, time, sg) => ({ id: uid(), name, color: PART_PRESETS.find(p => p.name === name).color, songId: sg.id, time, address: "", rows: [] });
+    const blobs = [];
+    for (const f of ["practice-song.mp3", "practice-song-2.mp3"]) { const r = await fetch("assets/" + f); if (!r.ok) throw new Error("demo song missing"); blobs.push(await r.blob()); }
+    const art = normalizeRecord({ id: uid(), type: "artist", docTitle: "Demo Band", workspace: "draft", createdAt: now, updatedAt: now, songs: [s1, s2], sections: [sec("Intro", "0:00.6", s1), sec("Verse", "0:10.2", s1), sec("Chorus", "0:29.4", s1)] });
+    await putProjectRecord(art);
+    await saveTrack(art.id + "::" + s1.id, blobs[0], "Practice Song 1.mp3");
+    await saveTrack(art.id + "::" + s2.id, blobs[1], "Practice Song 2.mp3");
+    d = { artist: art.id, s1: s1.id, s2: s2.id };
+    try { localStorage.setItem(DKEY, JSON.stringify(d)); } catch (e) {}
+    demo = d; return d;
+  }
+  /* "start from scratch": remove only the demo artist, shoots made for it, and the seeded examples */
+  async function scratch() {
+    if (busy) return; busy = true;
+    try {
+      if (project) await goToProjects();
+      const d = demo || readDemo(), titles = ["Example project", "Example content shoot", "Example band"];
+      for (const r of await listProjects()) {
+        if ((d && (r.id === d.artist || r.artistId === d.artist)) || titles.includes(r.docTitle)) await deleteProjectRecord(r.id);
+      }
+      try { localStorage.removeItem(DKEY); } catch (e) {}
+      demo = null; finish();
+      await renderProjectsList();
+      setHomeMode("projects");
+      showNotice("Demo cleared. You're starting from scratch.");
+    } catch (e) { showNotice("Couldn't clear the demo. Delete Demo Band from the Artists tab."); }
+    busy = false;
+  }
   function build() {
     if (layer) return;
     layer = document.createElement("div"); layer.id = "tourLayer"; layer.className = "hidden";
@@ -5893,89 +5943,103 @@ var TOUR = (function () {
   }
   function save() { put(String(idx)); }
   function finish(msg) { idx = -1; put("done"); clearInterval(timer); timer = 0; if (layer) layer.classList.add("hidden"); if (msg) showNotice(msg); }
-  async function loadSample() {
-    if (!inArtist()) return;
-    try {
-      const r = await fetch(SAMPLE); if (!r.ok) throw new Error("http " + r.status);
-      const f = new File([await r.blob()], "Practice song.mp3", { type: "audio/mpeg" });
-      const dt = new DataTransfer(); dt.items.add(f);
-      const inp = $("trackFileInput"); inp.files = dt.files; inp.dispatchEvent(new Event("change"));
-    } catch (e) { showNotice("Couldn't load the practice song. Tap Choose my file instead."); }
-  }
   async function bring() {
     const st = STEPS[idx]; if (!st) return;
+    const d = demo || await ensureDemo();
     if (st.ctx === "home") { if (project) await goToProjects(); setHomeMode(idx === 0 ? "projects" : "artists"); }
-    else if (!inArtist()) {
-      if (project) await goToProjects();
-      if (firstArtistId) await openProject(firstArtistId); else { idx = 1; save(); setHomeMode("artists"); }
+    else if (st.ctx === "artist") { if (!inArtist()) { if (project) await goToProjects(); await openProject(d.artist); } if (st.song) setActiveSong(d[st.song]); }
+    else if (st.ctx === "content") {
+      if (!inContent()) {
+        const c = (await listProjects()).filter(r => r.type === "content" && r.artistId === d.artist).sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))[0];
+        if (!c) { idx = 6; save(); return bring(); }
+        if (project) await goToProjects(); await openProject(c.id);
+      }
+      if (st.ws && currentWs !== st.ws) switchWs(st.ws);
+      if (st.open && !shootOpenId) setTimeout(() => { const h = q("#partPanel .pc-head"); if (h) h.click(); }, 400);
     }
-    tick();
+    setTimeout(tick, 450);
   }
   function onClick(e) {
     const b = e.target.closest("[data-t]"); if (!b) return;
     const a = b.dataset.t;
     if (a === "skip") finish("Tour skipped. You can replay it from Settings.");
-    else if (a === "sample") loadSample();
-    else if (a === "file") $("trackFileInput").click();
-    else if (a === "finish") finish();
+    else if (a === "next") { idx = Math.min(idx + 1, STEPS.length - 1); save(); scrolledFor = -1; tick(); }
+    else if (a === "end") finish("Tour finished. The Demo Band is still there to play with.");
+    else if (a === "scratch") scratch();
     else if (a === "show") bring();
   }
-  function paintCard(st, r) {
+  function unionRect(els) {
+    const rs = els.map(e => e.getBoundingClientRect()); if (!rs.length) return null;
+    const l = Math.min(...rs.map(r => r.left)), t = Math.min(...rs.map(r => r.top)), rr = Math.max(...rs.map(r => r.right)), bb = Math.max(...rs.map(r => r.bottom));
+    return { left: l, top: t, right: rr, bottom: bb, width: rr - l, height: bb - t };
+  }
+  function paintCard(st, r, hint) {
     const n = idx + 1, total = STEPS.length;
     let btns = "";
-    if (st.buttons === "song") btns = '<div class="tc-btns"><button class="btn primary" data-t="sample">Use practice song</button><button class="btn" data-t="file">Choose my file</button></div>';
-    if (st.buttons === "finish") btns = '<div class="tc-btns"><button class="btn primary" data-t="finish">Done</button></div>';
-    card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div><h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns + (st.buttons === "finish" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>');
+    if (st.buttons === "next") btns = '<div class="tc-btns"><button class="btn primary" data-t="next">Next</button></div>';
+    if (st.buttons === "end") btns = '<div class="tc-btns"><button class="btn primary" data-t="scratch">I understand how to use this app, let me start from scratch</button><button class="btn" data-t="end">Keep the demo for now</button></div>';
+    card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>');
     card.hidden = false;
-    const h = card.offsetHeight, below = r ? r.bottom + 14 : 0;
+    const h = card.offsetHeight, pad = 14, safeB = 16;
     let top;
-    if (!r) top = Math.max(60, (innerHeight - h) / 2);
-    else if (below + h < innerHeight - 16) top = below;
-    else top = Math.max(60, r.top - h - 14);
+    if (hint) top = 12;
+    else if (!r) top = Math.max(60, (innerHeight - h) / 2);
+    else if (r.bottom + pad + h < innerHeight - safeB) top = r.bottom + pad;
+    else if (r.top - h - pad >= 56) top = r.top - h - pad;
+    else top = innerHeight - h - safeB;
     card.style.top = top + "px";
   }
   function tick() {
-    if (idx < 0 || !layer) return;
-    const now = Date.now();
-    if (now - lastArtistTick > 1500) {
-      lastArtistTick = now;
-      listProjects().then(all => { const arts = mine(all); hasArtist = arts.length > 0; firstArtistId = hasArtist ? arts[0].id : null; }).catch(() => {});
-    }
-    if (idx === 0 && hasArtist && homeMode !== "artists" && !project) return finish();     // an existing account that just synced down: no tour
+    if (idx < 0 || !layer || busy) return;
     const ctx = ctxNow();
+    if (idx === 0 && !project && demo === null) return;
     for (let guard = 0; guard < STEPS.length && idx >= 0 && idx < STEPS.length - 1; guard++) {
       const st = STEPS[idx];
-      if ((st.anyCtx || st.ctx === ctx) && st.done()) { idx++; save(); scrolledFor = -1; } else break;
+      let ok = false;
+      try { ok = !!st.done && (st.any || (st.ctx === ctx && (!st.ws || currentWs === st.ws))) && st.done(); } catch (e) {}
+      if (ok) { idx++; save(); scrolledFor = -1; } else break;
     }
     const st = STEPS[idx];
-    if (document.querySelector(".modal:not(.hidden), #lightbox.open")) { layer.classList.add("hidden"); return; }
+    if (document.querySelector(".modal:not(.hidden), #lightbox.open")) {
+      if (st.modalHint && document.querySelector("#newModal:not(.hidden)")) { layer.classList.remove("hidden"); hole.style.display = "none"; pill.hidden = true; paintCard(st, null, st.modalHint); }
+      else layer.classList.add("hidden");
+      return;
+    }
     layer.classList.remove("hidden");
-    const ok = (st.ctx === ctx) || (st.ctx === "home" && ctx === "home");
-    const el = ok && st.target ? st.target() : null;
-    if (st.target && !(el && onScreen(el))) {
+    const here = st.ctx === "any" || (st.ctx === ctx && (!st.ws || currentWs === st.ws));
+    let t = here && st.target ? st.target() : null;
+    const els = (Array.isArray(t) ? t : t ? [t] : []).filter(Boolean);
+    if (st.target && !(els.length && els.every(onScreen))) {
       hole.className = "tour-hole none"; hole.style.cssText = "display:none"; card.hidden = true;
-      if (ok && el && scrolledFor !== idx) { scrolledFor = idx; el.scrollIntoView({ block: "center", behavior: "smooth" }); }
+      if (here && els.length && scrolledFor !== idx) { scrolledFor = idx; els[0].scrollIntoView({ block: "center", behavior: "smooth" }); }
       pill.hidden = false;
       pill.innerHTML = '<span>Quick tour: ' + st.title + '</span><button data-t="show">Show me</button><button class="x" data-t="skip">Skip</button>';
       return;
     }
     pill.hidden = true;
     if (!st.target) { hole.className = "tour-hole none"; hole.style.cssText = ""; paintCard(st, null); return; }
-    const r = el.getBoundingClientRect(), pad = 6;
+    const r = unionRect(els), pad = 6;
     hole.className = "tour-hole"; hole.style.display = "";
     hole.style.left = (r.left - pad) + "px"; hole.style.top = (r.top - pad) + "px"; hole.style.width = (r.width + pad * 2) + "px"; hole.style.height = (r.height + pad * 2) + "px";
     paintCard(st, r);
   }
-  function start(from) { build(); idx = from || 0; save(); lastArtistTick = 0; scrolledFor = -1; clearInterval(timer); timer = setInterval(tick, 450); tick(); }
+  async function start(from) {
+    build();
+    try { await ensureDemo(); } catch (e) { finish(); return; }
+    idx = from || 0; save(); scrolledFor = -1;
+    await renderProjectsList();
+    clearInterval(timer); timer = setInterval(tick, 450); tick();
+  }
   async function boot() {
     if (DEMO_MODE) return;
+    demo = readDemo();
     const st = get();
     if (st === "done") return;
-    if (/^\d+$/.test(st)) { start(Math.min(+st, STEPS.length - 1)); return; }
+    if (/^\d+$/.test(st)) { setTimeout(() => start(Math.min(+st, STEPS.length - 1)), 600); return; }
     try { if (mine(await listProjects()).length) { put("done"); return; } } catch (e) { return; }
     setTimeout(() => start(0), 900);
   }
-  function replay() { $("settingsModal").classList.add("hidden"); start(0); }
+  function replay() { $("settingsModal").classList.add("hidden"); if (project) goToProjects().then(() => start(0)); else start(0); }
   return { boot, replay };
 })();
 $("tourReplayBtn").addEventListener("click", () => TOUR.replay());
