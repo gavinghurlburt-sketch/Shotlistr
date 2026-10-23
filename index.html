@@ -1205,7 +1205,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .tour-card h4 { margin: 2px 0 4px; font-size: 17px; }
 .tour-card p { margin: 0 0 10px; font-size: 14px; line-height: 1.4; }
 .tour-card .tc-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-.tour-card .tc-foot { display: flex; gap: 18px; }
+.tour-card .tc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tour-card .tc-left { display: flex; gap: 18px; }
+.tour-card .tc-next { margin: 0; }
 .tour-card .tc-skip { background: none; border: none; color: var(--muted); font-size: 12px; padding: 4px 0; text-decoration: underline; }
 .tour-pill { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); max-width: 400px; margin: 0 auto; background: var(--primary-bg); color: var(--primary-fg); border-radius: 999px; padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; pointer-events: auto; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
 .tour-pill[hidden], .tour-card[hidden] { display: none; }
@@ -6032,13 +6034,13 @@ var TOUR = (function () {
   function paintCard(st, rects, hint) {
     const n = idx + 1, total = STEPS.length;
     let btns = "";
-    if (st.buttons === "next" || (hold === idx && st.buttons !== "end")) btns = '<div class="tc-btns"><button class="btn primary" data-t="next">Next</button></div>';
+    const nextBtn = (st.buttons === "next" || (hold === idx && st.buttons !== "end")) ? '<button class="btn primary tc-next" data-t="next">Next</button>' : "";
     if (st.buttons === "end") btns = '<div class="tc-btns"><button class="btn primary" data-t="scratch">I understand how to use this app, let me start from scratch</button><button class="btn" data-t="end">Keep the demo for now</button></div>';
     const ck = idx + "|" + (hint || "");
     if (card.dataset.k !== ck) card.classList.remove("swap");
     if (card.dataset.k !== ck) { void card.offsetWidth; card.classList.add("swap"); }
     card.dataset.k = ck;
-    card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + ('<div class="tc-foot">' + (idx > 0 ? '<button class="tc-skip" data-t="back">‹ Back</button>' : "") + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>') + '</div>');
+    card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + ('<div class="tc-foot"><div class="tc-left">' + (idx > 0 ? '<button class="tc-skip" data-t="back">‹ Back</button>' : "") + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>') + '</div>' + nextBtn + '</div>');
     card.hidden = false;
     const h = card.offsetHeight;
     const top = hint ? 12 : placeCard(rects || [], h);
