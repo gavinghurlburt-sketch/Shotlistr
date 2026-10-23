@@ -5907,7 +5907,7 @@ var TOUR = (function () {
     const s2 = normalizeSong({ name: "Practice Song 2" });
     const sec = (name, time, sg) => ({ id: uid(), name, color: PART_PRESETS.find(p => p.name === name).color, songId: sg.id, time, address: "", rows: [] });
     const blobs = [];
-    for (const f of ["practice-song.mp3", "practice-song-2.mp3"]) { const r = await fetch("assets/" + f); if (!r.ok) throw new Error("demo song missing"); blobs.push(await r.blob()); }
+    for (const f of ["practice-song.mp3", "practice-song-2.mp3"]) { let r; try { r = await fetch("assets/" + f); } catch (er) { throw new Error("fetch " + f + ": " + ((er && er.message) || er)); } if (!r.ok) throw new Error(f + " status " + r.status); blobs.push(await r.blob()); }
     const art = normalizeRecord({ id: uid(), type: "artist", docTitle: "Demo Band", workspace: "draft", createdAt: now, updatedAt: now, songs: [s1, s2], sections: [sec("Intro", "0:00.6", s1), sec("Verse", "0:10.2", s1), sec("Chorus", "0:29.4", s1)] });
     await putProjectRecord(art);
     await saveTrack(art.id + "::" + s1.id, blobs[0], "Practice Song 1.mp3");
@@ -6025,7 +6025,7 @@ var TOUR = (function () {
   }
   async function start(from) {
     build();
-    try { await ensureDemo(); } catch (e) { console.error("Tour demo failed:", e); showNotice("Couldn't load the demo songs for the tour. Open Settings and tap Show the quick tour again to retry."); clearInterval(timer); if (layer) layer.classList.add("hidden"); return; }   // not marked done, so it retries
+    try { await ensureDemo(); } catch (e) { console.error("Tour demo failed:", e); showNotice("Couldn't load the demo songs (" + String((e && e.message) || e).slice(0, 80) + "). Open Settings and tap Show the quick tour again to retry."); clearInterval(timer); if (layer) layer.classList.add("hidden"); return; }   // not marked done, so it retries
     idx = from || 0; save(); scrolledFor = -1;
     await renderProjectsList();
     clearInterval(timer); timer = setInterval(tick, 450); tick();
