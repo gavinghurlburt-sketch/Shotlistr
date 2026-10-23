@@ -340,6 +340,7 @@ async function cloudInit() {
     const was = cloudUser;
     cloudUser = session ? session.user : null;
     paintCloud();
+    try { window.onCloudUser && window.onCloudUser(cloudUser); } catch (e) {}
     if (cloudUser && (!was || was.id !== cloudUser.id)) {
       if ($("accountModal") && !$("acctCode").classList.contains("hidden") && codeKind === "recovery") return; // stay for new-password step
       acctCloseModal();
@@ -348,6 +349,7 @@ async function cloudInit() {
   });
   try { const { data } = await sb.auth.getSession(); cloudUser = data.session ? data.session.user : null; } catch (e) {}
   paintCloud();
+  window.__cloudUserNow = cloudUser;
   if (cloudUser) syncDown(true);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") syncDown(false); });
   window.addEventListener("online", () => { kickSync(); syncDown(true); });

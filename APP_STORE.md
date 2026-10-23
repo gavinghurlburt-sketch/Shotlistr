@@ -38,3 +38,14 @@ Re-check this table after adding RevenueCat; if you ever add analytics or crash 
 - [ ] Screenshots (6.9" iPhone minimum; others are optional)
 - [ ] Age rating questionnaire (expected 4+)
 - [ ] Export compliance: app uses only standard HTTPS encryption (answer "No" to proprietary encryption / exempt)
+
+## RevenueCat setup (do after the Apple account is approved)
+1. Create the free RevenueCat account, add an iOS app (bundle id `art.gavingeddes.producrr`), and paste the App Store Connect shared secret / API key when it asks.
+2. In App Store Connect create one subscription group "creatrr" with three monthly products. Product IDs must be exactly:
+   `creatrr_artist_monthly` ($1.99, 7-day free trial intro offer), `creatrr_plus_monthly` ($9.99), `creatrr_pro_monthly` ($29.99).
+3. In RevenueCat: create **entitlements** named exactly `artist`, `plus`, `pro`, attach each product to its entitlement, and put all three in the default **Offering**.
+4. Copy RevenueCat's **public Apple SDK key** (starts `appl_`) into `scripts/subs.config.json` as `revenueCatAppleKey`, set `"live": true`, then `npm install && npm run sync`.
+5. In Xcode add the **In-App Purchase** capability (Signing & Capabilities → + Capability).
+6. Test with a Sandbox Apple ID; check purchase, cancel, restore, and a plan upgrade.
+
+While `"live"` is false the app behaves exactly as today (plan switcher in testing mode, no paywall).
