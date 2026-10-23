@@ -5907,7 +5907,7 @@ var TOUR = (function () {
     const s2 = normalizeSong({ name: "Practice Song 2" });
     const sec = (name, time, sg) => ({ id: uid(), name, color: PART_PRESETS.find(p => p.name === name).color, songId: sg.id, time, address: "", rows: [] });
     const blobs = [];
-    for (const f of ["practice-song.mp3", "practice-song-2.mp3"]) { let r; try { r = await fetch("assets/" + f); } catch (er) { throw new Error("fetch " + f + ": " + ((er && er.message) || er)); } if (!r.ok) throw new Error(f + " status " + r.status); blobs.push(await r.blob()); }
+    for (const f of ["practice-song.mp3", "practice-song-2.mp3"]) { let r; try { r = await fetch("assets/" + f); } catch (er) { throw new Error("fetch " + f + ": " + ((er && er.message) || er)); } if (!r.ok && r.status !== 0) throw new Error(f + " status " + r.status); const bl = await r.blob(); if (!bl || bl.size < 5000) throw new Error(f + " empty (status " + r.status + ")"); blobs.push(bl); }   // the app's own files answer with status 0 on iOS
     const art = normalizeRecord({ id: uid(), type: "artist", docTitle: "Demo Band", workspace: "draft", createdAt: now, updatedAt: now, songs: [s1, s2], sections: [sec("Intro", "0:00.6", s1), sec("Verse", "0:10.2", s1), sec("Chorus", "0:29.4", s1)] });
     await putProjectRecord(art);
     await saveTrack(art.id + "::" + s1.id, blobs[0], "Practice Song 1.mp3");
