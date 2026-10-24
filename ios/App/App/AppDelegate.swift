@@ -57,7 +57,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "ShareBridgePlugin"
     public let jsName = "ShareBridge"
-    public let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "setArtists", returnType: CAPPluginReturnPromise)]
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "setArtists", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "drain", returnType: CAPPluginReturnPromise),
+    ]
+    /// Move files the share extension left in the App Group folder into Documents/Inbox. Reports whether the shared folder is reachable at all.
+    @objc func drain(_ call: CAPPluginCall) {
+        let fm = FileManager.default
+        guard let group = fm.containerURL(forSecurityApplicationGroupIdentifier: "group.art.gavingeddes.producrr"),
+              let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { call.resolve(["groupOk": false, "moved": 0]); return }
+        let from = group.appendingPathComponent("Inbox", isDirectory: true)
+        let to = docs.appendingPathComponent("Inbox", isDirectory: true)
+        let files = (try? fm.contentsOfDirectory(at: from, includingPropertiesForKeys: nil)) ?? []
+        if !files.isEmpty { try? fm.createDirectory(at: to, withIntermediateDirectories: true) }
+        var moved = 0
+        for f in files {
+            var dest = to.appendingPathComponent(f.lastPathComponent)
+            if fm.fileExists(atPath: dest.path) { dest = to.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(f.lastPathComponent)") }
+            if (try? fm.moveItem(at: f, to: dest)) != nil { moved += 1 }
+        }
+        call.resolve(["groupOk": true, "moved": moved])
+    }
     @objc func setArtists(_ call: CAPPluginCall) {
         UserDefaults(suiteName: "group.art.gavingeddes.producrr")?.set(call.getString("json") ?? "[]", forKey: "artists")
         call.resolve()

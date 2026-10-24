@@ -357,5 +357,6 @@ async function cloudInit() {
   window.addEventListener("online", () => { kickSync(); syncDown(true); });
 }
 window.__cloudToken = async () => { try { const { data } = await sb.auth.getSession(); return data.session ? data.session.access_token : null; } catch (e) { return null; } };
+window.__cloudRefresh = async () => { try { await syncDown(true); } catch (e) {} };
 window.__cloudOpenAccount = () => acctShow(cloudUser ? "acctSignedIn" : "acctSignedOut");
 setTimeout(cloudInit, 0);
