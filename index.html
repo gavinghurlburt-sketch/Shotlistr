@@ -1562,7 +1562,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   <!-- ===== cut ===== -->
   <section id="cutView" class="ws-view hidden">
     <p class="ws-intro">The song is the timeline. Click anywhere on it, or press play, to see which shots cover that moment and the takes called on set. Every shot is listed below.</p>
-    <div id="cutSongTabs" class="song-tabs hidden"></div>
+    <div id="cutSongTabs" class="song-titles hidden"></div>
     <div class="panel">
       <div class="shoot-transport">
         <button id="cutPlayBtn" class="playsq" aria-label="Play"></button>
@@ -3739,7 +3739,7 @@ $("cutPlayBtn").addEventListener("click", togglePlay);
   function blocked(el) {
     for (let n = el; n && n !== document.body; n = n.parentElement) {
       if (!n.classList) return true;
-      if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.id === "shootSongTabs" || n.draggable) return true;
+      if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.id === "shootSongTabs" || n.id === "cutSongTabs" || n.draggable) return true;
       const cs = getComputedStyle(n);
       if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && n.scrollWidth > n.clientWidth + 2) return true;
     }
@@ -5306,9 +5306,9 @@ function currentShootPart() {
 var lastShootSong = null, dropT0 = 0;
 /* The title row is a wheel fixed on the centre. Every title is placed with transforms only (no scrolling, no font-size
    animation), so moving between songs stays smooth and never nudges the page. */
-var stX = [];
-function stLayout(dragDx, animate) {
-  const box = $("shootSongTabs"), els = [...box.children], songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
+function stLayout(dragDx, animate, box) {
+  if (!box) { stLayout(dragDx, animate, $("shootSongTabs")); stLayout(dragDx, animate, $("cutSongTabs")); return; }
+  const els = [...box.children], songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
   if (!els.length || ai < 0) return;
   const sc = d => d === 0 ? 1 : Math.max(.34, .64 - (Math.abs(d) - 1) * .1);
   const w = els.map((el, i) => el.offsetWidth * sc(i - ai));
@@ -5319,7 +5319,7 @@ function stLayout(dragDx, animate) {
      and the active title covers the inner part */
   const half = box.clientWidth / 2;
   for (let i = 0; i < els.length; i++) if (i !== ai) c[i] = Math.max(-half + w[i] / 2, Math.min(half - w[i] / 2, c[i]));
-  stX = c;
+  box._stX = c;
   box.classList.toggle("noanim", !animate);
   els.forEach((el, i) => {
     const d = i - ai, a = Math.abs(d), rot = d === 0 ? 0 : (d < 0 ? 28 : -28);
@@ -5328,8 +5328,8 @@ function stLayout(dragDx, animate) {
     el.style.zIndex = 10 - a;
   });
 }
-(function () {
-  const box = $("shootSongTabs");
+["shootSongTabs", "cutSongTabs"].forEach(function (boxId) {
+  const box = $(boxId);
   let x0 = 0, y0 = 0, mode = "", t0 = 0;
   box.addEventListener("touchstart", e => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; mode = ""; t0 = Date.now(); }, { passive: true });
   box.addEventListener("touchmove", e => {
@@ -5338,9 +5338,9 @@ function stLayout(dragDx, animate) {
     if (mode !== "x") return;
     if (e.cancelable) e.preventDefault();
     /* the wheel never travels further than the next song in the direction of the finger */
-    const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId), nx = dx < 0 ? stX[ai + 1] : stX[ai - 1];
+    const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId), nx = dx < 0 ? box._stX[ai + 1] : box._stX[ai - 1];
     const lim = nx == null ? 28 : Math.abs(nx), eff = nx == null ? Math.sign(dx) * Math.min(lim, Math.abs(dx) * 0.25) : Math.sign(dx) * Math.min(lim, Math.abs(dx));
-    stLayout(eff, false); box.classList.add("drag");
+    stLayout(eff, false, box); box.classList.add("drag");
   }, { passive: false });
   const end = e => {
     box.classList.remove("drag");
@@ -5348,23 +5348,24 @@ function stLayout(dragDx, animate) {
     const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
     const dx = ((e.changedTouches && e.changedTouches[0]) || {}).clientX - x0, fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.4;
     /* one song at a time, in the direction of the swipe */
-    const nx = dx < 0 ? stX[ai + 1] : stX[ai - 1];
+    const nx = dx < 0 ? (box._stX || [])[ai + 1] : (box._stX || [])[ai - 1];
     let best = ai;
     if (nx != null && (fast || Math.abs(dx) > Math.min(70, Math.abs(nx) * 0.35))) best = ai + (dx < 0 ? 1 : -1);
     mode = "";
-    if (best !== ai && songs[best]) { feel("select"); setActiveSong(songs[best].id); } else stLayout(0, true);
+    if (best !== ai && songs[best]) { feel("select"); setActiveSong(songs[best].id); } else stLayout(0, true, box);
   };
   box.addEventListener("touchend", end);
-  box.addEventListener("touchcancel", () => { mode = ""; box.classList.remove("drag"); stLayout(0, true); });
-  window.addEventListener("resize", () => { if (project) stLayout(0, false); });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (project) stLayout(0, false); });
-})();
-function paintSongTitles() {
-  const box = $("shootSongTabs"), songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
+  box.addEventListener("touchcancel", () => { mode = ""; box.classList.remove("drag"); stLayout(0, true, box); });
+});
+window.addEventListener("resize", () => { if (project) stLayout(0, false); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (project) stLayout(0, false); });
+function paintSongTitles(box) {
+  box = box || $("shootSongTabs");
+  const songs = shootSongs(), ai = songs.findIndex(x => x.id === activeSongId);
   const same = box.children.length === songs.length && songs.every((x, i) => box.children[i].dataset.songId === x.id && box.children[i].textContent === x.name);
   if (!same) box.innerHTML = songs.map(sg => `<button type="button" class="st" data-song-id="${sg.id}">${esc(sg.name)}</button>`).join("");
   [...box.children].forEach((el, i) => { el.classList.toggle("on", i === ai); el.classList.toggle("before", i < ai); el.classList.toggle("after", i > ai); });
-  stLayout(0, same && box.offsetParent !== null);
+  stLayout(0, same && box.offsetParent !== null, box);
 }
 function renderShootContent() {
   mountTransport("#shootCView .transport-slot");
@@ -5680,7 +5681,7 @@ function followCutPlayhead() {
 function renderCut() {
   const content = isContent();
   $("cutSongTabs").classList.toggle("hidden", !content);
-  if (content) $("cutSongTabs").innerHTML = songTabsHTML(false, shootSongs());
+  if (content) paintSongTitles($("cutSongTabs"));
   $("cutInfo").textContent = player.src ? $("trackName").textContent : (content && !activeSong() ? "Add a song in Draft." : "No track loaded — upload it in Draft to hear it here.");
   const lanes = cutLanes();
   $("cutLegend").innerHTML = content ? "" : lanes.map(sec => `<span style="--sec:${sec.color}"><span class="dot"></span>${esc(sec.name || "Untitled")}</span>`).join("")
