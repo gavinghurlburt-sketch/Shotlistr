@@ -612,13 +612,14 @@ table.sched tr.done-row td { background-color: var(--done); }
 .song-tab-meta { font-weight: 500; font-size: 11px; opacity: .7; }
 .song-tab-add { border-style: dashed; color: var(--muted); }
 .song-rows { margin-top: 4px; }
-.song-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; box-shadow: none; min-height: 0; padding: 16px 4px; border-bottom: 1px solid var(--border); font: inherit; color: var(--text); }
+.song-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; box-shadow: none; min-height: 0; padding: 13px 4px; border-bottom: 1px solid var(--border); font: inherit; color: var(--text); }
 .song-row:hover, .song-row:active { background: none; }
-.song-row .sr-title { flex: 1; min-width: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.song-row .sr-status { font-size: 13px; color: var(--muted); white-space: nowrap; }
-.song-row .sr-status.todo { color: var(--accent); font-weight: 600; }
+.song-row .sr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.song-row .sr-title { font-size: 19px; font-weight: 400; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-row .sr-status { font-size: 14px; font-weight: 400; color: var(--muted); }
+.song-row .sr-status.todo { color: var(--accent); }
 .song-row::after { content: "\203A"; font-size: 22px; color: var(--muted); line-height: 1; }
-.song-row.add { color: var(--muted); font-weight: 600; font-size: 16px; }
+.song-row.add { color: var(--muted); font-weight: 500; font-size: 17px; }
 .song-row.add::after { content: ""; }
 .song-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
 input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; background-color: transparent !important; border: 0 !important; border-radius: 0 !important; min-width: 0; background: none; border: 0; border-radius: 0; box-shadow: none; padding: 4px 0; font: inherit; font-size: 28px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
@@ -4675,7 +4676,7 @@ function songStatus(sg) {
   return n ? { text: n + (n === 1 ? " section" : " sections"), todo: false } : { text: "0 sections", todo: true };
 }
 function renderSongRows() {
-  $("songRows").innerHTML = project.songs.map(sg => { const st = songStatus(sg); return `<button type="button" class="song-row" data-song-open="${sg.id}"><span class="sr-title">${esc(sg.name)}</span><span class="sr-status ${st.todo ? "todo" : ""}">${st.text}</span></button>`; }).join("")
+  $("songRows").innerHTML = project.songs.map(sg => { const st = songStatus(sg); return `<button type="button" class="song-row" data-song-open="${sg.id}"><span class="sr-text"><span class="sr-title">${esc(sg.name)}</span><span class="sr-status ${st.todo ? "todo" : ""}">${st.text}</span></span></button>`; }).join("")
     + `<button type="button" class="song-row add" data-c="add-song">+ Add song</button>`;
 }
 function openSongPage(id) {
