@@ -1189,6 +1189,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 }
 @media (max-width: 640px) {
   .modal { align-items: flex-end; padding: 0; }
+  #sectionModal { align-items: center; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
+  #sectionModal .modal-inner { width: 100%; max-width: 420px; border-radius: 28px; padding: 24px; }
   .modal-inner, .modal-inner.wide { width: 100%; max-width: none; border-radius: 30px 30px 0 0; max-height: 90vh; padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px)); }
 }
 
@@ -5884,11 +5886,11 @@ var TOUR = (function () {
   const STEPS = [
     /* 0 */ { ctx: "home", target: () => $("calCard"), title: "Welcome to creatrr", body: "This is your home base. Scheduled shoots show up on the calendar. Swipe left to see your Artists.", done: () => homeMode === "artists" || inArtist(), any: true },
     /* 1 */ { ctx: "home", target: () => demo ? q('#paneArtists [data-artist-open="' + demo.artist + '"]') : null, title: "Meet your artists", body: "We added a Demo Band so you can practice. Tap it to open.", done: () => inArtist(), any: true },
-    /* 2 */ { ctx: "artist", target: () => $("bannerBtn"), title: "The artist page", body: "Upload songs for your band, or for several artists on Plus or Pro. Add a photo to personalize it, upload tracks, and mark sections like intro, verse and chorus. Set an artist up here before you create a project. Use our demo songs, or upload any track to test it.", buttons: "next" },
+    /* 2 */ { ctx: "artist", target: null, title: "The artist page", body: "Upload songs for your band, or for several artists on Plus or Pro. Add a photo to personalize it, upload tracks, and mark sections like intro, verse and chorus. Set an artist up here before you create a project. Use our demo songs, or upload any track to test it.", buttons: "next" },
     /* 3 */ { ctx: "artist", target: () => demo ? q('#draftSongTabs .song-tab[data-song-id="' + demo.s2 + '"]') : null, title: "Open Practice Song 2", body: "Practice Song 1 is already set up with its tempo and sections. Song 2 is blank. Tap it to set it up yourself.", done: () => demo && activeSongId === demo.s2 },
     /* 4 */ { ctx: "artist", song: "s2", target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo, tap along with the beat, then tap on the 1 (the first beat of a bar).", done: () => { const t = curTempo(); return !!(demo && activeSongId === demo.s2 && t.bpm && t.offset != null); } },
-    /* 5 */ { ctx: "artist", song: "s2", align: "top", target: () => [$("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to where the verse begins, then tap + Add section. It snaps to the start of the beat automatically.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
-    /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
+    /* 5 */ { ctx: "artist", song: "s2", align: "top", target: () => [$("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to where the verse begins, then tap + Add section. It snaps to the start of the beat automatically.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
+    /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalId: "newModal", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
     /* 7 */ { ctx: "content", ws: "plan", target: () => { const b = demo && q('[data-sp-song="' + demo.s2 + '"]'); return b ? b.closest(".sp-card") : null; }, title: "Pick your songs", body: "Practice Song 1 is already ticked. Tick Practice Song 2 too, so your setlist has two songs. You can tick a whole song or just the sections you want.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. The Standard Shoot template stamps those shots on every section you picked. Tap it to edit shots or build your own.", buttons: "next" },
     /* 9 */ { ctx: "content", ws: "plan", target: () => ["songRefs", "songLinks", "songNotes"].map(panelOf).filter(Boolean), title: "References, links and notes", body: "Add reference images, paste Instagram, TikTok or YouTube links, and jot down notes about energy and wardrobe.", buttons: "next" },
@@ -6045,7 +6047,7 @@ var TOUR = (function () {
     }
     return innerHeight - h - safeB;
   }
-  function paintCard(st, rects, hint) {
+  function paintCard(st, rects, hint, anchor) {
     const n = idx + 1, total = STEPS.length;
     let btns = "";
     const nextBtn = (st.buttons === "next" || (hold === idx && st.buttons !== "end")) ? '<button class="btn primary tc-next" data-t="next">Next</button>' : "";
@@ -6057,7 +6059,9 @@ var TOUR = (function () {
     card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + ('<div class="tc-foot"><div class="tc-left">' + (idx > 0 ? '<button class="tc-skip" data-t="back">‹ Back</button>' : "") + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>') + '</div>' + nextBtn + '</div>');
     card.hidden = false;
     const h = card.offsetHeight;
-    const top = hint ? safe().top + 10 : placeCard(rects || [], h);
+    let top;
+    if (hint && anchor) { const sf = safe(), above = anchor.top - h - 10; top = above >= sf.top + 10 ? above : Math.min(anchor.bottom + 10, innerHeight - h - sf.bottom - 10); }   // right next to the sheet it talks about
+    else top = hint ? safe().top + 10 : placeCard(rects || [], h);
     card.style.top = top + "px";
   }
   function tick() {
@@ -6075,8 +6079,9 @@ var TOUR = (function () {
       const b1 = q('[data-sp-song="' + demo.s1 + '"]'); if (b1) { seeded = project.id; b1.click(); }
     }
     const st = STEPS[idx];
-    if (document.querySelector(".modal:not(.hidden), #lightbox.open")) {
-      if (st.modalHint && document.querySelector("#newModal:not(.hidden)")) { layer.classList.remove("hidden"); setHoles([]); hole.style.display = "none"; pill.hidden = true; paintCard(st, [], st.modalHint); }
+    const om = document.querySelector(".modal:not(.hidden)");
+    if (om || document.querySelector("#lightbox.open")) {
+      if (om && st.modalHint && st.modalId === om.id) { layer.classList.remove("hidden"); setHoles([]); hole.style.display = "none"; pill.hidden = true; paintCard(st, [], st.modalHint, (om.querySelector(".modal-inner") || om).getBoundingClientRect()); }
       else layer.classList.add("hidden");
       return;
     }
@@ -6084,7 +6089,7 @@ var TOUR = (function () {
     const here = st.ctx === "any" || (st.ctx === ctx && (!st.ws || currentWs === st.ws));
     let t = here && st.target ? st.target() : null;
     const els = (Array.isArray(t) ? t : t ? [t] : []).filter(Boolean);
-    if (st.target && !(els.length && onScreen(els[0]))) {
+    if (!here || (st.target && !(els.length && onScreen(els[0])))) {
       setHoles([]); hole.style.display = "none"; card.hidden = true;
       if (here && els.length && scrolledFor !== idx) { scrolledFor = idx; els[0].style.scrollMarginTop = "76px"; els[0].scrollIntoView({ block: st.align === "top" ? "start" : "center", behavior: "smooth" }); }
       pill.hidden = false;
