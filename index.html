@@ -643,8 +643,13 @@ input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; ba
 .tpl-intro { display: none; font-size: 14px; line-height: 1.45; color: var(--muted); margin: 0 0 14px; }
 #tplModal.show-intro .tpl-intro { display: block; }
 .tpl-title { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-.tpl-title h3 { margin: 0; }
-#tplHelp { width: 26px; height: 26px; min-height: 0; padding: 0; border-radius: 50%; font-size: 14px; font-weight: 700; color: var(--muted); background-color: var(--surface-3); line-height: 1; }
+.tpl-title h3 { margin: 0; line-height: 26px; }
+/* once the tour is finished the explanatory lines go away */
+.help-q { display: none; width: 20px; height: 20px; min-height: 0; padding: 0; margin-left: 10px; border-radius: 50%; vertical-align: middle; font-size: 12px; font-weight: 700; line-height: 1; color: var(--muted); background-color: var(--surface-3); align-items: center; justify-content: center; position: relative; top: -1px; }
+.quiet .help-q { display: inline-flex; }
+.quiet .desc-shown.desc-shown { display: block; }
+.quiet .ws-intro, .quiet .sp-hint, .quiet .ord-hint, .quiet .quiet-hide, .quiet #paneProjects > p.muted, .quiet #artistsHint { display: none; }
+#tplHelp { flex: none; width: 26px; height: 26px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 14px; font-weight: 700; color: var(--muted); background-color: var(--surface-3); line-height: 1; }
 .tpl-intro b { display: block; color: var(--text); font-size: 17px; margin-bottom: 2px; }
 .tpl-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
 #tplSwap { gap: 6px 20px; align-items: baseline; }
@@ -1508,9 +1513,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 
   <!-- ===== content shoot: draft ===== -->
   <section id="draftCView" class="ws-view hidden">
-    <p class="ws-intro" id="draftIntro">Upload each song once and mark its sections. When you plan a shoot, you pick which sections to film.</p>
     <div id="songList">
-      <h2 class="sec-title">Songs</h2>
+      <h2 class="sec-title">Songs<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h2>
+      <p class="ws-intro" id="draftIntro">Upload each song once and mark its sections. When you plan a shoot, you pick which sections to film.</p>
       <div id="songRows" class="song-rows"></div>
     </div>
     <div id="songPage" class="hidden">
@@ -1544,11 +1549,11 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <button class="subtab" data-csub="board">Shots by part</button>
     </div>
     <div data-csub-panel="shoots">
-      <h2 class="sec-title">Songs</h2>
+      <h2 class="sec-title">Songs<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h2>
       <p class="muted small sp-hint">Select the sections of each song you want to shoot. You can play any section at ½× or 2× on the Shoot page.</p>
       <div id="setPick"></div>
       <div id="setOrder"></div>
-      <h2 class="sec-title" style="margin-top:22px">Shot template</h2>
+      <h2 class="sec-title" style="margin-top:22px">Shot template<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h2>
       <p class="muted small sp-hint">Choose or create the set of shots every section gets.</p>
       <button type="button" id="tplCard" class="tpl-card" aria-label="Shot template"></button>
       <div class="panel">
@@ -1574,7 +1579,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       </div>
     </div>
     <div data-csub-panel="board" class="hidden">
-      <p class="muted small" style="margin-top:0">Each column is a song section. Drag shots to reorder or move them, add one-off extras, or remove what you don't need.</p>
+      <p class="muted small quiet-hide" style="margin-top:0">Each column is a song section. Drag shots to reorder or move them, add one-off extras, or remove what you don't need.</p>
       <div id="cBoard"></div>
     </div>
   </section>
@@ -4972,13 +4977,13 @@ function renderSongRefs() {
   const sg = project.brief;
   $("songRefs").innerHTML = sg.refs.length
     ? sg.refs.map((src, i) => `<button type="button" class="vb-item" data-ref-index="${i}"><img src="${src}" alt="Reference ${i + 1}"></button>`).join("")
-    : `<p class="muted small" style="margin:0;grid-column:1/-1">Screenshots of shots you want to recreate.</p>`;
+    : `<p class="muted small quiet-hide" style="margin:0;grid-column:1/-1">Screenshots of shots you want to recreate.</p>`;
 }
 function renderSongLinks() {
   const sg = project.brief;
   $("songLinks").innerHTML = sg.links.length
     ? sg.links.map((u, i) => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a><button type="button" class="icon-btn" data-c="del-link" data-i="${i}" aria-label="Remove link">×</button></div>`).join("")
-    : `<p class="muted small" style="margin:0">Reels, TikToks, or videos to reference.</p>`;
+    : `<p class="muted small quiet-hide" style="margin:0">Reels, TikToks, or videos to reference.</p>`;
 }
 $("songNotes").addEventListener("input", e => { const sg = briefObj(); if (sg) { sg.notes = e.target.value; scheduleSave(); } });
 $("partsList").addEventListener("input", e => {
@@ -5127,7 +5132,7 @@ function renderSetPick() {
 }
 function renderSetOrder() {
   const el = $("setOrder"), rows = shootRows();
-  el.innerHTML = rows.length ? `<div class="order-card"><h3>Shoot order</h3><p class="muted small ord-hint">Drag ⠿ to change the order you shoot in.</p><div class="order-list">${rows.map((r, i) => `<div class="order-row" data-pid="${r.p.id}"><span class="n">${i + 1}</span><span>${esc(r.p.name)}</span><span class="sp">${esc(r.sg.name)}</span>${(r.p.speed || 1) !== 1 ? `<span class="spd">${speedLabel(r.p.speed)}</span>` : ""}<span class="ord-grip" aria-label="Drag to reorder">⠿</span></div>`).join("")}</div></div>` : "";
+  el.innerHTML = rows.length ? `<div class="order-card"><h3>Shoot order<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h3><p class="muted small ord-hint">Drag ⠿ to change the order you shoot in.</p><div class="order-list">${rows.map((r, i) => `<div class="order-row" data-pid="${r.p.id}"><span class="n">${i + 1}</span><span>${esc(r.p.name)}</span><span class="sp">${esc(r.sg.name)}</span>${(r.p.speed || 1) !== 1 ? `<span class="spd">${speedLabel(r.p.speed)}</span>` : ""}<span class="ord-grip" aria-label="Drag to reorder">⠿</span></div>`).join("")}</div></div>` : "";
   const list = el.querySelector(".order-list");
   if (list && typeof Sortable !== "undefined") new Sortable(list, { handle: ".ord-grip", animation: 150, forceFallback: false, ghostClass: "ord-ghost",
     onStart: () => feel("select"),
@@ -5195,6 +5200,10 @@ function icsFor(days) {
 function exportDays(days, name) { downloadBlob(new Blob([icsFor(days)], { type: "text/calendar" }), safeName(name) + ".ics"); }
 
 /* template popup */
+document.addEventListener("click", e => {
+  const q = e.target.closest(".help-q[data-help]"); if (!q) return;
+  const d = q.parentElement && q.parentElement.nextElementSibling; if (d) d.classList.toggle("desc-shown");
+});
 $("tplHelp").addEventListener("click", () => { const m = $("tplModal"), on = m.classList.toggle("show-intro"); $("tplHelp").setAttribute("aria-expanded", on); });
 var tplRename = false, tplLastTap = 0;
 function startTplRename() { tplRename = true; renderTplModal(); const i = $("tplName"); if (i) { i.focus(); i.select(); } }
@@ -5929,7 +5938,7 @@ async function firstRunSetup() {
 var TOUR = (function () {
   const KEY = "creatrr_tour_v1", DKEY = "creatrr_tour_demo";
   const get = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
-  const put = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
+  const put = v => { try { localStorage.setItem(KEY, v); } catch (e) {} document.body.classList.toggle("quiet", v === "done"); };
   let idx = -1, timer = 0, layer, hole, rings, card, pill, scrolledFor = -1, demo = null, busy = false, seeded = null, hold = -1;
   const q = sel => document.querySelector(sel), qa = sel => [...document.querySelectorAll(sel)];
   const inArtist = () => !!project && project.type === "artist";
@@ -6205,6 +6214,7 @@ var TOUR = (function () {
     if (DEMO_MODE) return;
     demo = readDemo();
     const st = get();
+    document.body.classList.toggle("quiet", st === "done");
     if (st === "done") return;
     if (/^\d+$/.test(st)) { setTimeout(() => start(Math.min(+st, STEPS.length - 1)), 600); return; }
     try { if (mine(await listProjects()).length) { put("done"); return; } } catch (e) { return; }
