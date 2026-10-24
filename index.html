@@ -611,6 +611,18 @@ table.sched tr.done-row td { background-color: var(--done); }
 .song-tab.active, .song-tab.active:hover { background-color: var(--text); color: var(--bg); border-color: var(--text); }
 .song-tab-meta { font-weight: 500; font-size: 11px; opacity: .7; }
 .song-tab-add { border-style: dashed; color: var(--muted); }
+.song-rows { margin-top: 4px; }
+.song-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; box-shadow: none; min-height: 0; padding: 16px 4px; border-bottom: 1px solid var(--border); font: inherit; color: var(--text); }
+.song-row:hover, .song-row:active { background: none; }
+.song-row .sr-title { flex: 1; min-width: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-row .sr-status { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.song-row .sr-status.todo { color: var(--accent); font-weight: 600; }
+.song-row::after { content: "\203A"; font-size: 22px; color: var(--muted); line-height: 1; }
+.song-row.add { color: var(--muted); font-weight: 600; font-size: 16px; }
+.song-row.add::after { content: ""; }
+.song-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
+input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; background-color: transparent !important; border: 0 !important; border-radius: 0 !important; min-width: 0; background: none; border: 0; border-radius: 0; box-shadow: none; padding: 4px 0; font: inherit; font-size: 28px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
+#songNameInput:focus { outline: none; box-shadow: inset 0 -2px 0 var(--accent); }
 .stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .stack .panel { margin-bottom: 0; }
 .song-name-input { font-size: 18px; font-weight: 700; flex: 1; min-width: 0; }
@@ -1484,11 +1496,15 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   <!-- ===== content shoot: draft ===== -->
   <section id="draftCView" class="ws-view hidden">
     <p class="ws-intro" id="draftIntro">Upload each song once and mark its sections. When you plan a shoot, you pick which sections to film.</p>
-    <div id="draftSongTabs" class="song-tabs"></div>
-    <div id="draftSongEmpty" class="panel hidden">
-      <p style="margin-top:0">Start with the first song — you'll upload its track right after.</p>
-      <button type="button" class="btn primary" data-c="add-song">+ Add song</button>
+    <div id="songList">
+      <h2 class="sec-title">Songs</h2>
+      <div id="songRows" class="song-rows"></div>
     </div>
+    <div id="songPage" class="hidden">
+      <div class="song-head">
+        <input type="text" id="songNameInput" class="song-name-input" aria-label="Song name" placeholder="Song name" autocapitalize="words">
+        <button type="button" id="songDoneBtn" class="btn primary" data-c="song-done">Done</button>
+      </div>
     <div id="draftSongBody" class="draft-top">
       <div class="stack">
         <div class="track-slot"></div>
@@ -1503,6 +1519,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
           <button type="button" class="btn small danger-text" data-c="delete-song">Delete song</button>
         </details>
       </div>
+    </div>
     </div>
     <div id="artistShoots" class="hidden"></div>
   </section>
@@ -4499,6 +4516,7 @@ async function openProject(id) {
   requestAnimationFrame(() => placeInd(false)); setTimeout(() => placeInd(false), 300);
   document.querySelector('.ws-tab[data-ws="draft"]').classList.toggle("hidden", project.type === "content");
   $("draftIntro").classList.toggle("hidden", project.type !== "artist");
+  songOpen = false;
   setSaveStatus(DEMO_MODE ? "Demo — not saved" : "Saved");
   switchWs(project.workspace, true);
   await loadActiveTrack();
@@ -4516,7 +4534,7 @@ async function goToProjects() {
   if (wasArtist) setHomeMode("artists", true);
   renderProjectsList();
 }
-$("backToProjectsBtn").addEventListener("click", goToProjects);
+$("backToProjectsBtn").addEventListener("click", () => { if (project && project.type === "artist" && songOpen) closeSongPage(); else goToProjects(); });
 $("docTitleInput").addEventListener("input", e => {
   project.docTitle = e.target.value;
   document.title = `${e.target.value || "Untitled project"} · creatrr`;
@@ -4651,28 +4669,29 @@ function addPart(sg, preset) {
   project.sections.push(sec);
   return sec;
 }
-var editingSongId = null, lastTapSong = null, lastTapAt = 0;
-function startSongEdit(id) {
-  if (!id) return;
-  editingSongId = id;
-  $("draftSongTabs").innerHTML = songTabsHTML(true);
-  const i = document.querySelector("#draftSongTabs [data-edit-song]");
-  if (i) { i.focus(); i.select(); }
+var songOpen = false;
+function songStatus(sg) {
+  const n = project.sections.filter(x => x.songId === sg.id).length;
+  return n ? { text: n + (n === 1 ? " section" : " sections"), todo: false } : { text: "0 sections", todo: true };
 }
-function endSongEdit(commit) {
-  const i = document.querySelector("#draftSongTabs [data-edit-song]");
-  if (!i || editingSongId == null) return;
-  const sg = project.songs.find(x => x.id === editingSongId);
-  editingSongId = null;
-  if (commit && sg && i.value.trim()) { sg.name = i.value.trim(); scheduleSave(); }
-  renderCurrent();
+function renderSongRows() {
+  $("songRows").innerHTML = project.songs.map(sg => { const st = songStatus(sg); return `<button type="button" class="song-row" data-song-open="${sg.id}"><span class="sr-title">${esc(sg.name)}</span><span class="sr-status ${st.todo ? "todo" : ""}">${st.text}</span></button>`; }).join("")
+    + `<button type="button" class="song-row add" data-c="add-song">+ Add song</button>`;
 }
-$("draftSongTabs").addEventListener("keydown", e => {
-  if (!e.target.hasAttribute("data-edit-song")) return;
-  if (e.key === "Enter") { e.preventDefault(); endSongEdit(true); }
-  else if (e.key === "Escape") { endSongEdit(false); }
-});
-$("draftSongTabs").addEventListener("focusout", e => { if (e.target.hasAttribute && e.target.hasAttribute("data-edit-song")) endSongEdit(true); });
+function openSongPage(id) {
+  if (isPlaying()) togglePlay();
+  songOpen = true;
+  if (id !== activeSongId) { setActiveSong(id); } else renderCurrent();
+  window.scrollTo(0, 0);
+}
+function closeSongPage() {
+  if (isPlaying()) togglePlay();
+  songOpen = false; renderCurrent(); window.scrollTo(0, 0);
+}
+$("songNameInput").addEventListener("input", e => { const sg = activeSong(); if (sg) { sg.name = e.target.value; scheduleSave(); } });
+$("songNameInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+$("songNameInput").addEventListener("blur", e => { const sg = activeSong(); if (sg && !e.target.value.trim()) { sg.name = "Untitled song"; e.target.value = sg.name; scheduleSave(); } });
+$("songRows").addEventListener("click", e => { const b = e.target.closest("[data-song-open]"); if (b) openSongPage(b.dataset.songOpen); });
 function ordinal(n) { const v = n % 100; if (v >= 11 && v <= 13) return n + "th"; return n + (["th", "st", "nd", "rd"][n % 10] || "th"); }
 function bigDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short" }) + " " + ordinal(d); }
 /* a content shoot is one day: its date, start time and location live on the project's single shoot day */
@@ -4685,7 +4704,7 @@ function projectDay(create) {
 function renderBanner() {
   const b = $("projectBanner"), t = project && project.type;
   const view = !project ? "" : t === "artist" ? "artist" : t === "content" ? (currentWs === "plan" ? "content" : "") : ((currentWs === "draft" || currentWs === "plan") ? "prod" : "");
-  b.classList.toggle("hidden", !view);
+  b.classList.toggle("hidden", !view || (view === "artist" && songOpen));
   if (!view) return;
   const img = project.cover || (view === "content" && artistRec && artistRec.cover) || "";
   b.classList.toggle("has-img", !!img);
@@ -4764,11 +4783,14 @@ function prettyLink(u) {
 /* ================= content: draft ================= */
 function renderDraftContent() {
   renderArtistShoots();
-  $("draftSongTabs").innerHTML = songTabsHTML(true);
   const sg = activeSong();
-  $("draftSongEmpty").classList.toggle("hidden", !!sg);
-  $("draftSongBody").classList.toggle("hidden", !sg);
-  if (!sg) return;
+  if (songOpen && !sg) songOpen = false;
+  $("songList").classList.toggle("hidden", songOpen);
+  $("songPage").classList.toggle("hidden", !songOpen);
+  $("draftIntro").classList.toggle("hidden", songOpen || project.type !== "artist");
+  renderBanner();
+  if (!songOpen) { renderSongRows(); return; }
+  if (document.activeElement !== $("songNameInput")) $("songNameInput").value = sg.name;
   const slot = document.querySelector("#draftCView .track-slot");
   if ($("trackPanel").parentElement !== slot) slot.appendChild($("trackPanel"));
   syncTempoInputs();
@@ -4776,7 +4798,7 @@ function renderDraftContent() {
   requestAnimationFrame(drawWaveform);
 }
 async function renderArtistShoots() {
-  const el = $("artistShoots"), show = !!project && project.type === "artist";
+  const el = $("artistShoots"), show = !!project && project.type === "artist" && !songOpen;
   el.classList.toggle("hidden", !show);
   if (!show) return;
   const id = project.id, name = project.docTitle;
@@ -5433,10 +5455,8 @@ document.addEventListener("click", e => {
   if (!project) return;
   const tab = e.target.closest(".song-tab[data-song-id], .st[data-song-id]");
   if (tab) {
-    const id = tab.dataset.songId, now = Date.now();
-    if (tab.closest("#draftSongTabs") && id === lastTapSong && now - lastTapAt < 600) { lastTapSong = null; startSongEdit(id); return; }   // double-tap a song on the artist page to rename it
-    lastTapSong = id; lastTapAt = now;
-    if (id !== activeSongId || !tab.closest("#draftSongTabs")) setActiveSong(id);
+    const id = tab.dataset.songId;
+    if (id !== activeSongId) setActiveSong(id);
     return;
   }
   const b = e.target.closest("[data-c]");
@@ -5447,9 +5467,13 @@ document.addEventListener("click", e => {
   const row = tileEl ? findRow(tileEl.dataset.rowId).row : null;
   switch (b.dataset.c) {
     case "add-song": {
-      addSong(); scheduleSave(); renderCurrent(); loadActiveTrack();
-      if (currentWs === "draft") startSongEdit(activeSongId);
+      addSong(); scheduleSave();
+      if (currentWs === "draft" && project.type === "artist") { songOpen = true; renderCurrent(); loadActiveTrack(); const ni = $("songNameInput"); ni.focus(); ni.select(); window.scrollTo(0, 0); }
+      else { renderCurrent(); loadActiveTrack(); }
       break;
+    }
+    case "song-done": closeSongPage(); break;
+    case "__noop": {
     }
     case "delete-song": {
       const sg = activeSong();
@@ -5458,6 +5482,7 @@ document.addEventListener("click", e => {
       project.sections = project.sections.filter(x => x.songId !== sg.id);
       project.songs = project.songs.filter(x => x.id !== sg.id);
       activeSongId = project.songs.length ? project.songs[0].id : null;
+      songOpen = false;
       scheduleSave(); renderCurrent(); loadActiveTrack();
       break;
     }
@@ -5899,9 +5924,10 @@ var TOUR = (function () {
     /* 0 */ { ctx: "home", target: () => $("calCard"), title: "Welcome to creatrr", body: "This is your home base. Scheduled shoots show up on the calendar. Swipe left to see your Artists.", done: () => homeMode === "artists" || inArtist(), any: true },
     /* 1 */ { ctx: "home", target: () => demo ? q('#paneArtists [data-artist-open="' + demo.artist + '"]') : null, title: "Meet your artists", body: "We added a Demo Band so you can practice. Tap it to open.", done: () => inArtist(), any: true },
     /* 2 */ { ctx: "artist", target: null, title: "The artist page", body: "Set up your band here before you create a project: add a photo, upload your songs, and mark sections like intro, verse and chorus. Plus and Pro can hold several artists. For now, use our two demo songs.", buttons: "next" },
-    /* 3 */ { ctx: "artist", target: () => demo ? q('#draftSongTabs .song-tab[data-song-id="' + demo.s2 + '"]') : null, title: "Open Practice Song 2", body: "Practice Song 1 is already set up with its tempo and sections. Song 2 is blank. Tap it to set it up yourself.", done: () => demo && activeSongId === demo.s2 },
+    /* 3 */ { ctx: "artist", target: () => demo ? q('#songRows [data-song-open="' + demo.s2 + '"]') : null, title: "Open Practice Song 2", body: "This is your song list. Practice Song 1 is already set up with its tempo and sections. Song 2 is blank. Tap it to set it up yourself.", done: () => demo && songOpen && activeSongId === demo.s2 },
     /* 4 */ { ctx: "artist", song: "s2", target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo, tap along with the beat, then tap on the 1 (the first beat of a bar).", done: () => { const t = curTempo(); return !!(demo && activeSongId === demo.s2 && t.bpm && t.offset != null); } },
     /* 5 */ { ctx: "artist", song: "s2", align: "top", target: () => [$("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to where the verse begins, then tap + Add section. It snaps to the start of the beat automatically.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
+    /* 5b */ { ctx: "artist", song: "s2", target: () => $("songDoneBtn"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Tap Done to go back to your song list.", done: () => !songOpen },
     /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalId: "newModal", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
     /* 7 */ { ctx: "content", ws: "plan", target: () => { const b = demo && q('[data-sp-song="' + demo.s2 + '"]'); return b ? b.closest(".sp-card") : null; }, title: "Pick your songs", body: "Practice Song 1 is already ticked. Tick Practice Song 2 too, so your setlist has two songs. You can tick a whole song or just the sections you want.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. A template is your list of go-to shots. Tap it to take a look.", done: () => { const m = $("tplModal"); return !!m && !m.classList.contains("hidden"); } },
@@ -5969,11 +5995,11 @@ var TOUR = (function () {
     const st = STEPS[idx]; if (!st) return;
     const d = demo || await ensureDemo();
     if (st.ctx === "home") { if (project) await goToProjects(); setHomeMode(idx === 0 ? "projects" : "artists"); }
-    else if (st.ctx === "artist") { if (!inArtist()) { if (project) await goToProjects(); await openProject(d.artist); } if (st.song) setActiveSong(d[st.song]); }
+    else if (st.ctx === "artist") { if (!inArtist()) { if (project) await goToProjects(); await openProject(d.artist); } songOpen = !!st.song; if (st.song) { if (activeSongId !== d[st.song]) setActiveSong(d[st.song]); else renderCurrent(); } else renderCurrent(); }
     else if (st.ctx === "content") {
       if (!inContent()) {
         const c = (await listProjects()).filter(r => r.type === "content" && r.artistId === d.artist).sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))[0];
-        if (!c) { idx = 6; save(); return bring(); }
+        if (!c) { idx = 7; save(); return bring(); }
         if (project) await goToProjects(); await openProject(c.id);
       }
       if (st.ws && currentWs !== st.ws) switchWs(st.ws);
@@ -6092,7 +6118,7 @@ var TOUR = (function () {
       try { ok = !!st.done && (st.any || (st.ctx === ctx && (!st.ws || currentWs === st.ws))) && st.done(); } catch (e) {}
       if (ok) { idx++; save(); scrolledFor = -1; } else break;
     }
-    if (idx === 7 && inContent() && currentWs === "plan" && demo && seeded !== project.id && !project.sections.length) {   // start the demo shoot with song 1 already picked
+    if (idx === 8 && inContent() && currentWs === "plan" && demo && seeded !== project.id && !project.sections.length) {   // start the demo shoot with song 1 already picked
       const b1 = q('[data-sp-song="' + demo.s1 + '"]'); if (b1) { seeded = project.id; b1.click(); }
     }
     const st = STEPS[idx];
