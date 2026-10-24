@@ -13,5 +13,5 @@ fs.copyFileSync("index.html", "site/band.html");
 fs.copyFileSync("landing.html", "site/home.html");
 fs.copyFileSync("band-landing.html", "site/band-home.html");
 ["manifest.json", "service-worker.js"].forEach(f => fs.copyFileSync(f, "site/" + f));
-["assets", "docs", "icons"].forEach(d => fs.cpSync(d, "site/" + d, { recursive: true }));
+["assets", "docs", "icons", "promo"].forEach(d => fs.cpSync(d, "site/" + d, { recursive: true }));
 console.log("site/ ready");

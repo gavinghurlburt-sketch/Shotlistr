@@ -40,6 +40,19 @@ h2{font-size:clamp(28px,5vw,38px);letter-spacing:-.03em;margin:0 0 8px}
 footer{max-width:980px;margin:0 auto;padding:30px 18px 50px;border-top:1px solid var(--line);color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:10px 22px}
 footer a{text-decoration:none}
 footer span{margin-right:auto}
+.feat{display:grid;grid-template-columns:1fr 280px;gap:40px;align-items:center;margin:0 0 70px}
+.feat:nth-of-type(even){grid-template-columns:280px 1fr}
+.feat:nth-of-type(even) .phone{order:-1}
+.feat h3{font-size:clamp(26px,4.5vw,34px);letter-spacing:-.03em;margin:0 0 10px}
+.feat p{color:var(--muted);margin:0 0 12px;font-size:17px}
+.feat ul{margin:0;padding:0;list-style:none;color:var(--muted);font-size:15.5px}
+.feat li{padding:5px 0 5px 22px;position:relative}
+.feat li:before{content:"";position:absolute;left:0;top:13px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.phone{width:280px;max-width:100%;margin:0 auto;border-radius:42px;padding:9px;background:#1c1c1e;box-shadow:0 24px 60px rgba(0,0,0,.28),inset 0 0 0 2px #3a3a3d}
+.scr{position:relative;width:100%;aspect-ratio:584/1140;border-radius:34px;overflow:hidden;background:#f4f3f0 center/cover no-repeat}
+.scr video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s}
+.scr video.on{opacity:1}
+@media(max-width:760px){.feat,.feat:nth-of-type(even){grid-template-columns:1fr;gap:26px;margin-bottom:56px}.feat:nth-of-type(even) .phone{order:0}.feat .phone{order:2}}
 @media(max-width:520px){nav a.l{padding:8px 8px}section{padding:46px 18px}}
 </style></head><body>
 <nav>
@@ -56,12 +69,21 @@ footer span{margin-right:auto}
 </section>
 <section id="info">
   <h2>How it works</h2>
-  <p class="sub">Four steps, in the order a shoot happens. Works for a single artist or a whole roster.</p>
-  <div class="grid">
-    <div class="card"><div class="num">1</div><h3>Draft</h3><p>Upload each song once. Tap the tempo, set the downbeat, and mark sections like intro, verse and chorus. They snap to the beat.</p></div>
-    <div class="card"><div class="num">2</div><h3>Plan</h3><p>Pick the songs and sections you're filming, and build a shot template so every section gets the same coverage.</p></div>
-    <div class="card"><div class="num">3</div><h3>Shoot</h3><p>Play any section with a click, count-in and lead-in. Slow-mo and speed-up playback. Log and rate every take as you roll.</p></div>
-    <div class="card"><div class="num">4</div><h3>Cut</h3><p>Every song's timeline with each section and take in one place. Export the take log for your editor.</p></div>
+  <p class="sub">Three steps, in the order a shoot happens. Works for a single artist or a whole roster.</p>
+  <div class="feat">
+    <div><h3>Plan</h3><p>Upload each song once, tap in the tempo and mark its sections. Then pick the songs and sections you're filming, and build a shot template so every section gets the same coverage.</p>
+      <ul><li>Sections snap to the beat</li><li>Tick a whole song or just the parts you want</li><li>Shot template, reference images, links and notes</li></ul></div>
+    <div class="phone"><div class="scr" style="background-image:url(promo/plan.jpg)" role="img" aria-label="Planning a shoot in creatrr: ticking songs and sections, then opening the shot template"><video muted loop playsinline preload="none" data-src="promo/plan.mp4" aria-hidden="true"></video></div></div>
+  </div>
+  <div class="feat">
+    <div><h3>Shoot</h3><p>On set, tap a section and hit play. The song plays with a click, a count-in and a lead-in, so everyone knows where they are. Log and rate every take as you roll.</p>
+      <ul><li>Slow-mo and speed-up playback</li><li>Take ratings and locations for your editor</li><li>Check off each shot as you get it</li></ul></div>
+    <div class="phone"><div class="scr" style="background-image:url(promo/shoot.jpg)" role="img" aria-label="Shooting in creatrr: playing a section and logging takes"><video muted loop playsinline preload="none" data-src="promo/shoot.mp4" aria-hidden="true"></video></div></div>
+  </div>
+  <div class="feat">
+    <div><h3>Cut</h3><p>Every song's timeline with each section and take in one place. Scrub the song and see exactly what you shot for that moment. Export the take log and send it to your editor.</p>
+      <ul><li>Timeline with sections and takes</li><li>CSV and PDF take log</li><li>Works from the first take to the final edit</li></ul></div>
+    <div class="phone"><div class="scr" style="background-image:url(promo/cut.jpg)" role="img" aria-label="The Cut page: playing the song with the take for each moment"><video muted loop playsinline preload="none" data-src="promo/cut.mp4" aria-hidden="true"></video></div></div>
   </div>
   <p class="note"><b>Working with a band?</b> Send them a private link. They add their photo, songs and sections themselves, and you import it when they're done.</p>
 </section>
@@ -76,4 +98,15 @@ footer span{margin-right:auto}
   <p class="note">Subscriptions are bought in the creatrr iPhone app. Your plan works on the web too: log in with the same account.</p>
 </section>
 <footer><span>© creatrr</span><a href="/support">Support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></footer>
+<script>
+(function(){
+  var vs=[].slice.call(document.querySelectorAll("video[data-src]"));
+  if(!("IntersectionObserver" in window)){return;}
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){var v=e.target;
+    if(e.isIntersecting){ if(!v.src){v.src=v.dataset.src;} v.addEventListener("playing",function(){v.classList.add("on");},{once:true}); var p=v.play(); if(p&&p.catch)p.catch(function(){}); }
+    else v.pause();
+  });},{threshold:.35});
+  vs.forEach(function(v){io.observe(v);});
+})();
+</script>
 </body></html>
