@@ -1154,6 +1154,11 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .band-ref img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .band-ref button:not(.add) { position: absolute; top: 4px; right: 4px; width: 24px; min-width: 24px; height: 24px; min-height: 24px; box-sizing: border-box; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 16px; line-height: 1; }
 .band-ref.add { border: 1px dashed var(--border); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 700; }
+#bandSyncPill { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); z-index: 40; display: none; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--surface-2, #eee); color: var(--muted, #666); box-shadow: 0 2px 10px rgba(0,0,0,.15); pointer-events: none; }
+body.band-mode #bandSyncPill { display: inline-flex; }
+#bandSyncPill.busy svg { animation: bandSpin 1s linear infinite; }
+#bandSyncPill.err { color: #c0392b; }
+@keyframes bandSpin { to { transform: rotate(360deg); } }
 body.band-mode main { max-width: 620px; }
 body.band-mode .banner { height: auto; aspect-ratio: 3 / 2; max-height: 360px; }
 #bannerBtn { opacity: 0; pointer-events: none; transition: opacity .3s ease; }
@@ -2076,6 +2081,7 @@ async function saveTrack(projectId, blob, name) {
   if (DEMO_MODE) { demoTracks.set(projectId, { blob, name }); return; }
   try { await idb("tracks", "readwrite", tx => { tx.objectStore("tracks").put({ projectId, blob, name }); }); }
   catch (e) { console.error("Couldn't save the track:", e); }
+  if (BAND_CODE && typeof bandDirty === "function" && window.__bandReady) bandDirty();
 }
 async function loadTrack(projectId) {
   if (DEMO_MODE) return demoTracks.get(projectId) || null;
@@ -2100,6 +2106,7 @@ function scheduleSave() {
   setSaveStatus(DEMO_MODE ? "Demo — not saved" : "Saving…");
   clearTimeout(saveTimer);
   saveTimer = setTimeout(persistNow, 400);
+  if (BAND_CODE && typeof bandDirty === "function" && window.__bandReady) bandDirty();
 }
 async function persistNow() {
   clearTimeout(saveTimer);
@@ -6127,14 +6134,14 @@ var TOUR = (function () {
 
   /* the shorter walkthrough on the band's web link: their page, a song, the tempo, the sections, Send */
   const BAND_STEPS = [
-    { ctx: "artist", target: null, title: "Let's set up your first song", body: "We'll walk through one song: upload it, name it, find the tempo, and mark a section. Then you can add more and tap Send. It takes about two minutes.", buttons: "next" },
+    { ctx: "artist", target: null, title: "Let's set up your first song", body: "We'll walk through one song: upload it, name it, find the tempo, and mark a section. Everything saves automatically. It takes about two minutes.", buttons: "next" },
     { ctx: "artist", target: () => q("#songRows .song-row.add"), title: "Add a song", body: "Tap + Add song to start.", done: () => songOpen },
     { ctx: "artist", song: true, target: () => $("uploadTrackBtn"), title: "Upload the track", body: "Upload the song file (MP3, M4A or WAV).", extra: '<button class="tc-skip" data-t="practice">No song handy? Use a practice song</button>', done: () => !$("waveformCanvas").classList.contains("hidden") },
     { ctx: "artist", song: true, target: () => $("songNameInput"), title: "Name your song", body: "Type the song's name up top. We filled in the file name to start.", buttons: "next" },
     { ctx: "artist", song: true, target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo and tap along with the beat. Once it locks in, tap Sync on the first beat of any section, like a choreographer counting \u20185, 6, 7, 8\u2019.", done: () => { const t = curTempo(); return !!(t.bpm && t.offset != null); } },
     { ctx: "artist", song: true, align: "top", target: () => [$("draftPlayBtn"), $("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to the start of any section, then tap + Add section. It snaps to the beat automatically. Hit play to check that your placement sounds right.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => project.sections.some(x => x.songId === activeSongId) },
     { ctx: "artist", song: true, target: () => $("songDoneBtn"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Tap Done to go back to your song list.", done: () => !songOpen },
-    { ctx: "artist", target: () => $("bandSendBtn"), title: "Send it", body: "Add more songs if you like, plus photos, links or notes. When you're ready, tap Send. You can send again any time until the link expires.", buttons: "bandend" }
+    { ctx: "artist", target: () => $("bandSendBtn"), title: "That's it", body: "Add more songs if you like, plus photos, links or notes. Everything syncs automatically, so tap Finish whenever you're done. You can keep editing until the link expires.", buttons: "bandend" }
   ];
   const STEPS = BAND_CODE ? BAND_STEPS : APP_STEPS;
   const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
@@ -6208,7 +6215,7 @@ var TOUR = (function () {
     if (a === "skip") finish("Tour skipped. You can replay it from the menu at the top right, under Help.");
     else if (a === "back") { if (idx > 0) { idx--; hold = idx; save(); scrolledFor = -1; tick(); } }
     else if (a === "next") { idx = Math.min(idx + 1, STEPS.length - 1); save(); scrolledFor = -1; tick(); }
-    else if (a === "end") finish(BAND_CODE ? "You're all set. Tap Send when you're ready." : "Tour finished. The Demo Band is still there to play with.");
+    else if (a === "end") finish(BAND_CODE ? "You're all set. Tap Finish when you're done." : "Tour finished. The Demo Band is still there to play with.");
     else if (a === "practice") practiceTrack();
     else if (a === "scratch") scratch();
     else if (a === "show") bring();
@@ -6431,7 +6438,7 @@ function renderBandBox() {
   if (BAND_CODE) {
     const nm = project.docTitle === "Untitled project" ? "" : project.docTitle, b = project.brief;
     top.innerHTML = `<div class="panel band-box"><h2 style="margin:0 0 6px">${esc((BAND_INFO && BAND_INFO.artist_name) ? "Hi! " + BAND_INFO.artist_name + " set this up for you" : "Hi!")}</h2>
-      <p class="muted small" style="margin:0">Add your band name and photo, then your songs and where each section starts. Nothing is sent until you tap Send. This page works until ${esc(BAND_INFO ? bandWhen(BAND_INFO.expires_at) : "")}.</p>
+      <p class="muted small" style="margin:0">Add your band name and photo, then your songs and where each section starts. Everything saves automatically as you go. This page works until ${esc(BAND_INFO ? bandWhen(BAND_INFO.expires_at) : "")}.</p>
       <label class="band-lab" for="bandName">Band name</label><input type="text" id="bandName" value="${esc(nm)}" placeholder="Your band or artist name" autocapitalize="words"></div>`;
     box.innerHTML = `<div class="panel band-box" style="margin-top:18px"><h2 style="margin:0 0 6px">Inspiration <span class="muted small">(optional)</span></h2>
       <label class="band-lab" for="bandLinks">Links (Instagram, TikTok, YouTube… one per line)</label><textarea id="bandLinks" placeholder="https://">${esc(b.links.join("\n"))}</textarea>
@@ -6439,7 +6446,7 @@ function renderBandBox() {
       <div class="band-refs">${(b.refs || []).map((src, i) => `<div class="band-ref"><img src="${src}" alt="Inspiration ${i + 1}"><button type="button" data-band="refx" data-i="${i}" aria-label="Remove photo">\u00d7</button></div>`).join("")}${(b.refs || []).length < 8 ? `<button type="button" class="band-ref add" data-band="refadd">+ Add photos</button>` : ""}</div>
       <input type="file" id="bandRefFile" accept="image/*,.heic,.heif" multiple hidden>
       <label class="band-lab" for="bandNotes">Notes</label><textarea id="bandNotes" placeholder="Vibe, wardrobe, anything that helps">${esc(b.notes)}</textarea>
-      <div class="band-actions"><button type="button" class="btn primary" data-band="send" id="bandSendBtn">Send to ${esc((BAND_INFO && BAND_INFO.artist_name) || "your photographer")}</button></div>
+      <div class="band-actions"><button type="button" class="btn primary" data-band="send" id="bandSendBtn">Finish</button></div>
       <p class="muted small" id="bandSendMsg" style="margin:10px 0 0"></p></div>
       <p style="text-align:center;margin:18px 0 0"><button type="button" class="btn small" id="tourReplayBtn3">Show the tutorial again</button></p>`;
     return;
@@ -6579,14 +6586,31 @@ async function bandUp(kind, blob, extra) {
   const r = await fetch(u.signedUrl, { method: "PUT", headers: { "x-upsert": "true" }, body: fd });
   if (!r.ok) throw new Error("Upload failed. Check your connection and try again.");
 }
-async function bandSend() {
-  if (bandBusy || !project) return; bandBusy = true;
-  const btn = $("bandSendBtn"), msg = $("bandSendMsg"), say = t => { msg.textContent = t; };
-  btn.disabled = true; say("Sending…");
+/* the band page saves itself: any change syncs a couple of seconds later, and Finish just does a last sync */
+var bandDirtyT = 0, bandPending = false, bandRetryT = 0;
+function bandPill(state, text) {
+  let el = $("bandSyncPill");
+  if (!el) { el = document.createElement("div"); el.id = "bandSyncPill"; el.setAttribute("aria-live", "polite"); document.body.appendChild(el); }
+  const ic = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
+  el.className = state; el.innerHTML = (state === "ok" ? "\u2713" : ic) + "<span>" + esc(text) + "</span>";
+}
+function bandDirty() {
+  if (!BAND_CODE || !project) return;
+  clearTimeout(bandDirtyT); bandPill("busy", "Syncing\u2026");
+  bandDirtyT = setTimeout(() => bandSend(false), 1800);
+}
+async function bandSend(final) {
+  if (!project) return;
+  if (bandBusy) { if (final) setTimeout(() => bandSend(true), 600); else bandPending = true; return; }
+  bandBusy = true; clearTimeout(bandDirtyT); clearTimeout(bandRetryT);
+  const btn = $("bandSendBtn"), msg = $("bandSendMsg"), say = t => { if (final && msg) msg.textContent = t; };
+  if (final && btn) btn.disabled = true; say("Finishing\u2026");
+  bandPill("busy", "Syncing\u2026");
+  let ok = false;
   try {
     await persistNow();
     const nm = project.docTitle === "Untitled project" ? "" : project.docTitle.trim();
-    if (!nm) throw new Error("Add your band name first.");
+    if (final && !nm) throw new Error("Add your band name first.");
     let hasPhoto = false;
     if (project.cover) {
       hasPhoto = true;
@@ -6617,13 +6641,21 @@ async function bandSend() {
       const key = "bandup:" + BAND_CODE + ":ref:" + id; let seen = ""; try { seen = localStorage.getItem(key); } catch (e) {}
       if (!seen) { say(`Uploading photo ${refIds.length}…`); await bandUp("ref", await (await fetch(src)).blob(), { id }); try { localStorage.setItem(key, "1"); } catch (e) {} }
     }
-    if (!songs.length && !hasPhoto && !refIds.length) throw new Error("Add a photo or at least one song first.");
+    if (!songs.length && !hasPhoto && !refIds.length && !nm && !project.brief.links.length && !project.brief.notes) { if (final) throw new Error("Add a photo or at least one song first."); bandPill("ok", "Nothing to sync yet"); bandBusy = false; return; }
+    if (final && !songs.length && !hasPhoto && !refIds.length) throw new Error("Add a photo or at least one song first.");
     await bandCall({ action: "band_save", code: BAND_CODE, band_name: nm, photo: hasPhoto, songs, refs: refIds, links: project.brief.links, notes: project.brief.notes });
-    say(""); bandDone();
+    say(""); ok = true; bandPill("ok", "Synced");
+    if (final) bandDone();
   } catch (e) {
-    if (e.status === 410) { bandGone(true); } else say(e.message || "Something went wrong. Try again.");
+    if (e.status === 410) { bandGone(true); }
+    else {
+      say(e.message || "Something went wrong. Try again.");
+      bandPill("err", final ? (e.message || "Couldn't sync") : "Couldn't sync, retrying\u2026");
+      if (!final) bandRetryT = setTimeout(() => bandSend(false), 10000);
+    }
   }
-  btn.disabled = false; bandBusy = false;
+  if (btn) btn.disabled = false; bandBusy = false;
+  if (bandPending && ok) { bandPending = false; bandDirty(); }
 }
 async function bandRestore(rec, sub) {
   rec.docTitle = sub.band_name || rec.docTitle;
@@ -6652,6 +6684,7 @@ async function bandBoot() {
     await putProjectRecord(rec);
   }
   await openProject(id);
+  window.__bandReady = true; bandPill("ok", BAND_INFO.submission ? "Synced" : "Saves automatically");
   TOUR.boot();
 }
 document.addEventListener("click", e => {
@@ -6664,7 +6697,7 @@ document.addEventListener("click", e => {
     case "send-link": bandShareLink(); break;
     case "revoke": bandRevoke(); break;
     case "import": bandImport(); break;
-    case "send": bandSend(); break;
+    case "send": bandSend(true); break;
     case "refadd": { const f = $("bandRefFile"); if (f) f.click(); break; }
     case "refx": { project.brief.refs.splice(+b.dataset.i, 1); scheduleSave(); renderBandBox(); break; }
     case "again": { const d = $("bandDone"); if (d) d.remove(); break; }
