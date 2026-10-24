@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    { "source": "/", "has": [{ "type": "query", "key": "band" }], "destination": "/index.html" },
+    { "source": "/", "destination": "/landing.html" },
+    { "source": "/support", "destination": "/docs/index.html" },
+    { "source": "/terms", "destination": "/docs/terms.html" },
+    { "source": "/privacy", "destination": "/docs/privacy.html" }
+  ]
+}
