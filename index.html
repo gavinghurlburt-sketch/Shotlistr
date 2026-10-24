@@ -1311,6 +1311,7 @@ body.band-mode .banner { height: auto; aspect-ratio: 3 / 2; max-height: 360px; }
 .note-row { display: block; width: 100%; text-align: left; padding: 12px 14px; margin: 8px 0; border-radius: 14px; background: var(--surface-2); border: 0; font: inherit; color: var(--text); }
 .note-row b { display: block; }
 .note-row span { font-size: 13px; color: var(--muted); }
+.note-row .note-go { margin-top: 4px; color: var(--accent, inherit); font-weight: 700; }
 body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #docTitleInput, body.band-mode #saveStatus, body.band-mode #artistShoots, body.band-mode .song-opts { display: none !important; }
 </style>
 </head>
@@ -6636,7 +6637,7 @@ async function checkBandNotes() {
     const l = rec && rec.type === "artist" && rec.bandLink; if (!l || Date.parse(l.expires_at) < Date.now()) continue;
     try {
       const st = await bandCall({ action: "status", code: l.code }, tok), sub = st.submission;
-      if (sub && sub.finished_at && (!l.seenFinished || Date.parse(sub.finished_at) > Date.parse(l.seenFinished)) && noteSeen[rec.id] !== sub.finished_at) out.push({ id: rec.id, name: sub.band_name || rec.docTitle || "A band", at: sub.finished_at, songs: sub.songs, refs: sub.refs, photo: sub.photo });
+      if (sub && sub.finished_at && (!l.seenFinished || Date.parse(sub.finished_at) > Date.parse(l.seenFinished)) && noteSeen[rec.id] !== sub.finished_at) out.push({ id: rec.id, name: sub.band_name || rec.docTitle || "A band", at: sub.finished_at, songs: sub.songs, sections: sub.sections, refs: sub.refs, photo: sub.photo });
     } catch (e) {}
   }
   bandNotes = out; paintBell();
@@ -6656,26 +6657,24 @@ async function markNoteSeen(n) {
 const mb = n => (n / 1048576 >= 0.1 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
 async function renderNotes(msg) {
   const el = $("notesInner"), files = inboxList();
-  const artists = (await listProjects()).filter(r => r && r.type === "artist" && !String(r.id).startsWith("band_")).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  const artists = files.length ? (await listProjects()).filter(r => r && r.type === "artist" && !String(r.id).startsWith("band_")).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) : [];
   if (!artists.some(a => a.id === inboxPick)) inboxPick = (project && project.type === "artist" ? project.id : "") || (artists[0] && artists[0].id) || "";
+  const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
   const notes = bandNotes.length ? bandNotes.map((n, i) => {
-    const bits = [n.songs ? n.songs + (n.songs === 1 ? " song" : " songs") : "", n.photo ? "a photo" : "", n.refs ? n.refs + (n.refs === 1 ? " inspiration photo" : " inspiration photos") : ""].filter(Boolean);
-    return `<button type="button" class="note-row" data-note="${i}"><b>${esc(n.name)} finished their page</b><span>${esc(bits.join(", ") || "Their details are ready")}. Tap to review and import.</span></button>`;
-  }).join("") : `<p class="muted small" style="margin:6px 0 0">Nothing new. When a band taps Finish on their link, it shows up here.</p>`;
-  const rows = files.map(f => `<div class="inbox-row"><div><b>${esc(songNameFromFile(f.name))}</b><span>${esc(f.name)} · ${mb(f.size)}</span></div><button type="button" class="btn small primary" data-inbox-add="${esc(f.id)}"${artists.length ? "" : " disabled"}>Add as song</button><button type="button" class="btn small" data-inbox-rm="${esc(f.id)}" aria-label="Remove">×</button></div>`).join("");
-  el.innerHTML = `<h3>Notifications</h3>${notes}<h3 style="margin-top:20px">Audio inbox</h3>
-    <p class="modal-hint">Share an audio file to creatrr from Messages, Files or Voice Memos, or add one here. Then pick the artist and tap Add as song.</p>
-    ${artists.length ? `<label class="band-lab" for="inboxArtist">Add songs to</label><select id="inboxArtist" class="field">${artists.map(a => `<option value="${esc(a.id)}"${a.id === inboxPick ? " selected" : ""}>${esc(a.docTitle || "Untitled artist")}</option>`).join("")}</select>` : `<p class="muted small">Create an artist first, then you can add songs here.</p>`}
-    ${rows || `<p class="muted small" style="margin:10px 0 0">No audio waiting.</p>`}
-    <input type="file" id="inboxFile" accept="audio/*,.mp3,.m4a,.wav,.aac,.aiff,.caf,.flac,.ogg" multiple hidden>
-    <p class="muted small" id="inboxMsg" style="margin:8px 0 0">${esc(msg || "")}</p>
-    <div class="modal-actions"><button type="button" class="btn" id="inboxPickBtn">Add audio files…</button><button type="button" class="btn primary" id="notesClose">Done</button></div>`;
+    const bits = [n.songs ? plural(n.songs, "song") : "", n.sections ? plural(n.sections, "section") : "", n.photo ? "a band photo" : "", n.refs ? plural(n.refs, "inspiration photo") : ""].filter(Boolean);
+    return `<button type="button" class="note-row" data-note="${i}"><b>${esc(n.name)} uploaded their page</b><span>${esc(bits.join(" · ") || "Their details are ready")}</span><span class="note-go">Tap to review and import</span></button>`;
+  }).join("") : `<p class="muted" style="margin:6px 0 0">Nothing new. When a band finishes their link, it shows up here.</p>`;
+  const shared = files.length ? `<h3 style="margin-top:20px">Shared audio</h3>
+    <p class="modal-hint">Files you shared to creatrr. Pick the artist, then tap Add as song.</p>
+    ${artists.length ? `<select id="inboxArtist" class="field" aria-label="Artist">${artists.map(a => `<option value="${esc(a.id)}"${a.id === inboxPick ? " selected" : ""}>${esc(a.docTitle || "Untitled artist")}</option>`).join("")}</select>` : `<p class="muted small">Create an artist first, then you can add these as songs.</p>`}
+    ${files.map(f => `<div class="inbox-row"><div><b>${esc(songNameFromFile(f.name))}</b><span>${esc(f.name)} · ${mb(f.size)}</span></div><button type="button" class="btn small primary" data-inbox-add="${esc(f.id)}"${artists.length ? "" : " disabled"}>Add as song</button><button type="button" class="btn small" data-inbox-rm="${esc(f.id)}" aria-label="Remove">×</button></div>`).join("")}
+    <p class="muted small" id="inboxMsg" style="margin:8px 0 0">${esc(msg || "")}</p>` : (msg ? `<p class="muted small" id="inboxMsg">${esc(msg)}</p>` : "");
+  el.innerHTML = `<h3>Notifications</h3>${notes}${shared}<div class="modal-actions"><span></span><button type="button" class="btn primary" id="notesClose">Done</button></div>`;
 }
 async function openNotes(msg) { await checkBandNotes(); await renderNotes(msg); $("notesModal").classList.remove("hidden"); }
 document.addEventListener("click", async e => {
   if (e.target.closest("#bellBtn")) { await inboxDrainNative(); openNotes(); return; }
   if (e.target.closest("#notesClose") || e.target === $("notesModal")) { $("notesModal").classList.add("hidden"); return; }
-  if (e.target.closest("#inboxPickBtn")) { $("inboxFile").click(); return; }
   const add = e.target.closest("[data-inbox-add]");
   if (add) { add.disabled = true; add.textContent = "Adding…"; const r = await inboxToSong(add.dataset.inboxAdd, ($("inboxArtist") || {}).value || inboxPick); renderNotes(r ? `Added “${r.song}” to ${r.artist}.` : "Couldn't add that file."); return; }
   const rm = e.target.closest("[data-inbox-rm]");
@@ -6685,30 +6684,15 @@ document.addEventListener("click", async e => {
   $("notesModal").classList.add("hidden");
   try { if (project) await goToProjects(); await openProject(n.id); await markNoteSeen(n); openShare(); } catch (er) {}
 });
-document.addEventListener("change", async e => {
-  if (e.target.id === "inboxArtist") { inboxPick = e.target.value; return; }
-  if (e.target.id !== "inboxFile") return;
-  const files = [...e.target.files]; e.target.value = ""; let n = 0;
-  for (const f of files) if (await inboxAdd(f)) n++;
-  renderNotes(n ? `Added ${n} ${n === 1 ? "file" : "files"} to your inbox.` : "Those didn't look like audio files.");
-});
-/* drag audio onto the page on a computer */
-if (!BAND_CODE) {
-  ["dragover", "drop"].forEach(t => window.addEventListener(t, e => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files")) e.preventDefault(); }));
-  window.addEventListener("drop", async e => {
-    const fs = [...(e.dataTransfer ? e.dataTransfer.files : [])].filter(f => AUDIO_RE.test(f.name) || /^audio\//.test(f.type)); if (!fs.length) return;
-    for (const f of fs) await inboxAdd(f);
-    openNotes(`Added ${fs.length} ${fs.length === 1 ? "file" : "files"} to your inbox.`);
-  });
-}
+document.addEventListener("change", e => { if (e.target.id === "inboxArtist") inboxPick = e.target.value; });
 /* push notifications (iPhone app) */
-var pushWired = false, pushState = "Not set up yet";
+var pushWired = false, pushAsked = false, pushState = "Not set up yet";
 function pushSay(t, loud) { pushState = t; const el = $("pushStatus"); if (el) el.textContent = t; if (loud) showNotice(t); }
 async function pushSetup(ask) {
   const C = window.Cap; if (BAND_CODE) return;
   if (!C) { pushSay("Notifications aren't available here (no app bridge).", ask); return; }
   if (!C.Capacitor.isNativePlatform()) { pushSay("Notifications work in the iPhone app.", ask); return; }
-  const P = C.PushNotifications;
+  const P = C.PushNotifications; pushAsked = !!ask;
   try {
     let st = await P.checkPermissions();
     if (st.receive === "prompt" || st.receive === "prompt-with-rationale") { if (!ask) { pushSay("Off. Tap Turn on notifications."); return; } st = await P.requestPermissions(); }
@@ -6719,7 +6703,7 @@ async function pushSetup(ask) {
       P.addListener("registration", async t => {
         const tok = await bandToken();
         if (!tok) { pushSay("Allowed. Sign in to finish setting up notifications.", ask); return; }
-        try { const r = await bandCall({ action: "push_register", token: t.value }, tok); pushSay(r.configured ? "On. You'll get a notification when a band finishes." : "Allowed on this phone, but the server has no Apple key yet."); }
+        try { const r = await bandCall({ action: "push_register", token: t.value }, tok); pushSay(r.configured ? "Notifications are on. You'll get one when a band finishes." : "Allowed on this phone, but the server has no Apple key yet.", pushAsked); }
         catch (e) { pushSay("Couldn't register this phone: " + (e.message || e), true); }
       });
       P.addListener("registrationError", e => pushSay("Apple wouldn't register this phone: " + ((e && (e.error || e.message)) || JSON.stringify(e)), true));
