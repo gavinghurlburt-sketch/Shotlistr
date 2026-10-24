@@ -640,9 +640,17 @@ input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; ba
 .link-add .field { flex: 1; min-width: 0; }
 .link-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .link-row a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
-.tpl-intro { font-size: 14px; line-height: 1.45; color: var(--muted); margin: 0 0 14px; }
+.tpl-intro { display: none; font-size: 14px; line-height: 1.45; color: var(--muted); margin: 0 0 14px; }
+#tplModal.show-intro .tpl-intro { display: block; }
+.tpl-title { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.tpl-title h3 { margin: 0; }
+#tplHelp { width: 26px; height: 26px; min-height: 0; padding: 0; border-radius: 50%; font-size: 14px; font-weight: 700; color: var(--muted); background-color: var(--surface-3); line-height: 1; }
 .tpl-intro b { display: block; color: var(--text); font-size: 17px; margin-bottom: 2px; }
 .tpl-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+#tplSwap { gap: 6px 20px; align-items: baseline; }
+#tplSwap .btn { background: none !important; border: 0 !important; box-shadow: none !important; min-height: 0; padding: 4px 0; border-radius: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--muted) !important; }
+#tplSwap .btn.primary { font-weight: 800; color: var(--text) !important; }
+#tplSwap .btn[data-lib="__new"] { font-size: 16px; font-weight: 500; }
 .tpl-links { display: flex; align-items: center; gap: 18px; }
 .tpl-link { background: none; border: 0; box-shadow: none; min-height: 0; padding: 6px 0; font-size: 14px; color: var(--muted); text-decoration: underline; }
 .tpl-link:hover, .tpl-link:active { background: none; }
@@ -1626,7 +1634,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 </div>
 <div id="tplModal" class="modal hidden">
   <div class="modal-inner wide">
-    <h3>Shot template</h3>
+    <div class="tpl-title"><h3>Shot template</h3><button type="button" id="tplHelp" aria-label="What is a shot template?" aria-expanded="false">?</button></div>
     <div class="tpl-intro"><b>Your go-to shots, for every section.</b> A shot template is a checklist of the shots you always want to get. Every shot below is added to every song section you pick, so you never forget coverage. Standard Shoot is ready to use. Edit it, or make your own and it's saved for next time.</div>
     <div class="tpl-label">Your templates</div>
     <div id="tplSwap" class="chip-row" style="margin-top:0"></div>
@@ -5188,7 +5196,8 @@ function icsFor(days) {
 function exportDays(days, name) { downloadBlob(new Blob([icsFor(days)], { type: "text/calendar" }), safeName(name) + ".ics"); }
 
 /* template popup */
-function openTplModal() { renderTplModal(); $("tplStatus").textContent = ""; $("tplModal").classList.remove("hidden"); }
+$("tplHelp").addEventListener("click", () => { const m = $("tplModal"), on = m.classList.toggle("show-intro"); $("tplHelp").setAttribute("aria-expanded", on); });
+function openTplModal() { $("tplModal").classList.remove("show-intro"); renderTplModal(); $("tplStatus").textContent = ""; $("tplModal").classList.remove("hidden"); }
 function renderTplModal() {
   const l = tplLib(), cur = libEntryForProject().e;
   $("tplSwap").innerHTML = l.map(x => `<button type="button" class="btn small ${x.id === cur.id ? "primary" : ""}" data-lib="${x.id}">${esc(x.name)}</button>`).join("") + `<button type="button" class="btn small" data-lib="__new">+ New</button>`;
@@ -5935,7 +5944,7 @@ var TOUR = (function () {
     /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalId: "newModal", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
     /* 7 */ { ctx: "content", ws: "plan", target: () => { const b = demo && q('[data-sp-song="' + demo.s2 + '"]'); return b ? b.closest(".sp-card") : null; }, title: "Pick your songs", body: "Practice Song 1 is already ticked. Tick Practice Song 2 too, so your setlist has two songs. You can tick a whole song or just the sections you want.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. A template is your list of go-to shots. Tap it to take a look.", done: () => { const m = $("tplModal"); return !!m && !m.classList.contains("hidden"); } },
-    /* 9 */ { ctx: "content", ws: "plan", target: null, title: "Your go-to shots", body: "Every shot in your template is added to every section. Edit them, or make your own.", modalId: "tplModal", modalHint: "This is your go-to shot list. Every shot here gets added to every section you picked. Edit them or tap + New for your own, then tap Done.", done: () => { const m = $("tplModal"); return !m || m.classList.contains("hidden"); } },
+    /* 9 */ { ctx: "content", ws: "plan", target: null, title: "Your go-to shots", body: "Every shot in your template is added to every section. Edit them, or make your own.", modalId: "tplModal", modalHint: "Have a look, then tap Done. Tap the ? if you want it explained.", done: () => { const m = $("tplModal"); return !m || m.classList.contains("hidden"); } },
     /* 9 */ { ctx: "content", ws: "plan", target: () => ["songRefs", "songLinks", "songNotes"].map(panelOf).filter(Boolean), title: "References, links and notes", body: "Add reference images, paste Instagram, TikTok or YouTube links, and jot down notes about energy and wardrobe.", buttons: "next" },
     /* 10 */ { ctx: "content", ws: "plan", target: () => $("wsTabs"), title: "Swipe between tabs", body: "Swipe left and right between Plan, Shoot and Cut, or tap a tab. Swipe left to go to Shoot.", done: () => inContent() && currentWs === "shoot", any: true },
     /* 11 */ { ctx: "content", ws: "shoot", target: () => [$("shootDateLine"), $("cShootStatus")].filter(e => e && onScreen(e)), title: "Your shoot day card", body: "The date card shows when you're shooting. The banner below shows the time, shots done, and takes logged so far.", buttons: "next" },
