@@ -643,7 +643,7 @@ input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; ba
 .tpl-intro { font-size: 14px; line-height: 1.45; color: var(--muted); margin: 0 0 14px; }
 .tpl-intro b { display: block; color: var(--text); font-size: 17px; margin-bottom: 2px; }
 .tpl-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
-.tpl-label span { text-transform: none; letter-spacing: 0; font-weight: 500; margin-left: 6px; }
+#tplSwap .btn { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .tpl-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 8px 8px 12px; background-color: var(--surface-2); border-radius: 16px; margin-bottom: 8px; }
 .tpl-row .tpl-fields { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .tpl-row .field { background-color: transparent; border: none; box-shadow: none; padding: 3px 0; min-height: 0; width: 100%; min-width: 0; }
@@ -1629,11 +1629,10 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <div id="tplSwap" class="chip-row" style="margin-top:0"></div>
     <div class="tpl-label">Template name</div>
     <input type="text" id="tplName" class="field" style="width:100%;font-weight:700" placeholder="Template name, e.g. Standard Shoot" autocapitalize="words">
-    <div class="tpl-label">Shots <span>Each one gets a name and a note on what to capture</span></div>
+    <div class="tpl-label">Shots</div>
     <div id="tplShots"></div>
     <div class="tpl-actions">
       <button type="button" id="tplAddShot" class="btn small">+ Add shot</button>
-      <button type="button" id="tplCopy" class="btn small">Save as new template</button>
     </div>
     <div class="tpl-actions">
       <button type="button" id="tplApply" class="btn small">Add missing shots to every section</button>
@@ -5244,12 +5243,29 @@ $("tplAddShot").addEventListener("click", () => {
   project.shotTemplates.push({ id: uid(), name: "", detail: "" }); syncLib(); scheduleSave(); renderTplModal();
   const rows = document.querySelectorAll('#tplShots [data-tpl-field="name"]'); if (rows.length) rows[rows.length - 1].focus();
 });
-$("tplCopy").addEventListener("click", () => {
-  const l = tplLib(); let n = (project.templateName || "Template") + " copy", i = 2; while (l.some(x => x.name === n)) n = (project.templateName || "Template") + " copy " + i++;
-  const entry = { id: uid(), name: n, shots: project.shotTemplates.map(t => ({ name: t.name, detail: t.detail })) };
-  l.push(entry); saveTplLib(l); project.templateLibId = entry.id; project.templateName = n;
-  scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); $("tplStatus").textContent = "Saved as a new template. Give it a name.";
-});
+/* hold a template tag to duplicate it */
+(function () {
+  let t = null, held = false;
+  const box = $("tplSwap");
+  const cancel = () => { clearTimeout(t); t = null; };
+  box.addEventListener("pointerdown", e => {
+    const b = e.target.closest("[data-lib]"); held = false;
+    if (!b || b.dataset.lib === "__new") return;
+    cancel();
+    t = setTimeout(() => {
+      held = true; t = null;
+      const l = tplLib(), src = l.find(x => x.id === b.dataset.lib); if (!src) return;
+      if (!confirm(`Duplicate "${src.name}"?`)) return;
+      let n = src.name + " copy", i = 2; while (l.some(x => x.name === n)) n = src.name + " copy " + i++;
+      const entry = { id: uid(), name: n, shots: src.shots.map(x => ({ name: x.name, detail: x.detail || "" })) };
+      l.push(entry); saveTplLib(l); swapTemplate(entry);
+      scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); $("tplStatus").textContent = "Duplicated. Give it a name.";
+    }, 550);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => box.addEventListener(ev, cancel));
+  box.addEventListener("click", e => { if (held) { held = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  box.addEventListener("contextmenu", e => e.preventDefault());
+})();
 $("tplDelete").addEventListener("click", () => {
   const l = tplLib(), cur = libEntryForProject().e;
   if (l.length < 2 || !confirm(`Delete the template "${cur.name}" from your library?`)) return;
@@ -6050,8 +6066,25 @@ var TOUR = (function () {
   let curRects = [], animId = 0, lastTarget = "";
   const ease = t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);   // ease-out expo: leaps off the line, then a long slow settle
   const rk = r => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, rad: r.rad || 0 });
+  function mergeRects(rs, gap) {       // neighbouring highlights that nearly touch become one shape, so no outline runs between them
+    rs = rs.map(r => Object.assign({}, r));
+    for (let again = true; again;) {
+      again = false;
+      outer: for (let a = 0; a < rs.length; a++) for (let b = a + 1; b < rs.length; b++) {
+        const A = rs[a], B = rs[b];
+        const hOver = Math.min(A.right, B.right) - Math.max(A.left, B.left) > 0, vGap = Math.max(A.top, B.top) - Math.min(A.bottom, B.bottom);
+        const vOver = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top) > 0, hGap = Math.max(A.left, B.left) - Math.min(A.right, B.right);
+        if ((hOver && vGap <= gap) || (vOver && hGap <= gap)) {
+          const u = { left: Math.min(A.left, B.left), top: Math.min(A.top, B.top), right: Math.max(A.right, B.right), bottom: Math.max(A.bottom, B.bottom), rad: Math.max(A.rad || 0, B.rad || 0) };
+          u.width = u.right - u.left; u.height = u.bottom - u.top;
+          rs.splice(b, 1); rs[a] = u; again = true; break outer;
+        }
+      }
+    }
+    return rs;
+  }
   function setHoles(rects) {
-    rects = rects.map(rk);
+    rects = mergeRects(rects.map(rk), 24);
     const key = rects.map(r => [r.left, r.top, r.right, r.bottom, r.rad].map(Math.round).join(",")).join("|");
     if (key === lastTarget) return;
     lastTarget = key;
