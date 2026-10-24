@@ -1206,6 +1206,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .tour-card p { margin: 0 0 10px; font-size: 14px; line-height: 1.4; }
 .tour-card .tc-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .tour-card .tc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tour-card .tc-keep { text-align: center; margin: 2px 0 8px; }
 .tour-card .tc-left { display: flex; gap: 18px; }
 .tour-card .tc-next { margin: 0; }
 .tour-card .tc-skip { background: none; border: none; color: var(--muted); font-size: 12px; padding: 4px 0; text-decoration: underline; }
@@ -5901,7 +5902,7 @@ var TOUR = (function () {
     /* 17 */ { ctx: "content", ws: "shoot", target: () => q('.ws-tab[data-ws="cut"]'), title: "Head to Cut", body: "Tap Cut, or swipe left.", done: () => inContent() && currentWs === "cut", any: true },
     /* 18 */ { ctx: "content", ws: "cut", target: () => panelOf("cutCanvas"), title: "The Cut page", body: "Every song's timeline, with each section and every take called on set, in one place.", buttons: "next" },
     /* 19 */ { ctx: "content", ws: "cut", target: () => $("exportTakeLogBtn"), title: "Export the take log", body: "Export a CSV or PDF of every take, with ratings and notes, to hand to your editor.", buttons: "next" },
-    /* 20 */ { ctx: "any", target: null, title: "You're ready", body: "That's the whole flow. You can replay this tour any time from Settings.", buttons: "end" }
+    /* 20 */ { ctx: "any", target: null, title: "You're ready", body: "That's the whole flow. You can replay this tour any time from the menu at the top right, under Help.", buttons: "end" }
   ];
   const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
   function readDemo() { try { return JSON.parse(localStorage.getItem(DKEY) || "null"); } catch (e) { return null; } }
@@ -5968,7 +5969,7 @@ var TOUR = (function () {
   function onClick(e) {
     const b = e.target.closest("[data-t]"); if (!b) return;
     const a = b.dataset.t;
-    if (a === "skip") finish("Tour skipped. You can replay it from Settings.");
+    if (a === "skip") finish("Tour skipped. You can replay it from the menu at the top right, under Help.");
     else if (a === "back") { if (idx > 0) { idx--; hold = idx; save(); scrolledFor = -1; tick(); } }
     else if (a === "next") { idx = Math.min(idx + 1, STEPS.length - 1); save(); scrolledFor = -1; tick(); }
     else if (a === "end") finish("Tour finished. The Demo Band is still there to play with.");
@@ -6018,9 +6019,15 @@ var TOUR = (function () {
     animId = requestAnimationFrame(step);
   }
   /* where the card goes so it never sits on a highlighted thing: below, above, in a gap between highlights, else the bottom */
+  let probe;
+  function safe() {
+    if (!probe) { probe = document.createElement("div"); probe.style.cssText = "position:fixed;left:0;top:0;width:0;visibility:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)"; document.body.appendChild(probe); }
+    const cs = getComputedStyle(probe);
+    return { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0 };
+  }
   function placeCard(rects, h) {
-    const pad = 14, top0 = 56, safeB = 16;
-    if (!rects.length) return Math.max(60, (innerHeight - h) / 2);
+    const sf = safe(), pad = 14, top0 = sf.top + 10, safeB = sf.bottom + 16;     // never under the notch / Dynamic Island or the home bar
+    if (!rects.length) return Math.max(top0, (innerHeight - h) / 2);
     const rs = rects.slice().sort((a, b) => a.top - b.top);
     const lo = rs[0].top, hi = Math.max(...rs.map(r => r.bottom));
     if (hi + pad + h < innerHeight - safeB) return hi + pad;
@@ -6035,7 +6042,7 @@ var TOUR = (function () {
     const n = idx + 1, total = STEPS.length;
     let btns = "";
     const nextBtn = (st.buttons === "next" || (hold === idx && st.buttons !== "end")) ? '<button class="btn primary tc-next" data-t="next">Next</button>' : "";
-    if (st.buttons === "end") btns = '<div class="tc-btns"><button class="btn primary" data-t="scratch">I understand how to use this app, let me start from scratch</button><button class="btn" data-t="end">Keep the demo for now</button></div>';
+    if (st.buttons === "end") btns = '<div class="tc-btns"><button class="btn primary" data-t="scratch">I understand how to use this app, let me start from scratch</button></div><div class="tc-keep"><button class="tc-skip" data-t="end">Keep the demo for now</button></div>';
     const ck = idx + "|" + (hint || "");
     if (card.dataset.k !== ck) card.classList.remove("swap");
     if (card.dataset.k !== ck) { void card.offsetWidth; card.classList.add("swap"); }
@@ -6043,7 +6050,7 @@ var TOUR = (function () {
     card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + ('<div class="tc-foot"><div class="tc-left">' + (idx > 0 ? '<button class="tc-skip" data-t="back">‹ Back</button>' : "") + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>') + '</div>' + nextBtn + '</div>');
     card.hidden = false;
     const h = card.offsetHeight;
-    const top = hint ? 12 : placeCard(rects || [], h);
+    const top = hint ? safe().top + 10 : placeCard(rects || [], h);
     card.style.top = top + "px";
   }
   function tick() {
