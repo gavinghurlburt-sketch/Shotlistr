@@ -1,4 +1,6 @@
 import UIKit
+import AVFoundation
+import MediaPlayer
 import Capacitor
 
 @UIApplicationMain
@@ -64,9 +66,67 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+/// Lock-screen / Control Center player (play, stop, next, previous) while a shoot plays.
+@objc(NowPlayingPlugin)
+public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "NowPlayingPlugin"
+    public let jsName = "NowPlaying"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+    ]
+    private var wired = false
+
+    private func wire() {
+        if wired { return }
+        wired = true
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        let cc = MPRemoteCommandCenter.shared()
+        func hook(_ c: MPRemoteCommand, _ name: String) {
+            c.isEnabled = true
+            c.addTarget { [weak self] _ in self?.notifyListeners("command", data: ["name": name]); return .success }
+        }
+        hook(cc.playCommand, "play"); hook(cc.pauseCommand, "pause"); hook(cc.stopCommand, "stop")
+        hook(cc.nextTrackCommand, "next"); hook(cc.previousTrackCommand, "previous")
+        cc.togglePlayPauseCommand.isEnabled = true
+        cc.togglePlayPauseCommand.addTarget { [weak self] _ in self?.notifyListeners("command", data: ["name": "toggle"]); return .success }
+    }
+
+    @objc func update(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.wire()
+            let playing = call.getBool("playing") ?? false
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+                MPMediaItemPropertyTitle: call.getString("title") ?? "creatrr",
+                MPMediaItemPropertyArtist: call.getString("artist") ?? "",
+                MPNowPlayingInfoPropertyPlaybackRate: playing ? 1.0 : 0.0,
+                MPNowPlayingInfoPropertyElapsedPlaybackTime: 0,
+            ]
+            MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
+            call.resolve()
+        }
+    }
+
+    @objc func stop(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if self.wired {
+                let cc = MPRemoteCommandCenter.shared()
+                for c in [cc.playCommand, cc.pauseCommand, cc.stopCommand, cc.nextTrackCommand, cc.previousTrackCommand, cc.togglePlayPauseCommand] { c.removeTarget(nil); c.isEnabled = false }
+                self.wired = false
+            }
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            MPNowPlayingInfoCenter.default().playbackState = .stopped
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            call.resolve()
+        }
+    }
+}
+
 class ViewController: CAPBridgeViewController {
     // Make sure the push and app plugins are registered even if automatic discovery missed them
     override func capacitorDidLoad() {
+        if bridge?.plugin(withName: "NowPlaying") == nil { bridge?.registerPluginInstance(NowPlayingPlugin()) }
         if bridge?.plugin(withName: "ShareBridge") == nil { bridge?.registerPluginInstance(ShareBridgePlugin()) }
         let wanted: [(js: String, cls: String)] = [("PushNotifications", "PushNotificationsPlugin"), ("App", "AppPlugin")]
         for w in wanted where bridge?.plugin(withName: w.js) == nil {
