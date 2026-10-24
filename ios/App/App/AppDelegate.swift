@@ -3,6 +3,7 @@ import AVFoundation
 import ActivityKit
 import AppIntents
 import Capacitor
+import MediaPlayer
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -112,7 +113,7 @@ public class ShootActivityPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func update(_ call: CAPPluginCall) {
         if !sessionReady {   // keeps the song playing with the screen locked
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])  // mixWithOthers keeps it out of the system Now Playing
             try? AVAudioSession.sharedInstance().setActive(true)
             sessionReady = true
         }

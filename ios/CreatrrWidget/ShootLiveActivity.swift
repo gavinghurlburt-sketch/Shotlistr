@@ -80,25 +80,39 @@ private struct Controls: View {
                     .frame(width: compact ? 34 : 40, height: compact ? 34 : 40).background(Color.white.opacity(0.12), in: Circle())
             }.buttonStyle(.plain)
             Button(intent: ShootToggleIntent()) {
-                // one shape that swaps instantly (no crossfade): rounded square = stop, triangle = play
+                // play triangle and stop square are one shape; the right-hand points slide apart so it morphs
                 ZStack {
-                    Circle().fill(tintColor(hex))
-                    if playing {
-                        RoundedRectangle(cornerRadius: 3).fill(glyphColor(hex)).frame(width: compact ? 14 : 18, height: compact ? 14 : 18)
-                    } else {
-                        Image(systemName: "play.fill").font(.system(size: compact ? 18 : 22, weight: .bold)).foregroundStyle(glyphColor(hex)).offset(x: 2)
-                    }
+                    Circle().fill(accent)
+                    PlayStopShape(t: playing ? 1 : 0)
+                        .fill(ink)
+                        .overlay(PlayStopShape(t: playing ? 1 : 0).stroke(ink, style: StrokeStyle(lineWidth: 4, lineJoin: .round)))
+                        .frame(width: compact ? 13 : 16, height: compact ? 13 : 16)
+                        .offset(x: playing ? 0 : 1.5)
+                        .animation(.timingCurve(0.2, 0.0, 0.1, 1.0, duration: 0.42), value: playing)
                 }
                 .frame(width: compact ? 44 : 54, height: compact ? 44 : 54)
-                .contentTransition(.identity)
-                .transaction { $0.animation = nil }
             }.buttonStyle(.plain)
             Button(intent: ShootNextIntent()) {
                 Image(systemName: "forward.fill").font(.system(size: compact ? 15 : 18, weight: .bold)).foregroundStyle(.white)
                     .frame(width: compact ? 34 : 40, height: compact ? 34 : 40).background(Color.white.opacity(0.12), in: Circle())
             }.buttonStyle(.plain)
         }
-        .transaction { $0.animation = nil }
+    }
+}
+
+private struct PlayStopShape: Shape {
+    var t: CGFloat   // 0 = play triangle, 1 = stop square
+    var animatableData: CGFloat { get { t } set { t = newValue } }
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let m = r.midY, k = r.height * 0.5 * (1 - t)   // right points converge on the middle when t = 0
+        p.move(to: CGPoint(x: r.minX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + k))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - k))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+        p.closeSubpath()
+        _ = m
+        return p
     }
 }
 
@@ -126,7 +140,6 @@ private struct LockScreenView: View {
             Dots(position: state.position, colors: state.colors)
         }
         .padding(16)
-        .contentTransition(.identity)
     }
 }
 

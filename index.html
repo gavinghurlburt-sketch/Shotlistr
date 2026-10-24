@@ -3003,6 +3003,8 @@ function nowPlayingSync() {
   if (!inShoot || (!npOn && !isPlaying())) { if (npOn && !inShoot) { npOn = false; NP.end().catch(() => {}); } return; }
   if (!npWired) { npWired = true; NP.addListener("command", e => npCommand(e && e.name)); }
   npOn = true;
+  try { if (!player.paused) player.pause(); } catch (e) {}
+  try { if (navigator.mediaSession) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none"; } } catch (e) {}
   const p = currentShootPart(), sg = activeSong();
   const parts = sg ? shootParts(sg.id).filter(x => x.time) : [];   // the lights show this song's sections, in colour
   const idx = parts.findIndex(x => p && x.id === p.id);
