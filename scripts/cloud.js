@@ -117,7 +117,7 @@ async function runOp(op) {
     for (const r of rows || []) await removeCloudTrack(r.key);
   } else if (op.t === "t") {
     const t = await _localLoadTrack(op.k);
-    if (!t || !t.blob) return;
+    if (!t || !t.blob || !t.blob.size) return;   // an empty file makes storage answer "No content provided"
     if (t.blob.size > MAX_TRACK_BYTES) { console.warn("track too large to sync", t.blob.size); try { showNotice("A track is over 50 MB, so it can't sync to your account and is only saved on this phone. Re-upload it as an MP3."); } catch (e) {} return; }
     const up = await sb.storage.from("tracks").upload(trackPath(uidStr, op.k), t.blob, { upsert: true, contentType: t.blob.type || "audio/mpeg" });
     if (up.error) throw up.error;
