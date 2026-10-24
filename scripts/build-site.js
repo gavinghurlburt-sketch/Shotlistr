@@ -7,6 +7,7 @@ const sh = c => cp.execSync(c, { stdio: "inherit" });
 fs.rmSync("site", { recursive: true, force: true });
 fs.mkdirSync("site");
 sh("npx esbuild scripts/supabase-entry.js --bundle --minify --format=iife --outfile=scripts/supabase.bundle.js --log-level=warning");
+sh("npx esbuild scripts/lame-entry.js --bundle --minify --format=iife --outfile=site/lame.js --log-level=warning");
 fs.copyFileSync("index.html", "site/app.html");
 sh("WEB=1 PATCH_FILE=site/app.html node scripts/patch.js");
 fs.copyFileSync("index.html", "site/band.html");

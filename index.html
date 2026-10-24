@@ -1302,7 +1302,12 @@ body.band-mode .banner { height: auto; aspect-ratio: 3 / 2; max-height: 360px; }
 .band-gone { position: fixed; inset: 0; z-index: 90; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 28px; text-align: center; }
 .band-gone > div { max-width: 340px; }
 .band-gone h2 { margin: 0 0 8px; font-size: 22px; }
-body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #docTitleInput, body.band-mode #saveStatus, body.band-mode #artistShoots, body.band-mode .song-opts { display: none !important; }
+.bell { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.bell-dot { position: absolute; top: 2px; right: 3px; min-width: 15px; height: 15px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #e5484d; color: #fff; font-size: 10px; font-weight: 800; line-height: 15px; text-align: center; }
+.note-row { display: block; width: 100%; text-align: left; padding: 12px 14px; margin: 8px 0; border-radius: 14px; background: var(--surface-2); border: 0; font: inherit; color: var(--text); }
+.note-row b { display: block; }
+.note-row span { font-size: 13px; color: var(--muted); }
+body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #docTitleInput, body.band-mode #saveStatus, body.band-mode #artistShoots, body.band-mode .song-opts { display: none !important; }
 </style>
 </head>
 <body>
@@ -1314,6 +1319,7 @@ body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #
     <input type="text" id="docTitleInput" class="doc-title hidden" placeholder="Untitled project" aria-label="Project title">
     <span class="spacer"></span>
     <span id="saveStatus" class="small"></span>
+    <button id="bellBtn" class="btn small bell hidden" aria-label="Notifications"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg><span id="bellDot" class="bell-dot hidden"></span></button>
     <button id="settingsBtn" class="btn small">Settings</button>
   </div>
   <nav id="wsTabs" class="ws-tabs hidden" aria-label="Workspaces">
@@ -1675,6 +1681,7 @@ body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #
 </main>
 
 <!-- ===== modals ===== -->
+<div id="notesModal" class="modal hidden"><div class="modal-inner" id="notesInner"></div></div>
 <div id="shareModal" class="modal hidden"><div class="modal-inner" id="shareInner"></div></div>
 <div id="cropModal" class="modal hidden">
   <div class="modal-inner">
@@ -2060,7 +2067,9 @@ async function deleteProjectRecord(id) {
 /* every uploaded track is stored as a 128 kbps mp3 (we only need it for shooting, not for release) */
 async function toMp3(file) {
   try {
-    if (!window.lamejs || /\.mp3$/i.test(file.name) || file.type === "audio/mpeg") return file;
+    if (/\.mp3$/i.test(file.name) || file.type === "audio/mpeg") return file;
+    if (!window.lamejs) await new Promise(res => { const sc = document.createElement("script"); sc.src = "lame.js"; sc.onload = sc.onerror = res; document.head.appendChild(sc); });   // the band page loads the encoder on demand
+    if (!window.lamejs) return file;
     const ab = await file.arrayBuffer();
     const buf = await new Promise((res, rej) => { const p = ctx().decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
     const nch = Math.min(2, buf.numberOfChannels), enc = new lamejs.Mp3Encoder(nch, buf.sampleRate, 128);
@@ -6138,10 +6147,13 @@ var TOUR = (function () {
     { ctx: "artist", target: () => q("#songRows .song-row.add"), title: "Add a song", body: "Tap + Add song to start.", done: () => songOpen },
     { ctx: "artist", song: true, target: () => $("uploadTrackBtn"), title: "Upload the track", body: "Upload the song file (MP3, M4A or WAV).", extra: '<button class="tc-skip" data-t="practice">No song handy? Use a practice song</button>', done: () => !$("waveformCanvas").classList.contains("hidden") },
     { ctx: "artist", song: true, target: () => $("songNameInput"), title: "Name your song", body: "Type the song's name up top. We filled in the file name to start.", buttons: "next" },
-    { ctx: "artist", song: true, target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo and tap along with the beat. Once it locks in, tap Sync on the first beat of any section, like a choreographer counting \u20185, 6, 7, 8\u2019.", done: () => { const t = curTempo(); return !!(t.bpm && t.offset != null); } },
+    { ctx: "artist", song: true, target: () => $("tempoManualBtn"), title: "Find the tempo", body: "Tap Set tempo. You'll tap along with the song so creatrr can learn its speed, then mark the first beat of a measure, called the downbeat, so sections snap to the right place.", done: () => { const m = $("tempoModal"); return !!m && !m.classList.contains("hidden"); } },
+    { ctx: "artist", song: true, target: null, title: "Tap the beat", body: "", modalId: "tempoModal", modalHint: "<b>Step 1: tap the beat.</b> Press play, then tap the big TAP button along with the beat. After a few taps it locks onto the tempo.", done: () => !!tap.locked || (() => { const m = $("tempoModal"); return !!m && m.classList.contains("hidden"); })() },
+    { ctx: "artist", song: true, target: null, title: "Sync the 1", body: "", modalId: "tempoModal", modalHint: "<b>Step 2: tap Sync on the 1.</b> Tempo found! Now tap Sync right on the first beat of a measure, the ‘1’ of a ‘1, 2, 3, 4’ count (like the ‘5’ in ‘5, 6, 7, 8’). Pick the start of any section.", done: () => { const t = curTempo(); return (t.bpm && t.offset != null) || (() => { const m = $("tempoModal"); return !!m && m.classList.contains("hidden"); })(); } },
+    { ctx: "artist", song: true, target: null, title: "Synced", body: "", modalId: "tempoModal", modalHint: "<b>Synced!</b> The higher click is the 1. If it sounds off, tap Re-sync on a different beat. Otherwise press Done.", done: () => { const m = $("tempoModal"); return !!m && m.classList.contains("hidden"); } },
     { ctx: "artist", song: true, align: "top", target: () => [$("draftPlayBtn"), $("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to the start of any section, then tap + Add section. It snaps to the beat automatically. Hit play to check that your placement sounds right.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => project.sections.some(x => x.songId === activeSongId) },
     { ctx: "artist", song: true, target: () => $("songDoneBtn"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Tap Done to go back to your song list.", done: () => !songOpen },
-    { ctx: "artist", target: () => $("bandSendBtn"), title: "That's it", body: "Add more songs if you like, plus photos, links or notes. Everything syncs automatically, so tap Finish whenever you're done. You can keep editing until the link expires.", buttons: "bandend" }
+    { ctx: "artist", target: () => $("bandSendBtn"), title: "That's it", body: "Add more songs if you like, plus photos, links or notes. Everything syncs automatically, so when you're done, tap Finish & notify to let your photographer know. You can keep editing until the link expires.", buttons: "bandend" }
   ];
   const STEPS = BAND_CODE ? BAND_STEPS : APP_STEPS;
   const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
@@ -6215,7 +6227,7 @@ var TOUR = (function () {
     if (a === "skip") finish("Tour skipped. You can replay it from the menu at the top right, under Help.");
     else if (a === "back") { if (idx > 0) { idx--; hold = idx; save(); scrolledFor = -1; tick(); } }
     else if (a === "next") { idx = Math.min(idx + 1, STEPS.length - 1); save(); scrolledFor = -1; tick(); }
-    else if (a === "end") finish(BAND_CODE ? "You're all set. Tap Finish when you're done." : "Tour finished. The Demo Band is still there to play with.");
+    else if (a === "end") finish(BAND_CODE ? "You're all set. Tap Finish & notify when you're done." : "Tour finished. The Demo Band is still there to play with.");
     else if (a === "practice") practiceTrack();
     else if (a === "scratch") scratch();
     else if (a === "show") bring();
@@ -6446,7 +6458,7 @@ function renderBandBox() {
       <div class="band-refs">${(b.refs || []).map((src, i) => `<div class="band-ref"><img src="${src}" alt="Inspiration ${i + 1}"><button type="button" data-band="refx" data-i="${i}" aria-label="Remove photo">\u00d7</button></div>`).join("")}${(b.refs || []).length < 8 ? `<button type="button" class="band-ref add" data-band="refadd">+ Add photos</button>` : ""}</div>
       <input type="file" id="bandRefFile" accept="image/*,.heic,.heif" multiple hidden>
       <label class="band-lab" for="bandNotes">Notes</label><textarea id="bandNotes" placeholder="Vibe, wardrobe, anything that helps">${esc(b.notes)}</textarea>
-      <div class="band-actions"><button type="button" class="btn primary" data-band="send" id="bandSendBtn">Finish</button></div>
+      <div class="band-actions"><button type="button" class="btn primary" data-band="send" id="bandSendBtn">Finish &amp; notify ${esc((BAND_INFO && BAND_INFO.artist_name) || "your photographer")}</button></div>
       <p class="muted small" id="bandSendMsg" style="margin:10px 0 0"></p></div>
       <p style="text-align:center;margin:18px 0 0"><button type="button" class="btn small" id="tourReplayBtn3">Show the tutorial again</button></p>`;
     return;
@@ -6508,7 +6520,7 @@ async function refreshShareStatus() {
     if (!$("shareStat")) return;
     if (!s) { $("shareStat").textContent = "Nothing uploaded yet."; return; }
     const bits = [s.songs ? s.songs + (s.songs === 1 ? " song" : " songs") : "", s.photo ? "a photo" : "", s.links || s.refs ? "inspiration" : ""].filter(Boolean);
-    $("shareStat").textContent = (s.band_name ? s.band_name + " sent " : "They sent ") + (bits.join(", ") || "their details") + ".";
+    $("shareStat").textContent = (s.band_name ? s.band_name + (s.finished_at ? " finished and sent " : " added ") : (s.finished_at ? "They finished and sent " : "They added ")) + (bits.join(", ") || "their details") + ".";
     $("shareImportBtn").classList.remove("hidden");
   } catch (e) { if ($("shareStat")) $("shareStat").textContent = e.status === 404 ? "This link is no longer active." : "Couldn't check right now."; }
 }
@@ -6564,6 +6576,52 @@ async function bandImport() {
     refreshShareStatus();
   } catch (e) { bandBusy = false; renderShare(e.message || "Couldn't import."); refreshShareStatus(); return; }
   bandBusy = false;
+}
+
+/* ---------- notifications: bands that have tapped Finish ---------- */
+var bandNotes = [];
+async function checkBandNotes() {
+  if (BAND_CODE || !window.__cloudToken) return;
+  const tok = await bandToken(); if (!tok) { bandNotes = []; paintBell(false); return; }
+  let recs = []; try { recs = await listProjects(); } catch (e) { return; }
+  const out = [];
+  for (const rec of recs) {
+    const l = rec && rec.type === "artist" && rec.bandLink; if (!l || Date.parse(l.expires_at) < Date.now()) continue;
+    try {
+      const st = await bandCall({ action: "status", code: l.code }, tok), sub = st.submission;
+      if (sub && sub.finished_at && (!l.seenFinished || Date.parse(sub.finished_at) > Date.parse(l.seenFinished))) out.push({ id: rec.id, name: sub.band_name || rec.docTitle || "A band", at: sub.finished_at, songs: sub.songs, refs: sub.refs, photo: sub.photo });
+    } catch (e) {}
+  }
+  bandNotes = out; paintBell(true);
+}
+function paintBell(signed) {
+  const b = $("bellBtn"), d = $("bellDot"); if (!b) return;
+  b.classList.toggle("hidden", !signed);
+  d.textContent = bandNotes.length; d.classList.toggle("hidden", !bandNotes.length);
+}
+async function markNoteSeen(n) {
+  let rec = project && project.id === n.id ? project : await getProjectRecord(n.id);
+  if (rec && rec.bandLink) { rec.bandLink.seenFinished = n.at; if (rec === project) scheduleSave(); else await putProjectRecord(rec); }
+  bandNotes = bandNotes.filter(x => x !== n); paintBell(true);
+}
+function renderNotes() {
+  const el = $("notesInner");
+  el.innerHTML = `<h3>Notifications</h3>` + (bandNotes.length ? bandNotes.map((n, i) => {
+    const bits = [n.songs ? n.songs + (n.songs === 1 ? " song" : " songs") : "", n.photo ? "a photo" : "", n.refs ? n.refs + (n.refs === 1 ? " inspiration photo" : " inspiration photos") : ""].filter(Boolean);
+    return `<button type="button" class="note-row" data-note="${i}"><b>${esc(n.name)} finished their page</b><span>${esc(bits.join(", ") || "Their details are ready")}. Tap to review and import.</span></button>`;
+  }).join("") : `<p class="muted">You're all caught up. When a band taps Finish on their link, it shows up here.</p>`) + `<div class="modal-actions"><button type="button" class="btn primary" id="notesClose">Done</button></div>`;
+}
+document.addEventListener("click", async e => {
+  if (e.target.closest("#bellBtn")) { await checkBandNotes(); renderNotes(); $("notesModal").classList.remove("hidden"); return; }
+  if (e.target.closest("#notesClose") || e.target === $("notesModal")) { $("notesModal").classList.add("hidden"); return; }
+  const row = e.target.closest("[data-note]"); if (!row) return;
+  const n = bandNotes[+row.dataset.note]; if (!n) return;
+  $("notesModal").classList.add("hidden");
+  try { if (project) await goToProjects(); await openProject(n.id); await markNoteSeen(n); openShare(); } catch (er) {}
+});
+if (!BAND_CODE) {
+  setTimeout(checkBandNotes, 4000); setInterval(checkBandNotes, 60000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkBandNotes(); });
 }
 
 /* ---------- band side ---------- */
@@ -6624,9 +6682,14 @@ async function bandSend(final) {
       const o = { id: sg.id, name: sg.name, tempo: { bpm: sg.tempo.bpm, offset: sg.tempo.offset, songStart: sg.tempo.songStart, snap: sg.tempo.snap },
         sections: project.sections.filter(x => x.songId === sg.id).map(x => ({ id: x.id, name: x.name, color: x.color, time: x.time })) };
       if (t && t.blob) {
-        const m = /\.([A-Za-z0-9]+)$/.exec(t.name || ""), ext = (m ? m[1] : "mp3").toLowerCase();
+        const m = /\.([A-Za-z0-9]+)$/.exec(t.name || ""); let ext = (m ? m[1] : "mp3").toLowerCase();
         if (!BAND_EXTS.includes(ext)) throw new Error(`"${sg.name}" is a .${ext} file. Please use MP3, M4A, WAV or AAC.`);
-        if (t.blob.size > 50 * 1024 * 1024) throw new Error(`"${sg.name}" is over 50 MB. Try an MP3 instead.`);
+        if (t.blob.size > 50 * 1024 * 1024 && ext !== "mp3") {
+          bandPill("busy", `Converting "${sg.name}" to MP3\u2026`);
+          const cf = await toMp3(new File([t.blob], t.name || (sg.name + "." + ext), { type: t.blob.type }));
+          if (/\.mp3$/i.test(cf.name) && cf.size < t.blob.size) { t.blob = cf; t.name = cf.name; await saveTrack(project.id + "::" + sg.id, cf, cf.name); ext = "mp3"; }
+        }
+        if (t.blob.size > 50 * 1024 * 1024) throw new Error(`"${sg.name}" is over 50 MB even as an MP3. Try a shorter version or a lower-quality export.`);
         const key = "bandup:" + BAND_CODE + ":" + sg.id, sig = t.blob.size + ":" + t.name;
         let seen = ""; try { seen = localStorage.getItem(key); } catch (e) {}
         if (seen !== sig) { say(`Uploading song ${i + 1} of ${project.songs.length}…`); await bandUp("song", t.blob, { id: sg.id, ext }); try { localStorage.setItem(key, sig); } catch (e) {} }
@@ -6643,7 +6706,7 @@ async function bandSend(final) {
     }
     if (!songs.length && !hasPhoto && !refIds.length && !nm && !project.brief.links.length && !project.brief.notes) { if (final) throw new Error("Add a photo or at least one song first."); bandPill("ok", "Nothing to sync yet"); bandBusy = false; return; }
     if (final && !songs.length && !hasPhoto && !refIds.length) throw new Error("Add a photo or at least one song first.");
-    await bandCall({ action: "band_save", code: BAND_CODE, band_name: nm, photo: hasPhoto, songs, refs: refIds, links: project.brief.links, notes: project.brief.notes });
+    await bandCall({ action: "band_save", code: BAND_CODE, band_name: nm, photo: hasPhoto, songs, refs: refIds, links: project.brief.links, notes: project.brief.notes, finish: !!final });
     say(""); ok = true; bandPill("ok", "Synced");
     if (final) bandDone();
   } catch (e) {
