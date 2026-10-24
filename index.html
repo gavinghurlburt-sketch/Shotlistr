@@ -6583,7 +6583,7 @@ async function bandImport() {
 }
 
 /* ---------- notifications and the audio inbox ---------- */
-var bandNotes = [], inboxPick = "";
+var bandNotes = [], inboxPick = "", noteSeen = {};
 const INBOX_KEY = "creatrr_inbox";
 const inboxList = () => { try { return JSON.parse(localStorage.getItem(INBOX_KEY) || "[]"); } catch (e) { return []; } };
 const inboxSave = l => { try { localStorage.setItem(INBOX_KEY, JSON.stringify(l)); } catch (e) {} paintBell(); };
@@ -6633,7 +6633,7 @@ async function checkBandNotes() {
     const l = rec && rec.type === "artist" && rec.bandLink; if (!l || Date.parse(l.expires_at) < Date.now()) continue;
     try {
       const st = await bandCall({ action: "status", code: l.code }, tok), sub = st.submission;
-      if (sub && sub.finished_at && (!l.seenFinished || Date.parse(sub.finished_at) > Date.parse(l.seenFinished))) out.push({ id: rec.id, name: sub.band_name || rec.docTitle || "A band", at: sub.finished_at, songs: sub.songs, refs: sub.refs, photo: sub.photo });
+      if (sub && sub.finished_at && (!l.seenFinished || Date.parse(sub.finished_at) > Date.parse(l.seenFinished)) && noteSeen[rec.id] !== sub.finished_at) out.push({ id: rec.id, name: sub.band_name || rec.docTitle || "A band", at: sub.finished_at, songs: sub.songs, refs: sub.refs, photo: sub.photo });
     } catch (e) {}
   }
   bandNotes = out; paintBell();
@@ -6645,6 +6645,7 @@ function paintBell() {
   d.textContent = n; d.classList.toggle("hidden", !n);
 }
 async function markNoteSeen(n) {
+  noteSeen[n.id] = n.at;
   let rec = project && project.id === n.id ? project : await getProjectRecord(n.id);
   if (rec && rec.bandLink) { rec.bandLink.seenFinished = n.at; if (rec === project) { scheduleSave(); await persistNow(); } else await putProjectRecord(rec); }
   bandNotes = bandNotes.filter(x => x !== n); paintBell();
