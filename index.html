@@ -3003,9 +3003,10 @@ function nowPlayingSync() {
   if (!inShoot || (!npOn && !isPlaying())) { if (npOn && !inShoot) { npOn = false; NP.end().catch(() => {}); } return; }
   if (!npWired) { npWired = true; NP.addListener("command", e => npCommand(e && e.name)); }
   npOn = true;
-  const rows = shootRows().filter(r => r.p.time), p = currentShootPart(), sg = activeSong();
-  const idx = rows.findIndex(r => p && r.p.id === p.id);
-  NP.update({ shoot: project.docTitle || "", song: sg ? sg.name : "creatrr", section: p ? p.name : "", playing: isPlaying(), position: idx < 0 ? 1 : idx + 1, total: Math.max(1, rows.length) }).catch(() => {});
+  const p = currentShootPart(), sg = activeSong();
+  const parts = sg ? shootParts(sg.id).filter(x => x.time) : [];   // the lights show this song's sections, in colour
+  const idx = parts.findIndex(x => p && x.id === p.id);
+  NP.update({ shoot: project.docTitle || "", song: sg ? sg.name : "creatrr", section: p ? p.name : "", playing: isPlaying(), position: idx < 0 ? 1 : idx + 1, total: Math.max(1, parts.length), color: p ? p.color : "", colors: parts.map(x => x.color || "") }).catch(() => {});
 }
 async function npCommand(name) {
   if (!project || currentWs !== "shoot") return;

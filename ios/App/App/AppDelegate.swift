@@ -65,6 +65,8 @@ struct ShootActivityAttributes: ActivityAttributes {
         var playing: Bool
         var position: Int
         var total: Int
+        var color: String = ""
+        var colors: [String] = []
     }
     var shoot: String
 }
@@ -117,7 +119,8 @@ public class ShootActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { call.resolve(["enabled": false]); return }
         let state = ShootActivityAttributes.ContentState(
             song: call.getString("song") ?? "creatrr", section: call.getString("section") ?? "",
-            playing: call.getBool("playing") ?? false, position: call.getInt("position") ?? 1, total: call.getInt("total") ?? 1)
+            playing: call.getBool("playing") ?? false, position: call.getInt("position") ?? 1, total: call.getInt("total") ?? 1,
+            color: call.getString("color") ?? "", colors: (call.getArray("colors") as? [String]) ?? [])
         let content = ActivityContent(state: state, staleDate: nil)
         if let a = activity ?? Activity<ShootActivityAttributes>.activities.first {
             activity = a
