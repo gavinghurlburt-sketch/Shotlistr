@@ -1276,6 +1276,19 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .tour-pill span { flex: 1; }
 .tour-pill button { border: none; border-radius: 999px; padding: 8px 14px; font-weight: 600; background: var(--accent); color: var(--accent-fg); }
 .tour-pill button.x { background: transparent; color: var(--primary-fg); opacity: .7; padding: 8px 10px; }
+
+/* ---- band share link ---- */
+.band-box textarea, .band-box input[type="text"] { width: 100%; box-sizing: border-box; } .band-box textarea { min-height: 84px; }
+.band-lab { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 5px; }
+.band-url { width: 100%; font-size: 14px; }
+.band-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.band-actions .btn { flex: 1; }
+.band-stat { margin: 12px 0 0; font-size: 14px; }
+.band-from p { margin: 6px 0; white-space: pre-wrap; }
+.band-gone { position: fixed; inset: 0; z-index: 90; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 28px; text-align: center; }
+.band-gone > div { max-width: 340px; }
+.band-gone h2 { margin: 0 0 8px; font-size: 22px; }
+body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #docTitleInput, body.band-mode #saveStatus, body.band-mode #artistShoots, body.band-mode .song-opts { display: none !important; }
 </style>
 </head>
 <body>
@@ -1537,9 +1550,11 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
   <!-- ===== content shoot: draft ===== -->
   <section id="draftCView" class="ws-view hidden">
     <div id="songList">
+      <div id="bandTop"></div>
       <h2 class="sec-title">Songs<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h2>
       <p class="ws-intro" id="draftIntro">Upload each song once and mark its sections. When you plan a shoot, you pick which sections to film.</p>
       <div id="songRows" class="song-rows"></div>
+      <div id="bandBox"></div>
     </div>
     <div id="songPage" class="hidden">
       <div class="song-head">
@@ -1646,6 +1661,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 </main>
 
 <!-- ===== modals ===== -->
+<div id="shareModal" class="modal hidden"><div class="modal-inner" id="shareInner"></div></div>
 <div id="cropModal" class="modal hidden">
   <div class="modal-inner">
     <h3>Position your photo</h3>
@@ -4756,6 +4772,7 @@ function songStatus(sg) {
 function renderSongRows() {
   $("songRows").innerHTML = project.songs.map(sg => { const st = songStatus(sg); return `<button type="button" class="song-row" data-song-open="${sg.id}"><span class="sr-text"><span class="sr-title">${esc(sg.name)}</span><span class="sr-status ${st.todo ? "todo" : ""}">${st.text}</span></span></button>`; }).join("")
     + `<button type="button" class="song-row add" data-c="add-song">+ Add song</button>`;
+  renderBandBox();
 }
 function openSongPage(id) {
   if (isPlaying()) togglePlay();
@@ -6336,6 +6353,246 @@ var TOUR = (function () {
 })();
 document.addEventListener("click", e => { if (e.target.closest("#tourReplayBtn, #tourReplayBtn2")) TOUR.replay(); });
 
+
+/* ================= band share link =================
+   Photographer (Plus / Pro, signed in): makes a 3-day link. The band opens it on the web, adds a photo,
+   songs, sections and ideas, and taps Send. The photographer taps Import; nothing changes until then. */
+var BAND_FN = "https://anuybnbilfjthbhsxhdk.supabase.co/functions/v1/band-share";
+var BAND_KEY = "sb_publishable_xVAAW9qGTzEXDptnhK83SA_NTnbC3oj";
+var BAND_BASE = "https://creatrr-1.vercel.app/";
+var BAND_APP_URL = "";                       // App Store link, once the app is live
+var BAND_EXTS = ["mp3", "m4a", "wav", "aac", "flac", "ogg", "aiff", "caf"];
+var BAND_CODE = (function () { try { const c = new URLSearchParams(location.search).get("band"); return c && /^[A-Za-z0-9_-]{16}$/.test(c) ? c : ""; } catch (e) { return ""; } })();
+var BAND_INFO = null, bandBusy = false;
+async function bandCall(body, token) {
+  const r = await fetch(BAND_FN, { method: "POST", headers: { "Content-Type": "application/json", apikey: BAND_KEY, Authorization: "Bearer " + (token || BAND_KEY) }, body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) { const e = new Error(j.error || "Request failed"); e.status = r.status; throw e; }
+  return j;
+}
+const bandToken = async () => { try { return window.__cloudToken ? await window.__cloudToken() : null; } catch (e) { return null; } };
+function blobToDataURL(b) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); }); }
+const bandWhen = iso => new Date(iso).toLocaleString([], { weekday: "long", hour: "numeric", minute: "2-digit" });
+const bandUrl = code => BAND_BASE + "?band=" + code;
+function bandLive() { const l = project && project.bandLink; return l && Date.parse(l.expires_at) > Date.now() ? l : null; }
+
+function renderBandBox() {
+  const top = $("bandTop"), box = $("bandBox"); if (!top || !box || !project || project.type !== "artist") return;
+  if (BAND_CODE) {
+    const nm = project.docTitle === "Untitled project" ? "" : project.docTitle, b = project.brief;
+    top.innerHTML = `<div class="panel band-box"><h2 style="margin:0 0 6px">${esc((BAND_INFO && BAND_INFO.artist_name) ? "Hi! " + BAND_INFO.artist_name + " set this up for you" : "Hi!")}</h2>
+      <p class="muted small" style="margin:0">Add your band name and photo, then your songs and where each section starts. Nothing is sent until you tap Send. This page works until ${esc(BAND_INFO ? bandWhen(BAND_INFO.expires_at) : "")}.</p>
+      <label class="band-lab" for="bandName">Band name</label><input type="text" id="bandName" value="${esc(nm)}" placeholder="Your band or artist name" autocapitalize="words"></div>`;
+    box.innerHTML = `<div class="panel band-box" style="margin-top:18px"><h2 style="margin:0 0 6px">Inspiration <span class="muted small">(optional)</span></h2>
+      <label class="band-lab" for="bandLinks">Links (Instagram, TikTok, YouTube… one per line)</label><textarea id="bandLinks" placeholder="https://">${esc(b.links.join("\n"))}</textarea>
+      <label class="band-lab" for="bandNotes">Notes</label><textarea id="bandNotes" placeholder="Vibe, wardrobe, anything that helps">${esc(b.notes)}</textarea>
+      <div class="band-actions"><button type="button" class="btn primary" data-band="send" id="bandSendBtn">Send to ${esc((BAND_INFO && BAND_INFO.artist_name) || "your photographer")}</button></div>
+      <p class="muted small" id="bandSendMsg" style="margin:10px 0 0"></p></div>`;
+    return;
+  }
+  top.innerHTML = "";
+  const b = project.brief, from = (b.links.length || b.notes) && project.bandImported
+    ? `<div class="panel band-box band-from" style="margin-top:18px"><h2 style="margin:0 0 6px">From the band</h2>${b.links.map(u => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a></div>`).join("")}${b.notes ? `<p>${esc(b.notes)}</p>` : ""}</div>` : "";
+  const share = window.__cloudToken && !isArtistTier() ? `<button type="button" class="song-row add" data-band="share">${bandLive() ? "Band link" : "Share with the band"}</button>` : "";
+  box.innerHTML = share + from;
+}
+document.addEventListener("input", e => {
+  if (!BAND_CODE || !project) return;
+  if (e.target.id === "bandName") { project.docTitle = e.target.value; scheduleSave(); }
+  else if (e.target.id === "bandLinks") { project.brief.links = e.target.value.split("\n").map(x => x.trim()).filter(Boolean); scheduleSave(); }
+  else if (e.target.id === "bandNotes") { project.brief.notes = e.target.value; scheduleSave(); }
+});
+
+/* ---------- photographer side ---------- */
+function shareClose() { $("shareModal").classList.add("hidden"); }
+$("shareModal").addEventListener("click", e => { if (e.target === $("shareModal")) shareClose(); });
+function openShare() {
+  if (!project || project.type !== "artist") return;
+  bandToken().then(t => {
+    if (!t) { showNotice("Sign in to share a link."); if (window.__cloudOpenAccount) window.__cloudOpenAccount(); return; }
+    renderShare(); $("shareModal").classList.remove("hidden");
+    if (bandLive()) refreshShareStatus();
+  });
+}
+function renderShare(msg) {
+  const l = bandLive(), name = project.docTitle, el = $("shareInner");
+  if (!l) {
+    el.innerHTML = `<h3>Share with ${esc(name)}</h3><p class="modal-hint">Send ${esc(name)} a private link where they can add their photo, songs, sections and ideas. It works for 3 days. Nothing changes in your app until you tap Import.</p>
+      <p class="muted small" id="shareMsg">${esc(msg || "")}</p>
+      <div class="modal-actions"><button type="button" class="btn" data-band="close">Not now</button><button type="button" class="btn primary" data-band="create">Create link</button></div>`;
+    return;
+  }
+  el.innerHTML = `<h3>Band link</h3><p class="modal-hint">Anyone with this link can add to ${esc(name)}'s page until ${esc(bandWhen(l.expires_at))}.</p>
+    <input type="text" class="band-url" id="bandUrl" readonly value="${esc(bandUrl(l.code))}">
+    <div class="band-actions"><button type="button" class="btn" data-band="copy">Copy</button><button type="button" class="btn primary" data-band="send-link">Share…</button></div>
+    <p class="band-stat muted" id="shareStat">Checking for uploads…</p>
+    <p class="muted small" id="shareMsg">${esc(msg || "")}</p>
+    <div class="band-actions"><button type="button" class="btn primary hidden" id="shareImportBtn" data-band="import">Import what they sent</button></div>
+    <div class="modal-actions"><button type="button" class="btn danger-text" data-band="revoke">End link</button><button type="button" class="btn" data-band="close">Done</button></div>`;
+}
+async function refreshShareStatus() {
+  const l = bandLive(), st = $("shareStat"); if (!l || !st) return;
+  try {
+    const r = await bandCall({ action: "status", code: l.code }, await bandToken()), s = r.submission;
+    if (!$("shareStat")) return;
+    if (!s) { $("shareStat").textContent = "Nothing uploaded yet."; return; }
+    const bits = [s.songs ? s.songs + (s.songs === 1 ? " song" : " songs") : "", s.photo ? "a photo" : "", s.links ? "inspiration" : ""].filter(Boolean);
+    $("shareStat").textContent = (s.band_name ? s.band_name + " sent " : "They sent ") + (bits.join(", ") || "their details") + ".";
+    $("shareImportBtn").classList.remove("hidden");
+  } catch (e) { if ($("shareStat")) $("shareStat").textContent = e.status === 404 ? "This link is no longer active." : "Couldn't check right now."; }
+}
+async function bandCreate() {
+  const btn = document.querySelector('[data-band="create"]'); if (btn) btn.disabled = true;
+  try {
+    const r = await bandCall({ action: "create", artistName: project.docTitle }, await bandToken());
+    project.bandLink = { code: r.code, expires_at: r.expires_at }; scheduleSave(); renderBandBox();
+    renderShare(); refreshShareStatus();
+  } catch (e) { renderShare(e.message || "Couldn't create the link."); }
+}
+async function bandShareLink() {
+  const l = bandLive(); if (!l) return;
+  const text = `Here's a private page to add your photo, songs and sections for our shoot. It works until ${bandWhen(l.expires_at)}.`, url = bandUrl(l.code);
+  try { if (navigator.share) { await navigator.share({ text, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  bandCopy();
+}
+async function bandCopy() {
+  const u = bandUrl(bandLive().code);
+  try { await navigator.clipboard.writeText(u); showNotice("Link copied."); }
+  catch (e) { const i = $("bandUrl"); if (i) { i.focus(); i.select(); i.setSelectionRange(0, 999); } showNotice("Press and hold the link to copy it."); }
+}
+async function bandRevoke() {
+  const l = project.bandLink; if (!l) return;
+  if (!confirm("End this link? Anything the band uploaded will be deleted.")) return;
+  try { await bandCall({ action: "revoke", code: l.code }, await bandToken()); } catch (e) { if (e.status !== 404) { renderShare("Couldn't end the link. Try again."); return; } }
+  delete project.bandLink; scheduleSave(); renderBandBox(); renderShare();
+}
+async function bandImport() {
+  const l = bandLive(), btn = $("shareImportBtn"); if (!l || bandBusy) return;
+  bandBusy = true; btn.disabled = true; btn.textContent = "Importing…";
+  try {
+    const r = await bandCall({ action: "import", code: l.code }, await bandToken()), sub = r.submission;
+    if (sub.photo_url) { const b = await (await fetch(sub.photo_url)).blob(); project.cover = await blobToDataURL(b); }
+    project.bandImported = project.bandImported || {};
+    let added = 0;
+    for (const g of sub.songs || []) {
+      if (project.bandImported[g.id]) continue;
+      const t = g.tempo || {}, tempo = {};
+      ["bpm", "offset", "songStart"].forEach(k => { if (typeof t[k] === "number") tempo[k] = t[k]; });
+      if (typeof t.snap === "boolean") tempo.snap = t.snap;
+      const sg = normalizeSong({ name: g.name, tempo }); project.songs.push(sg);
+      (g.sections || []).forEach((x, i) => { const sec = defaultSection(x.name || "Section", project.sections.length + i); if (x.color) sec.color = x.color; sec.time = x.time || ""; sec.songId = sg.id; sec.rows = (project.shotTemplates || []).map(templateRow); project.sections.push(sec); });
+      if (g.url) { try { const tb = await (await fetch(g.url)).blob(); await saveTrack(project.id + "::" + sg.id, tb, g.track_name || (g.name + "." + g.ext)); } catch (e) {} }
+      project.bandImported[g.id] = sg.id; added++;
+    }
+    (sub.links || []).forEach(u => { if (!project.brief.links.includes(u)) project.brief.links.push(u); });
+    if (sub.notes && !project.brief.notes.includes(sub.notes)) project.brief.notes = (project.brief.notes ? project.brief.notes + "\n\n" : "") + sub.notes;
+    scheduleSave(); renderCurrent(); renderBanner();
+    renderShare(added ? `Imported ${added} ${added === 1 ? "song" : "songs"}${sub.photo_url ? " and the photo" : ""}.` : sub.photo_url ? "Imported the photo." : "Everything was already imported.");
+    refreshShareStatus();
+  } catch (e) { bandBusy = false; renderShare(e.message || "Couldn't import."); refreshShareStatus(); return; }
+  bandBusy = false;
+}
+
+/* ---------- band side ---------- */
+function bandGone(expired) {
+  const d = document.createElement("div"); d.className = "band-gone";
+  d.innerHTML = `<div><h2>${expired ? "This link has expired" : "This link doesn't work"}</h2><p class="muted">Ask your photographer to send you a new one.</p></div>`;
+  document.body.appendChild(d);
+}
+function bandDone() {
+  const d = document.createElement("div"); d.className = "band-gone"; d.id = "bandDone";
+  d.innerHTML = `<div><h2>Sent!</h2><p class="muted">${esc((BAND_INFO && BAND_INFO.artist_name) || "Your photographer")} can now import everything.</p>
+    <p style="margin:22px 0 14px"><b>Want to save all of this for your own shoots?</b><br><span class="muted">You can save everything you have here with our Artist account.</span></p>
+    ${BAND_APP_URL ? `<a class="btn primary" href="${esc(BAND_APP_URL)}">Get creatrr</a>` : ""}
+    <p style="margin-top:18px"><button type="button" class="btn" data-band="again">Keep editing</button></p></div>`;
+  document.body.appendChild(d);
+}
+async function bandUp(kind, blob, extra) {
+  const u = await bandCall(Object.assign({ action: "band_upload_url", code: BAND_CODE, kind }, extra || {}));
+  const fd = new FormData(); fd.append("cacheControl", "3600"); fd.append("", blob);
+  const r = await fetch(u.signedUrl, { method: "PUT", headers: { "x-upsert": "true" }, body: fd });
+  if (!r.ok) throw new Error("Upload failed. Check your connection and try again.");
+}
+async function bandSend() {
+  if (bandBusy || !project) return; bandBusy = true;
+  const btn = $("bandSendBtn"), msg = $("bandSendMsg"), say = t => { msg.textContent = t; };
+  btn.disabled = true; say("Sending…");
+  try {
+    await persistNow();
+    const nm = project.docTitle === "Untitled project" ? "" : project.docTitle.trim();
+    if (!nm) throw new Error("Add your band name first.");
+    let hasPhoto = false;
+    if (project.cover) {
+      hasPhoto = true;
+      const key = "bandup:" + BAND_CODE + ":photo", sig = String(project.cover.length);
+      let seen = ""; try { seen = localStorage.getItem(key); } catch (e) {}
+      if (seen !== sig) { say("Uploading photo…"); await bandUp("photo", await (await fetch(project.cover)).blob()); try { localStorage.setItem(key, sig); } catch (e) {} }
+    }
+    const songs = [];
+    for (let i = 0; i < project.songs.length; i++) {
+      const sg = project.songs[i], t = await loadTrack(project.id + "::" + sg.id);
+      const o = { id: sg.id, name: sg.name, tempo: { bpm: sg.tempo.bpm, offset: sg.tempo.offset, songStart: sg.tempo.songStart, snap: sg.tempo.snap },
+        sections: project.sections.filter(x => x.songId === sg.id).map(x => ({ id: x.id, name: x.name, color: x.color, time: x.time })) };
+      if (t && t.blob) {
+        const m = /\.([A-Za-z0-9]+)$/.exec(t.name || ""), ext = (m ? m[1] : "mp3").toLowerCase();
+        if (!BAND_EXTS.includes(ext)) throw new Error(`"${sg.name}" is a .${ext} file. Please use MP3, M4A, WAV or AAC.`);
+        if (t.blob.size > 50 * 1024 * 1024) throw new Error(`"${sg.name}" is over 50 MB. Try an MP3 instead.`);
+        const key = "bandup:" + BAND_CODE + ":" + sg.id, sig = t.blob.size + ":" + t.name;
+        let seen = ""; try { seen = localStorage.getItem(key); } catch (e) {}
+        if (seen !== sig) { say(`Uploading song ${i + 1} of ${project.songs.length}…`); await bandUp("song", t.blob, { id: sg.id, ext }); try { localStorage.setItem(key, sig); } catch (e) {} }
+        o.ext = ext; o.track_name = t.name;
+      }
+      songs.push(o);
+    }
+    if (!songs.length && !hasPhoto) throw new Error("Add a photo or at least one song first.");
+    await bandCall({ action: "band_save", code: BAND_CODE, band_name: nm, photo: hasPhoto, songs, links: project.brief.links, notes: project.brief.notes });
+    say(""); bandDone();
+  } catch (e) {
+    if (e.status === 410) { bandGone(true); } else say(e.message || "Something went wrong. Try again.");
+  }
+  btn.disabled = false; bandBusy = false;
+}
+async function bandRestore(rec, sub) {
+  rec.docTitle = sub.band_name || rec.docTitle;
+  if (sub.photo_url) { try { rec.cover = await blobToDataURL(await (await fetch(sub.photo_url)).blob()); } catch (e) {} }
+  for (const g of sub.songs || []) {
+    const t = g.tempo || {}, tempo = {};
+    ["bpm", "offset", "songStart"].forEach(k => { if (typeof t[k] === "number") tempo[k] = t[k]; });
+    const sg = normalizeSong({ id: g.id, name: g.name, tempo }); rec.songs.push(sg);
+    (g.sections || []).forEach((x, i) => { const sec = defaultSection(x.name || "Section", rec.sections.length + i); sec.id = x.id || sec.id; if (x.color) sec.color = x.color; sec.time = x.time || ""; sec.songId = sg.id; rec.sections.push(sec); });
+    if (g.url) { try { await saveTrack(rec.id + "::" + sg.id, await (await fetch(g.url)).blob(), g.track_name || (g.name + "." + g.ext)); } catch (e) {} }
+  }
+  rec.brief = { refs: [], links: sub.links || [], notes: sub.notes || "" };
+}
+async function bandBoot() {
+  document.body.classList.add("band-mode");
+  try { BAND_INFO = await bandCall({ action: "band_get", code: BAND_CODE }); } catch (e) { bandGone(e.status === 410); return; }
+  const id = "band_" + BAND_CODE;
+  let rec = await getProjectRecord(id);
+  if (!rec) {
+    const now = new Date().toISOString();
+    rec = normalizeRecord({ id, type: "artist", docTitle: "", workspace: "draft", createdAt: now, updatedAt: now, songs: [], sections: [] });
+    rec.docTitle = "";
+    if (BAND_INFO.submission) await bandRestore(rec, BAND_INFO.submission);
+    await putProjectRecord(rec);
+  }
+  await openProject(id);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-band]"); if (!b) return;
+  switch (b.dataset.band) {
+    case "share": openShare(); break;
+    case "close": shareClose(); break;
+    case "create": bandCreate(); break;
+    case "copy": bandCopy(); break;
+    case "send-link": bandShareLink(); break;
+    case "revoke": bandRevoke(); break;
+    case "import": bandImport(); break;
+    case "send": bandSend(); break;
+    case "again": { const d = $("bandDone"); if (d) d.remove(); break; }
+  }
+});
+
 /* ================= init ================= */
 document.querySelectorAll(".sections-container").forEach(wireTableContainer);
 wireShoot();
@@ -6345,11 +6602,12 @@ updateTransportUI();
 window.addEventListener("pagehide", () => { if (project) persistNow(); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && project) persistNow(); });
 (async function init() {
+  if (BAND_CODE) { await bandBoot(); return; }
   await firstRunSetup();
   await renderProjectsList();
   TOUR.boot();
 })();
-if ("serviceWorker" in navigator && location.protocol !== "file:" && !DEMO_MODE) {
+if ("serviceWorker" in navigator && location.protocol !== "file:" && !DEMO_MODE && !BAND_CODE) {
   window.addEventListener("load", () => { navigator.serviceWorker.register("service-worker.js").catch(e => console.error("Service worker registration failed:", e)); });
 }
 
