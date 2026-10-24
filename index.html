@@ -1363,7 +1363,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <canvas id="tempoWave" class="tempo-wave hidden" aria-label="Drag to choose where the song plays from"></canvas>
       <div class="tap-top"><button type="button" id="tapPlay" class="tap-play" aria-label="Play" disabled>▶</button><div class="tap-readout" id="tapReadout" aria-live="polite">—</div><div class="beat-dots" id="beatDots" aria-hidden="true"><i>1</i><i>2</i><i>3</i><i>4</i></div></div>
       <button type="button" id="tapBtn" class="btn primary tap-big">TAP</button>
-      <div class="tempo-ctl"><button type="button" id="tapDown" class="btn tap-down" disabled>Tap on the 1 (start of a measure)</button></div>
+      <div class="tempo-ctl"><button type="button" id="tapDown" class="btn tap-down" disabled>Sync</button></div>
       <label class="check snap-row" title="Scrubbing, new sections and moved markers land on the start of a measure"><input type="checkbox" id="snapToggle"> Snap sections to the 1 (start of each measure)</label>
       <details class="more tempo-more"><summary>More settings</summary>
       <div class="tempo-form">
@@ -3647,8 +3647,8 @@ function tapReadout() {
   $("tapBtn").classList.toggle("locked", !!tap.locked && !tap.downbeat);
   $("tapDown").classList.toggle("ready", !!tap.locked && !tap.downbeat);
   $("tapHint").textContent = !player.src ? "Upload a track first."
-    : tap.downbeat ? "That's the 1! Hear the higher click? Every count starts there. Tap again to move it, or press Done."
-    : tap.locked ? "Locked in! Now find the 1. Picture a choreographer counting “5, 6, 7, 8…”. The beat right after the 8 is the 1. Tap the lower button the moment it lands."
+    : tap.downbeat ? "Synced! The higher click is the 1, where every count starts. Tap Re-sync to move it, or press Done."
+    : tap.locked ? "Locked in! Now sync up. Tap Sync on the first beat of any section, like the beat right after a choreographer counts “5, 6, 7, 8”."
     : !n ? "Drag the waveform to start anywhere, then tap along with the beat."
     : n < 4 ? "Nice, keep tapping with every beat."
     : q && q.uneven ? "A little off. Feel the beat and keep going."
@@ -3662,7 +3662,7 @@ function paintTapUI() {
   const pb = $("tapPlay"); if (pb) { pb.disabled = !player.src; pb.textContent = playing ? "❚❚" : "▶"; pb.setAttribute("aria-label", playing ? "Pause" : "Play"); }
   b.classList.toggle("tapping", playing); b.disabled = !player.src;
   const d = $("tapDown"); d.disabled = !(playing && tp.bpm > 0 && tp.offset != null);
-  d.textContent = tap.downbeat ? "Tap again to move the 1" : "Tap on the 1 (the beat after “5, 6, 7, 8”)";
+  d.textContent = tap.downbeat ? "Re-sync" : "Sync";
   d.classList.toggle("on", !!tap.downbeat);
   if (!$("tempoModal").classList.contains("hidden")) tapReadout();
 }
@@ -6001,7 +6001,7 @@ var TOUR = (function () {
     /* 1 */ { ctx: "home", target: () => demo ? q('#paneArtists [data-artist-open="' + demo.artist + '"]') : null, title: "Meet your artists", body: "We added a Demo Band so you can practice. Tap it to open.", done: () => inArtist(), any: true },
     /* 2 */ { ctx: "artist", target: null, title: "The artist page", body: "Set up your band here before you create a project: add a photo, upload your songs, and mark sections like intro, verse and chorus. Plus and Pro can hold several artists. For now, use our two demo songs.", buttons: "next" },
     /* 3 */ { ctx: "artist", target: () => demo ? q('#songRows [data-song-open="' + demo.s2 + '"]') : null, title: "Open Practice Song 2", body: "This is your song list. Practice Song 1 is already set up with its tempo and sections. Song 2 is blank. Tap it to set it up yourself.", done: () => demo && songOpen && activeSongId === demo.s2 },
-    /* 4 */ { ctx: "artist", song: "s2", target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo and tap along with the beat. Once it locks in, tap on the 1: picture a choreographer counting “5, 6, 7, 8”. The beat after the 8 is the 1.", done: () => { const t = curTempo(); return !!(demo && activeSongId === demo.s2 && t.bpm && t.offset != null); } },
+    /* 4 */ { ctx: "artist", song: "s2", target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo and tap along with the beat. Once it locks in, tap Sync on the first beat of any section, like the beat right after a choreographer counts “5, 6, 7, 8”.", done: () => { const t = curTempo(); return !!(demo && activeSongId === demo.s2 && t.bpm && t.offset != null); } },
     /* 5 */ { ctx: "artist", song: "s2", align: "top", target: () => [$("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to where the verse begins, then tap + Add section. It snaps to the start of the beat automatically.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 5b */ { ctx: "artist", song: "s2", target: () => $("songDoneBtn"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Tap Done to go back to your song list.", done: () => !songOpen },
     /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalId: "newModal", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
