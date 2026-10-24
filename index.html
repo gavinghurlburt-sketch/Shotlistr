@@ -650,6 +650,7 @@ input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; ba
 #tplSwap { gap: 6px 20px; align-items: baseline; }
 #tplSwap .btn { background: none !important; border: 0 !important; box-shadow: none !important; min-height: 0; padding: 4px 0; border-radius: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--muted) !important; }
 #tplSwap .btn.primary { font-weight: 800; color: var(--text) !important; }
+#tplSwap .tpl-rename { font: inherit; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: inset 0 -2px 0 var(--accent) !important; padding: 4px 0; min-height: 0; width: 170px; max-width: 100%; }
 #tplSwap .btn[data-lib="__new"] { font-size: 16px; font-weight: 500; }
 .tpl-links { display: flex; align-items: center; gap: 18px; }
 .tpl-link { background: none; border: 0; box-shadow: none; min-height: 0; padding: 6px 0; font-size: 14px; color: var(--muted); text-decoration: underline; }
@@ -1638,8 +1639,6 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <div class="tpl-intro"><b>Your go-to shots, for every section.</b> A shot template is a checklist of the shots you always want to get. Every shot below is added to every song section you pick, so you never forget coverage. Standard Shoot is ready to use. Edit it, or make your own and it's saved for next time.</div>
     <div class="tpl-label">Your templates</div>
     <div id="tplSwap" class="chip-row" style="margin-top:0"></div>
-    <div class="tpl-label">Template name</div>
-    <input type="text" id="tplName" class="field" style="width:100%;font-weight:700" placeholder="Template name, e.g. Standard Shoot" autocapitalize="words">
     <div class="tpl-label">Shots</div>
     <div id="tplShots"></div>
     <div class="tpl-actions">
@@ -5197,11 +5196,13 @@ function exportDays(days, name) { downloadBlob(new Blob([icsFor(days)], { type: 
 
 /* template popup */
 $("tplHelp").addEventListener("click", () => { const m = $("tplModal"), on = m.classList.toggle("show-intro"); $("tplHelp").setAttribute("aria-expanded", on); });
-function openTplModal() { $("tplModal").classList.remove("show-intro"); renderTplModal(); $("tplStatus").textContent = ""; $("tplModal").classList.remove("hidden"); }
+var tplRename = false, tplLastTap = 0;
+function startTplRename() { tplRename = true; renderTplModal(); const i = $("tplName"); if (i) { i.focus(); i.select(); } }
+function endTplRename() { if (!tplRename) return; tplRename = false; if (!(project.templateName || "").trim()) { project.templateName = "Untitled template"; syncLib(); scheduleSave(); } renderTplModal(); }
+function openTplModal() { tplRename = false; $("tplModal").classList.remove("show-intro"); renderTplModal(); $("tplStatus").textContent = ""; $("tplModal").classList.remove("hidden"); }
 function renderTplModal() {
   const l = tplLib(), cur = libEntryForProject().e;
-  $("tplSwap").innerHTML = l.map(x => `<button type="button" class="btn small ${x.id === cur.id ? "primary" : ""}" data-lib="${x.id}">${esc(x.name)}</button>`).join("") + `<button type="button" class="btn small" data-lib="__new">+ New</button>`;
-  if (document.activeElement !== $("tplName")) $("tplName").value = project.templateName || "";
+  $("tplSwap").innerHTML = l.map(x => x.id === cur.id && tplRename ? `<input type="text" id="tplName" class="tpl-rename" value="${esc(project.templateName || x.name)}" placeholder="Template name" aria-label="Template name" autocapitalize="words">` : `<button type="button" class="btn small ${x.id === cur.id ? "primary" : ""}" data-lib="${x.id}">${esc(x.name)}</button>`).join("") + `<button type="button" class="btn small" data-lib="__new">+ New</button>`;
   const list = $("tplShots");
   list.innerHTML = project.shotTemplates.map(t => `<div class="tpl-row" data-tpl-id="${t.id}">
       <span class="col-drag-handle" title="Drag to reorder">⠿</span>
@@ -5221,11 +5222,12 @@ function renderTplModal() {
 $("tplSwap").addEventListener("click", e => {
   const b = e.target.closest("[data-lib]"); if (!b) return;
   const l = tplLib();
+  if (b.dataset.lib === project.templateLibId) { const now = Date.now(); if (now - tplLastTap < 500) { tplLastTap = 0; startTplRename(); } else tplLastTap = now; return; }   // double-tap the selected template to rename it
   if (b.dataset.lib === "__new") {
     let n = "New template", i = 2; while (l.some(x => x.name === n)) n = "New template " + i++;
     const entry = { id: uid(), name: n, shots: [{ name: "", detail: "" }] };
     l.push(entry); saveTplLib(l); swapTemplate(entry);
-    scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); return;
+    scheduleSave(); startTplRename(); return;
   }
   const entry = l.find(x => x.id === b.dataset.lib);
   if (!entry || entry.id === project.templateLibId) return;
@@ -5233,7 +5235,9 @@ $("tplSwap").addEventListener("click", e => {
   const added = swapTemplate(entry);
   scheduleSave(); renderTplModal(); $("tplStatus").textContent = `Using ${entry.name}. ${added} shot${added === 1 ? "" : "s"} added.`;
 });
-$("tplName").addEventListener("input", e => { project.templateName = e.target.value; syncLib(); scheduleSave(); const cur = document.querySelector('#tplSwap .primary'); if (cur) cur.textContent = e.target.value || "Untitled template"; });
+$("tplSwap").addEventListener("input", e => { if (e.target.id !== "tplName") return; project.templateName = e.target.value; syncLib(); scheduleSave(); });
+$("tplSwap").addEventListener("keydown", e => { if (e.target.id === "tplName" && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); endTplRename(); } });
+$("tplSwap").addEventListener("focusout", e => { if (e.target.id === "tplName") endTplRename(); });
 $("tplShots").addEventListener("input", e => {
   const f = e.target.dataset.tplField; if (!f) return;
   const t = project.shotTemplates.find(x => x.id === e.target.closest("[data-tpl-id]").dataset.tplId); if (!t) return;
@@ -5260,7 +5264,7 @@ $("tplDup").addEventListener("click", () => {
   let n = src.name + " copy", i = 2; while (l.some(x => x.name === n)) n = src.name + " copy " + i++;
   const entry = { id: uid(), name: n, shots: project.shotTemplates.map(x => ({ name: x.name, detail: x.detail || "" })) };
   l.push(entry); saveTplLib(l); swapTemplate(entry);
-  scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); $("tplStatus").textContent = "Duplicated. Give it a name.";
+  scheduleSave(); startTplRename(); $("tplStatus").textContent = "Duplicated. Give it a name.";
 });
 $("tplDelete").addEventListener("click", () => {
   const l = tplLib(), cur = libEntryForProject().e;
