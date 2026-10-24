@@ -52,9 +52,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 }
 
+/// Lets the web layer hand the list of bands to the share extension (via the App Group).
+@objc(ShareBridgePlugin)
+public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ShareBridgePlugin"
+    public let jsName = "ShareBridge"
+    public let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "setArtists", returnType: CAPPluginReturnPromise)]
+    @objc func setArtists(_ call: CAPPluginCall) {
+        UserDefaults(suiteName: "group.art.gavingeddes.producrr")?.set(call.getString("json") ?? "[]", forKey: "artists")
+        call.resolve()
+    }
+}
+
 class ViewController: CAPBridgeViewController {
     // Make sure the push and app plugins are registered even if automatic discovery missed them
     override func capacitorDidLoad() {
+        if bridge?.plugin(withName: "ShareBridge") == nil { bridge?.registerPluginInstance(ShareBridgePlugin()) }
         let wanted: [(js: String, cls: String)] = [("PushNotifications", "PushNotificationsPlugin"), ("App", "AppPlugin")]
         for w in wanted where bridge?.plugin(withName: w.js) == nil {
             if let t = NSClassFromString(w.cls) as? CAPPlugin.Type { bridge?.registerPluginInstance(t.init()) }

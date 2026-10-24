@@ -6597,7 +6597,7 @@ const inboxSave = l => { try { localStorage.setItem(INBOX_KEY, JSON.stringify(l)
 const AUDIO_RE = /\.(mp3|m4a|wav|aac|aiff?|flac|ogg|caf|mp4)$/i;
 async function inboxAdd(file) {
   if (!file || !(AUDIO_RE.test(file.name) || /^audio\//.test(file.type))) return false;
-  const id = uid();
+  const id = uid(); inboxAdd.lastId = id;
   await saveTrack("inbox::" + id, file, file.name);
   const l = inboxList(); l.push({ id, name: file.name, size: file.size, at: new Date().toISOString() }); inboxSave(l);
   return true;
@@ -6605,7 +6605,7 @@ async function inboxAdd(file) {
 /* the iPhone share extension drops files in Documents/Inbox; pull them in */
 async function inboxDrainNative() {
   const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform() || BAND_CODE) return 0;
-  let n = 0;
+  let n = 0; const placed = [];
   try {
     const FS = C.Filesystem, r = await FS.readdir({ path: "Inbox", directory: "DOCUMENTS" });
     for (const f of r.files || []) {
@@ -6613,18 +6613,35 @@ async function inboxDrainNative() {
       try {
         const u = await FS.getUri({ path: "Inbox/" + name, directory: "DOCUMENTS" });
         const blob = await (await fetch(C.Capacitor.convertFileSrc(u.uri))).blob();
-        if (await inboxAdd(new File([blob], name, { type: blob.type || "audio/mpeg" }))) { n++; await FS.deleteFile({ path: "Inbox/" + name, directory: "DOCUMENTS" }); }
+        let meta = null; try { const m = await FS.readFile({ path: "Inbox/" + name + ".meta.json", directory: "DOCUMENTS", encoding: "utf8" }); meta = JSON.parse(m.data); } catch (e) {}
+        if (await inboxAdd(new File([blob], name, { type: blob.type || "audio/mpeg" }))) {
+          n++; const iid = inboxAdd.lastId;
+          await FS.deleteFile({ path: "Inbox/" + name, directory: "DOCUMENTS" });
+          if (meta) { try { await FS.deleteFile({ path: "Inbox/" + name + ".meta.json", directory: "DOCUMENTS" }); } catch (e) {} }
+          if (meta && meta.artistId) { try { const r = await inboxToSong(iid, meta.artistId, meta.songName); if (r) { placed.push(r); n--; } } catch (e) {} }
+        }
       } catch (e) {}
     }
   } catch (e) {}
+  if (placed.length) showNotice("Added " + placed.map(p => p.song + " to " + p.artist).join(", ") + ".");
   return n;
 }
-async function inboxToSong(itemId, artistId) {
+/* give the share extension the list of bands so it can offer them in its pop-up */
+async function publishArtists() {
+  const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform() || BAND_CODE) return;
+  try {
+    const recs = await listProjects();
+    const list = recs.filter(r => r && r.type === "artist" && !r.deletedAt).map(r => ({ id: r.id, name: r.docTitle || "" })).filter(a => a.name);
+    const sig = JSON.stringify(list); if (sig === publishArtists.last) return; publishArtists.last = sig;
+    await C.Capacitor.registerPlugin("ShareBridge").setArtists({ json: sig });
+  } catch (e) {}
+}
+async function inboxToSong(itemId, artistId, nameOverride) {
   const l = inboxList(), it = l.find(x => x.id === itemId); if (!it) return null;
   const t = await loadTrack("inbox::" + itemId); if (!t || !t.blob) { inboxSave(l.filter(x => x.id !== itemId)); return null; }
   const rec = project && project.id === artistId ? project : await getProjectRecord(artistId); if (!rec) return null;
   const f = await toMp3(new File([t.blob], it.name, { type: t.blob.type }));
-  const sg = normalizeSong({ name: songNameFromFile(it.name) }); rec.songs.push(sg);
+  const sg = normalizeSong({ name: (nameOverride || "").trim() || songNameFromFile(it.name) }); rec.songs.push(sg);
   await saveTrack(artistId + "::" + sg.id, f, f.name);
   if (rec === project) { scheduleSave(); renderCurrent(); } else await putProjectRecord(rec);
   await clearTrack("inbox::" + itemId); inboxSave(inboxList().filter(x => x.id !== itemId));
@@ -6692,7 +6709,7 @@ document.addEventListener("change", e => { if (e.target.id === "inboxArtist") in
 var notifPrefs = (function () { let o = {}; try { o = JSON.parse(localStorage.getItem("creatrr_notif_prefs") || "{}"); } catch (e) {} return { finished: o.finished !== false, shootday: o.shootday !== false, calltime: o.calltime !== false }; })();
 function paintNotifPrefs() { document.querySelectorAll("[data-notif]").forEach(el => { el.checked = !!notifPrefs[el.dataset.notif]; }); }
 var remTimer = null;
-function remindersSoon() { clearTimeout(remTimer); remTimer = setTimeout(syncReminders, 6000); }
+function remindersSoon() { clearTimeout(remTimer); remTimer = setTimeout(() => { syncReminders(); publishArtists(); }, 6000); }
 async function syncReminders() {
   if (BAND_CODE || !window.__cloudToken) return;
   try {
@@ -6757,9 +6774,9 @@ async function pushSetup(ask) {
 document.addEventListener("click", e => { if (e.target.closest("#pushBtn")) pushSetup(true); });
 document.addEventListener("click", e => { if (e.target.closest("#accountBtn")) { const el = $("pushStatus"); if (el) el.textContent = pushState; } });
 if (!BAND_CODE) {
-  setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); syncReminders(); }, 3500);
+  setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); syncReminders(); publishArtists(); }, 3500);
   setInterval(checkBandNotes, 60000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { checkBandNotes(); inboxDrainNative(); remindersSoon(); } });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { checkBandNotes(); inboxDrainNative(); remindersSoon(); publishArtists(); } });
   try {
     const C = window.Cap;
     if (C && C.Capacitor.isNativePlatform()) {
