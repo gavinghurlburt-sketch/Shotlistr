@@ -1,4 +1,7 @@
 import UIKit
+import AVFoundation
+import ActivityKit
+import AppIntents
 import Capacitor
 
 @UIApplicationMain
@@ -52,6 +55,86 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 }
 
+/// ---- Lock-screen Live Activity for shoot playback (the widget itself lives in the CreatrrWidget target) ----
+/// Identical copies of these types live in the widget target (ios/CreatrrWidget/ShootLiveActivity.swift).
+struct ShootActivityAttributes: ActivityAttributes {
+    struct ContentState: Codable, Hashable {
+        var song: String
+        var section: String
+        var playing: Bool
+        var position: Int
+        var total: Int
+    }
+    var shoot: String
+}
+
+enum ShootBridge {
+    static let note = Notification.Name("creatrr.shoot.command")
+    static func send(_ name: String) { NotificationCenter.default.post(name: note, object: nil, userInfo: ["name": name]) }
+}
+
+struct ShootToggleIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Play or stop"
+    func perform() async throws -> some IntentResult { ShootBridge.send("toggle"); return .result() }
+}
+struct ShootNextIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Next section"
+    func perform() async throws -> some IntentResult { ShootBridge.send("next"); return .result() }
+}
+struct ShootPreviousIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Previous section"
+    func perform() async throws -> some IntentResult { ShootBridge.send("previous"); return .result() }
+}
+
+@objc(ShootActivityPlugin)
+public class ShootActivityPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ShootActivityPlugin"
+    public let jsName = "ShootActivity"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "end", returnType: CAPPluginReturnPromise),
+    ]
+    private var activity: Activity<ShootActivityAttributes>?
+    private var sessionReady = false
+
+    override public func load() {
+        NotificationCenter.default.addObserver(forName: ShootBridge.note, object: nil, queue: .main) { [weak self] n in
+            self?.notifyListeners("command", data: ["name": (n.userInfo?["name"] as? String) ?? ""])
+        }
+    }
+
+    @objc func update(_ call: CAPPluginCall) {
+        if !sessionReady {   // keeps the song playing with the screen locked
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try? AVAudioSession.sharedInstance().setActive(true)
+            sessionReady = true
+        }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { call.resolve(["enabled": false]); return }
+        let state = ShootActivityAttributes.ContentState(
+            song: call.getString("song") ?? "creatrr", section: call.getString("section") ?? "",
+            playing: call.getBool("playing") ?? false, position: call.getInt("position") ?? 1, total: call.getInt("total") ?? 1)
+        let content = ActivityContent(state: state, staleDate: nil)
+        if let a = activity ?? Activity<ShootActivityAttributes>.activities.first {
+            activity = a
+            Task { await a.update(content) }
+            call.resolve(["enabled": true])
+        } else {
+            do {
+                activity = try Activity.request(attributes: ShootActivityAttributes(shoot: call.getString("shoot") ?? ""), content: content, pushType: nil)
+                call.resolve(["enabled": true])
+            } catch { call.resolve(["enabled": false, "error": "\(error)"]) }
+        }
+    }
+
+    @objc func end(_ call: CAPPluginCall) {
+        Task {
+            for a in Activity<ShootActivityAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) }
+            activity = nil
+            call.resolve()
+        }
+    }
+}
+
 /// Lets the web layer hand the list of bands to the share extension (via the App Group).
 @objc(ShareBridgePlugin)
 public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
@@ -87,6 +170,7 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 class ViewController: CAPBridgeViewController {
     // Make sure the push and app plugins are registered even if automatic discovery missed them
     override func capacitorDidLoad() {
+        if bridge?.plugin(withName: "ShootActivity") == nil { bridge?.registerPluginInstance(ShootActivityPlugin()) }
         if bridge?.plugin(withName: "ShareBridge") == nil { bridge?.registerPluginInstance(ShareBridgePlugin()) }
         let wanted: [(js: String, cls: String)] = [("PushNotifications", "PushNotificationsPlugin"), ("App", "AppPlugin")]
         for w in wanted where bridge?.plugin(withName: w.js) == nil {

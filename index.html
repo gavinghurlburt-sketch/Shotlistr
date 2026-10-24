@@ -2994,41 +2994,18 @@ function updateTimecodes() {
   document.querySelectorAll(".tc-display").forEach(el => { el.textContent = text; });
 }
 function paintRate() { const rb = $("rateBadge"); if (!rb) return; rb.textContent = speedLabel(playRate) + " speed"; rb.classList.toggle("hidden", playRate === 1); }
-/* lock-screen player: play, stop, next, previous while a shoot plays (iPhone app).
-   iOS only shows its player for a real media element, so a silent loop plays while the shoot is active and the Media Session API supplies the buttons. */
-var npOn = false, npEl = null;
-function npSilentURL() {
-  const n = 8000, b = new Uint8Array(44 + n), v = new DataView(b.buffer), w = (o, t) => { for (let i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
-  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true);
-  b.fill(128, 44);
-  let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
-  return "data:audio/wav;base64," + btoa(bin);
-}
+/* lock-screen player: a creatrr-styled Live Activity with previous / play-stop / next while a shoot plays (iPhone app) */
+var npOn = false, npWired = false;
+function npPlugin() { const C = window.Cap; if (!C || BAND_CODE || !C.Capacitor.isNativePlatform()) return null; try { return C.Capacitor.registerPlugin("ShootActivity"); } catch (e) { return null; } }
 function nowPlayingSync() {
-  const C = window.Cap; if (BAND_CODE || !C || !C.Capacitor.isNativePlatform() || !("mediaSession" in navigator)) return;
-  const ms = navigator.mediaSession;
+  const NP = npPlugin(); if (!NP) return;
   const inShoot = !!(project && project.type === "content" && currentWs === "shoot" && player.src);
-  if (!inShoot || (!npOn && !isPlaying())) {
-    if (npOn && !inShoot) {
-      npOn = false;
-      try { if (npEl) npEl.pause(); ms.metadata = null; ms.playbackState = "none"; ["play", "pause", "stop", "nexttrack", "previoustrack"].forEach(a => ms.setActionHandler(a, null)); } catch (e) {}
-    }
-    return;
-  }
-  const p = currentShootPart(), sg = activeSong(), on = isPlaying();
-  try {
-    if (!npEl) { npEl = new Audio(npSilentURL()); npEl.loop = true; npEl.setAttribute("playsinline", ""); }
-    if (!npOn) {
-      npOn = true;
-      const h = (a, f) => { try { ms.setActionHandler(a, f); } catch (e) {} };
-      h("play", () => { npCommand("play"); }); h("pause", () => { npCommand("pause"); }); h("stop", () => { npCommand("stop"); });
-      h("nexttrack", () => { npCommand("next"); }); h("previoustrack", () => { npCommand("previous"); });
-    }
-    ms.metadata = new MediaMetadata({ title: sg ? sg.name + (p ? " \u00b7 " + p.name : "") : "creatrr", artist: project.docTitle || "creatrr", album: "creatrr shoot" });
-    if (on) { const pr = npEl.play(); if (pr && pr.catch) pr.catch(() => {}); } else npEl.pause();
-    ms.playbackState = on ? "playing" : "paused";
-  } catch (e) {}
+  if (!inShoot || (!npOn && !isPlaying())) { if (npOn && !inShoot) { npOn = false; NP.end().catch(() => {}); } return; }
+  if (!npWired) { npWired = true; NP.addListener("command", e => npCommand(e && e.name)); }
+  npOn = true;
+  const rows = shootRows().filter(r => r.p.time), p = currentShootPart(), sg = activeSong();
+  const idx = rows.findIndex(r => p && r.p.id === p.id);
+  NP.update({ shoot: project.docTitle || "", song: sg ? sg.name : "creatrr", section: p ? p.name : "", playing: isPlaying(), position: idx < 0 ? 1 : idx + 1, total: Math.max(1, rows.length) }).catch(() => {});
 }
 async function npCommand(name) {
   if (!project || currentWs !== "shoot") return;
@@ -4723,6 +4700,7 @@ async function openProject(id) {
   await loadActiveTrack();
 }
 async function goToProjects() {
+  setTimeout(() => { if (typeof nowPlayingSync === "function") nowPlayingSync(); }, 120);
   const wasArtist = !!project && project.type === "artist";
   await persistNow();
   resetPlayer();
