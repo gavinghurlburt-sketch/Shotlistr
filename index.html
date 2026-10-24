@@ -5983,25 +5983,32 @@ var TOUR = (function () {
   }
   /* dim everything except the highlighted rects (even-odd cutouts), ring each one */
   function drawHoles(rects) {
-    const W = innerWidth, H = innerHeight, pad = 6, rad = 14;
+    const W = innerWidth, H = innerHeight, pad = 6;
     let d = "M0 0H" + W + "V" + H + "H0Z";
     rings.innerHTML = "";
     rects.forEach(r => {
       const x = Math.max(0, r.left - pad), y = Math.max(0, r.top - pad), w = Math.min(W, r.right + pad) - x, h = Math.min(H, r.bottom + pad) - y;
+      if (w <= 0 || h <= 0) return;
+      const rad = Math.max(0, Math.min((r.rad || 0) + pad, w / 2, h / 2));      // the ring wraps each shape: pill buttons get a pill, cards get their corners
       d += "M" + (x + rad) + " " + y + "H" + (x + w - rad) + "A" + rad + " " + rad + " 0 0 1 " + (x + w) + " " + (y + rad) + "V" + (y + h - rad) + "A" + rad + " " + rad + " 0 0 1 " + (x + w - rad) + " " + (y + h) + "H" + (x + rad) + "A" + rad + " " + rad + " 0 0 1 " + x + " " + (y + h - rad) + "V" + (y + rad) + "A" + rad + " " + rad + " 0 0 1 " + (x + rad) + " " + y + "Z";
       const ring = document.createElement("div"); ring.className = "tour-ring";
-      ring.style.cssText = "left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px";
+      ring.style.cssText = "left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;border-radius:" + rad + "px";
       rings.appendChild(ring);
     });
     hole.style.clipPath = hole.style.webkitClipPath = rects.length ? 'path(evenodd, "' + d + '")' : "none";
   }
+  const radiusOf = (el, r) => {
+    const v = getComputedStyle(el).borderTopLeftRadius || "0";
+    let n = parseFloat(v) || 0; if (/%/.test(v)) n = n / 100 * Math.min(r.width, r.height);
+    return n > 0 ? n : 8;
+  };
   /* ease the highlight from wherever it is to the new target (ease-out expo) instead of snapping */
   let curRects = [], animId = 0, lastTarget = "";
   const ease = t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);   // ease-out expo: leaps off the line, then a long slow settle
-  const rk = r => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  const rk = r => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, rad: r.rad || 0 });
   function setHoles(rects) {
     rects = rects.map(rk);
-    const key = rects.map(r => [r.left, r.top, r.right, r.bottom].map(Math.round).join(",")).join("|");
+    const key = rects.map(r => [r.left, r.top, r.right, r.bottom, r.rad].map(Math.round).join(",")).join("|");
     if (key === lastTarget) return;
     lastTarget = key;
     cancelAnimationFrame(animId);
@@ -6012,7 +6019,7 @@ var TOUR = (function () {
     const src = rects.map((r, i) => from[Math.min(i, from.length - 1)]);
     const step = now => {
       const k = Math.min(1, (now - start) / dur), e = ease(k);
-      curRects = rects.map((r, i) => { const a = src[i]; return { left: a.left + (r.left - a.left) * e, top: a.top + (r.top - a.top) * e, right: a.right + (r.right - a.right) * e, bottom: a.bottom + (r.bottom - a.bottom) * e }; });
+      curRects = rects.map((r, i) => { const a = src[i]; return { left: a.left + (r.left - a.left) * e, top: a.top + (r.top - a.top) * e, right: a.right + (r.right - a.right) * e, bottom: a.bottom + (r.bottom - a.bottom) * e, rad: (a.rad || 0) + ((r.rad || 0) - (a.rad || 0)) * e }; });
       drawHoles(curRects);
       if (k < 1) animId = requestAnimationFrame(step);
     };
@@ -6087,7 +6094,7 @@ var TOUR = (function () {
     pill.hidden = true;
     hole.style.display = "";
     if (!st.target) { setHoles([]); paintCard(st, []); return; }
-    const rects = els.filter(onScreen).map(e => e.getBoundingClientRect());
+    const rects = els.filter(onScreen).map(e => { const b = e.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height, rad: radiusOf(e, b) }; });
     setHoles(rects); paintCard(st, rects);
   }
   /* a fresh run (first launch or replay) starts from a clean Demo Band, so earlier practice can't make steps look done */
