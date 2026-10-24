@@ -1196,8 +1196,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 #tourLayer { position: fixed; inset: 0; z-index: 9000; pointer-events: none; }
 #tourLayer.hidden { display: none; }
 .tour-dim { position: fixed; inset: 0; background: rgba(0,0,0,.58); pointer-events: none; }
-.tour-card { transition: top .42s cubic-bezier(.4,0,.2,1); }
-.tour-card.swap { animation: tourIn .38s cubic-bezier(.2,.7,.2,1); }
+.tour-card { transition: top .7s cubic-bezier(.16,1,.3,1); }
+.tour-card.swap { animation: tourIn .6s cubic-bezier(.16,1,.3,1); }
 @keyframes tourIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .tour-ring { position: fixed; border-radius: 14px; outline: 2px solid var(--accent); pointer-events: none; }
 .tour-card { position: fixed; left: 12px; right: 12px; max-width: 400px; margin: 0 auto; background: var(--surface); color: var(--text); border-radius: 16px; padding: 14px 16px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.35); pointer-events: auto; }
@@ -5995,9 +5995,9 @@ var TOUR = (function () {
     });
     hole.style.clipPath = hole.style.webkitClipPath = rects.length ? 'path(evenodd, "' + d + '")' : "none";
   }
-  /* ease the highlight from wherever it is to the new target (cubic in-out) instead of snapping */
+  /* ease the highlight from wherever it is to the new target (ease-out expo) instead of snapping */
   let curRects = [], animId = 0, lastTarget = "";
-  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const ease = t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);   // ease-out expo: leaps off the line, then a long slow settle
   const rk = r => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
   function setHoles(rects) {
     rects = rects.map(rk);
@@ -6008,7 +6008,7 @@ var TOUR = (function () {
     const from = curRects.slice();
     const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!rects.length || !from.length || reduce) { curRects = rects; drawHoles(rects); return; }
-    const start = performance.now(), dur = 420;
+    const start = performance.now(), dur = 700;
     const src = rects.map((r, i) => from[Math.min(i, from.length - 1)]);
     const step = now => {
       const k = Math.min(1, (now - start) / dur), e = ease(k);
