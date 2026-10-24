@@ -1,12 +1,32 @@
 {
   "installCommand": "true",
-  "buildCommand": "rm -rf site && mkdir site && cp index.html landing.html manifest.json service-worker.js site/ && cp -r assets docs icons site/",
+  "buildCommand": "rm -rf site && mkdir site && cp index.html site/app.html && cp landing.html manifest.json service-worker.js site/ && cp -r assets docs icons site/ && cp landing.html site/index.html && rm site/landing.html",
   "outputDirectory": "site",
-  "rewrites": [
-    { "source": "/", "has": [{ "type": "query", "key": "band" }], "destination": "/index.html" },
-    { "source": "/", "destination": "/landing.html" },
-    { "source": "/support", "destination": "/docs/index.html" },
-    { "source": "/terms", "destination": "/docs/terms.html" },
-    { "source": "/privacy", "destination": "/docs/privacy.html" }
+  "routes": [
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "band"
+        }
+      ],
+      "dest": "/app.html"
+    },
+    {
+      "src": "/support",
+      "dest": "/docs/index.html"
+    },
+    {
+      "src": "/terms",
+      "dest": "/docs/terms.html"
+    },
+    {
+      "src": "/privacy",
+      "dest": "/docs/privacy.html"
+    },
+    {
+      "handle": "filesystem"
+    }
   ]
 }
