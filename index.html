@@ -627,9 +627,15 @@ table.sched tr.done-row td { background-color: var(--done); }
 .link-add .field { flex: 1; min-width: 0; }
 .link-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .link-row a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
-.tpl-row { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.tpl-row .field { flex: 1 1 140px; min-width: 0; }
-.tpl-row .tpl-detail { flex: 2 1 200px; }
+.tpl-intro { font-size: 14px; line-height: 1.45; color: var(--muted); margin: 0 0 14px; }
+.tpl-intro b { display: block; color: var(--text); font-size: 17px; margin-bottom: 2px; }
+.tpl-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+.tpl-label span { text-transform: none; letter-spacing: 0; font-weight: 500; margin-left: 6px; }
+.tpl-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 8px 8px 12px; background-color: var(--surface-2); border-radius: 16px; margin-bottom: 8px; }
+.tpl-row .tpl-fields { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.tpl-row .field { background-color: transparent; border: none; box-shadow: none; padding: 3px 0; min-height: 0; width: 100%; min-width: 0; }
+.tpl-row .tpl-name { font-weight: 700; font-size: 16px; }
+.tpl-row .tpl-detail { font-size: 14px; color: var(--muted); }
 .tpl-add { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .tpl-add .field { flex: 1 1 160px; min-width: 0; }
 .cboard-song { margin-bottom: 18px; }
@@ -1600,10 +1606,13 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 <div id="tplModal" class="modal hidden">
   <div class="modal-inner wide">
     <h3>Shot template</h3>
-    <p class="modal-hint">A template is the set of shots every song section gets. Pick one, or build your own and it's saved for next time.</p>
+    <div class="tpl-intro"><b>Your go-to shots, for every section.</b> A shot template is a checklist of the shots you always want to get. Every shot below is added to every song section you pick, so you never forget coverage. Standard Shoot is ready to use. Edit it, or make your own and it's saved for next time.</div>
+    <div class="tpl-label">Your templates</div>
     <div id="tplSwap" class="chip-row" style="margin-top:0"></div>
+    <div class="tpl-label">Template name</div>
     <input type="text" id="tplName" class="field" style="width:100%;font-weight:700" placeholder="Template name, e.g. Standard Shoot" autocapitalize="words">
-    <div id="tplShots" style="margin-top:6px"></div>
+    <div class="tpl-label">Shots <span>Each one gets a name and a note on what to capture</span></div>
+    <div id="tplShots"></div>
     <div class="tpl-actions">
       <button type="button" id="tplAddShot" class="btn small">+ Add shot</button>
       <button type="button" id="tplCopy" class="btn small">Save as new template</button>
@@ -5162,8 +5171,10 @@ function renderTplModal() {
   const list = $("tplShots");
   list.innerHTML = project.shotTemplates.map(t => `<div class="tpl-row" data-tpl-id="${t.id}">
       <span class="col-drag-handle" title="Drag to reorder">⠿</span>
-      <input type="text" class="field" data-tpl-field="name" value="${esc(t.name)}" placeholder="Shot, e.g. Close-up" aria-label="Shot name">
-      <input type="text" class="field tpl-detail" data-tpl-field="detail" value="${esc(t.detail)}" placeholder="Detail, e.g. Tight on the face" aria-label="Shot detail">
+      <div class="tpl-fields">
+        <input type="text" class="field tpl-name" data-tpl-field="name" value="${esc(t.name)}" placeholder="Shot name, e.g. Close-up" aria-label="Shot name">
+        <input type="text" class="field tpl-detail" data-tpl-field="detail" value="${esc(t.detail)}" placeholder="What to capture, e.g. Tight on the face" aria-label="What to capture">
+      </div>
       <button type="button" class="icon-btn" data-tpl-del="${t.id}" aria-label="Remove shot">×</button>
     </div>`).join("") || `<p class="muted small">No shots yet. Add the ones every section should get.</p>`;
   $("tplDelete").classList.toggle("hidden", l.length < 2);
@@ -5892,7 +5903,8 @@ var TOUR = (function () {
     /* 5 */ { ctx: "artist", song: "s2", align: "top", target: () => [$("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to where the verse begins, then tap + Add section. It snaps to the start of the beat automatically.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalId: "newModal", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
     /* 7 */ { ctx: "content", ws: "plan", target: () => { const b = demo && q('[data-sp-song="' + demo.s2 + '"]'); return b ? b.closest(".sp-card") : null; }, title: "Pick your songs", body: "Practice Song 1 is already ticked. Tick Practice Song 2 too, so your setlist has two songs. You can tick a whole song or just the sections you want.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
-    /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. The Standard Shoot template stamps those shots on every section you picked. Tap it to edit shots or build your own.", buttons: "next" },
+    /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. A template is your list of go-to shots. Tap it to take a look.", done: () => { const m = $("tplModal"); return !!m && !m.classList.contains("hidden"); } },
+    /* 9 */ { ctx: "content", ws: "plan", target: null, title: "Your go-to shots", body: "Every shot in your template is added to every section. Edit them, or make your own.", modalId: "tplModal", modalHint: "This is your go-to shot list. Every shot here gets added to every section you picked. Edit them or tap + New for your own, then tap Done.", done: () => { const m = $("tplModal"); return !m || m.classList.contains("hidden"); } },
     /* 9 */ { ctx: "content", ws: "plan", target: () => ["songRefs", "songLinks", "songNotes"].map(panelOf).filter(Boolean), title: "References, links and notes", body: "Add reference images, paste Instagram, TikTok or YouTube links, and jot down notes about energy and wardrobe.", buttons: "next" },
     /* 10 */ { ctx: "content", ws: "plan", target: () => $("wsTabs"), title: "Swipe between tabs", body: "Swipe left and right between Plan, Shoot and Cut, or tap a tab. Swipe left to go to Shoot.", done: () => inContent() && currentWs === "shoot", any: true },
     /* 11 */ { ctx: "content", ws: "shoot", target: () => [$("shootDateLine"), $("cShootStatus")].filter(e => e && onScreen(e)), title: "Your shoot day card", body: "The date card shows when you're shooting. The banner below shows the time, shots done, and takes logged so far.", buttons: "next" },
@@ -5971,6 +5983,8 @@ var TOUR = (function () {
   function onClick(e) {
     const b = e.target.closest("[data-t]"); if (!b) return;
     const a = b.dataset.t;
+    unclamp();
+    if (a === "back") { const tm = $("tplModal"); if (tm) tm.classList.add("hidden"); }
     if (a === "skip") finish("Tour skipped. You can replay it from the menu at the top right, under Help.");
     else if (a === "back") { if (idx > 0) { idx--; hold = idx; save(); scrolledFor = -1; tick(); } }
     else if (a === "next") { idx = Math.min(idx + 1, STEPS.length - 1); save(); scrolledFor = -1; tick(); }
@@ -6047,7 +6061,8 @@ var TOUR = (function () {
     }
     return innerHeight - h - safeB;
   }
-  function paintCard(st, rects, hint, anchor) {
+  function unclamp() { const m = $("tplModal"), i = m && m.querySelector(".modal-inner"); if (i) i.style.maxHeight = ""; }
+  function paintCard(st, rects, hint, anchor, atTop) {
     const n = idx + 1, total = STEPS.length;
     let btns = "";
     const nextBtn = (st.buttons === "next" || (hold === idx && st.buttons !== "end")) ? '<button class="btn primary tc-next" data-t="next">Next</button>' : "";
@@ -6056,11 +6071,12 @@ var TOUR = (function () {
     if (card.dataset.k !== ck) card.classList.remove("swap");
     if (card.dataset.k !== ck) { void card.offsetWidth; card.classList.add("swap"); }
     card.dataset.k = ck;
-    card.innerHTML = '<div class="tc-step">Step ' + n + ' of ' + total + '</div>' + (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + ('<div class="tc-foot"><div class="tc-left">' + (idx > 0 ? '<button class="tc-skip" data-t="back">‹ Back</button>' : "") + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>') + '</div>' + nextBtn + '</div>');
+    card.innerHTML = (hint ? '<p>' + hint + '</p>' : '<h4>' + st.title + '</h4><p>' + st.body + '</p>' + btns) + ('<div class="tc-foot"><div class="tc-left">' + (idx > 0 ? '<button class="tc-skip" data-t="back">‹ Back</button>' : "") + (st.buttons === "end" ? "" : '<button class="tc-skip" data-t="skip">Skip tour</button>') + '</div>' + nextBtn + '</div>');
     card.hidden = false;
     const h = card.offsetHeight;
     let top;
-    if (hint && anchor) { const sf = safe(), above = anchor.top - h - 10; top = above >= sf.top + 10 ? above : Math.min(anchor.bottom + 10, innerHeight - h - sf.bottom - 10); }   // right next to the sheet it talks about
+    if (hint && atTop) top = safe().top + 10;
+    else if (hint && anchor) { const sf = safe(), above = anchor.top - h - 10; top = above >= sf.top + 10 ? above : Math.min(anchor.bottom + 10, innerHeight - h - sf.bottom - 10); }   // right next to the sheet it talks about
     else top = hint ? safe().top + 10 : placeCard(rects || [], h);
     card.style.top = top + "px";
   }
@@ -6080,8 +6096,15 @@ var TOUR = (function () {
     }
     const st = STEPS[idx];
     const om = document.querySelector(".modal:not(.hidden)");
+    if (!(om && om.id === "tplModal" && st.modalId === "tplModal")) unclamp();
     if (om || document.querySelector("#lightbox.open")) {
-      if (om && st.modalHint && st.modalId === om.id) { layer.classList.remove("hidden"); setHoles([]); hole.style.display = "none"; pill.hidden = true; paintCard(st, [], st.modalHint, (om.querySelector(".modal-inner") || om).getBoundingClientRect()); }
+      if (om && st.modalHint && st.modalId === om.id) {
+        layer.classList.remove("hidden"); setHoles([]); hole.style.display = "none"; pill.hidden = true;
+        const inner = om.querySelector(".modal-inner") || om;
+        paintCard(st, [], st.modalHint, inner.getBoundingClientRect(), st.modalId === "tplModal");
+        const cardBottom = (parseFloat(card.style.top) || 0) + card.offsetHeight;      // a tall sheet (the template) gets shortened so the card never covers it
+        if (st.modalId === "tplModal") inner.style.maxHeight = Math.max(260, innerHeight - cardBottom - 10) + "px";
+      }
       else layer.classList.add("hidden");
       return;
     }
