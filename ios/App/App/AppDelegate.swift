@@ -57,6 +57,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 /// ---- Lock-screen Live Activity for shoot playback (the widget itself lives in the CreatrrWidget target) ----
 /// Identical copies of these types live in the widget target (ios/CreatrrWidget/ShootLiveActivity.swift).
+@available(iOS 16.2, *)
 struct ShootActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var song: String
@@ -73,19 +74,23 @@ enum ShootBridge {
     static func send(_ name: String) { NotificationCenter.default.post(name: note, object: nil, userInfo: ["name": name]) }
 }
 
+@available(iOS 17.0, *)
 struct ShootToggleIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Play or stop"
     func perform() async throws -> some IntentResult { ShootBridge.send("toggle"); return .result() }
 }
+@available(iOS 17.0, *)
 struct ShootNextIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Next section"
     func perform() async throws -> some IntentResult { ShootBridge.send("next"); return .result() }
 }
+@available(iOS 17.0, *)
 struct ShootPreviousIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Previous section"
     func perform() async throws -> some IntentResult { ShootBridge.send("previous"); return .result() }
 }
 
+@available(iOS 16.2, *)
 @objc(ShootActivityPlugin)
 public class ShootActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "ShootActivityPlugin"
@@ -170,7 +175,7 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 class ViewController: CAPBridgeViewController {
     // Make sure the push and app plugins are registered even if automatic discovery missed them
     override func capacitorDidLoad() {
-        if bridge?.plugin(withName: "ShootActivity") == nil { bridge?.registerPluginInstance(ShootActivityPlugin()) }
+        if #available(iOS 16.2, *) { if bridge?.plugin(withName: "ShootActivity") == nil { bridge?.registerPluginInstance(ShootActivityPlugin()) } }
         if bridge?.plugin(withName: "ShareBridge") == nil { bridge?.registerPluginInstance(ShareBridgePlugin()) }
         let wanted: [(js: String, cls: String)] = [("PushNotifications", "PushNotificationsPlugin"), ("App", "AppPlugin")]
         for w in wanted where bridge?.plugin(withName: w.js) == nil {
