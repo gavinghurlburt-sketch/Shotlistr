@@ -643,7 +643,10 @@ input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; ba
 .tpl-intro { font-size: 14px; line-height: 1.45; color: var(--muted); margin: 0 0 14px; }
 .tpl-intro b { display: block; color: var(--text); font-size: 17px; margin-bottom: 2px; }
 .tpl-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
-#tplSwap .btn { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.tpl-links { display: flex; align-items: center; gap: 18px; }
+.tpl-link { background: none; border: 0; box-shadow: none; min-height: 0; padding: 6px 0; font-size: 14px; color: var(--muted); text-decoration: underline; }
+.tpl-link:hover, .tpl-link:active { background: none; }
+.tpl-link.danger-text { color: var(--danger); }
 .tpl-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 8px 8px 12px; background-color: var(--surface-2); border-radius: 16px; margin-bottom: 8px; }
 .tpl-row .tpl-fields { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .tpl-row .field { background-color: transparent; border: none; box-shadow: none; padding: 3px 0; min-height: 0; width: 100%; min-width: 0; }
@@ -1638,7 +1641,7 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
       <button type="button" id="tplApply" class="btn small">Add missing shots to every section</button>
       <span id="tplStatus" class="muted small"></span>
     </div>
-    <div class="modal-actions"><button type="button" id="tplDelete" class="btn small danger-text">Delete template</button><button type="button" id="tplDone" class="btn primary">Done</button></div>
+    <div class="modal-actions"><span class="tpl-links"><button type="button" id="tplDup" class="tpl-link">Duplicate</button><button type="button" id="tplDelete" class="tpl-link danger-text">Delete template</button></span><button type="button" id="tplDone" class="btn primary">Done</button></div>
   </div>
 </div>
 <div id="detailsModal" class="modal hidden">
@@ -5243,29 +5246,13 @@ $("tplAddShot").addEventListener("click", () => {
   project.shotTemplates.push({ id: uid(), name: "", detail: "" }); syncLib(); scheduleSave(); renderTplModal();
   const rows = document.querySelectorAll('#tplShots [data-tpl-field="name"]'); if (rows.length) rows[rows.length - 1].focus();
 });
-/* hold a template tag to duplicate it */
-(function () {
-  let t = null, held = false;
-  const box = $("tplSwap");
-  const cancel = () => { clearTimeout(t); t = null; };
-  box.addEventListener("pointerdown", e => {
-    const b = e.target.closest("[data-lib]"); held = false;
-    if (!b || b.dataset.lib === "__new") return;
-    cancel();
-    t = setTimeout(() => {
-      held = true; t = null;
-      const l = tplLib(), src = l.find(x => x.id === b.dataset.lib); if (!src) return;
-      if (!confirm(`Duplicate "${src.name}"?`)) return;
-      let n = src.name + " copy", i = 2; while (l.some(x => x.name === n)) n = src.name + " copy " + i++;
-      const entry = { id: uid(), name: n, shots: src.shots.map(x => ({ name: x.name, detail: x.detail || "" })) };
-      l.push(entry); saveTplLib(l); swapTemplate(entry);
-      scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); $("tplStatus").textContent = "Duplicated. Give it a name.";
-    }, 550);
-  });
-  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => box.addEventListener(ev, cancel));
-  box.addEventListener("click", e => { if (held) { held = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-  box.addEventListener("contextmenu", e => e.preventDefault());
-})();
+$("tplDup").addEventListener("click", () => {
+  const l = tplLib(), src = libEntryForProject().e;
+  let n = src.name + " copy", i = 2; while (l.some(x => x.name === n)) n = src.name + " copy " + i++;
+  const entry = { id: uid(), name: n, shots: project.shotTemplates.map(x => ({ name: x.name, detail: x.detail || "" })) };
+  l.push(entry); saveTplLib(l); swapTemplate(entry);
+  scheduleSave(); renderTplModal(); $("tplName").focus(); $("tplName").select(); $("tplStatus").textContent = "Duplicated. Give it a name.";
+});
 $("tplDelete").addEventListener("click", () => {
   const l = tplLib(), cur = libEntryForProject().e;
   if (l.length < 2 || !confirm(`Delete the template "${cur.name}" from your library?`)) return;
