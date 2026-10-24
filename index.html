@@ -1391,6 +1391,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <div class="theme-seg"><button type="button" class="btn small" data-theme-pref="system">Device</button><button type="button" class="btn small" data-theme-pref="light">Light</button><button type="button" class="btn small" data-theme-pref="dark">Dark</button></div>
       <p class="modal-hint" style="margin:16px 0 8px">Plan <span class="muted small">(for testing, purchases come later)</span></p>
       <div class="theme-seg"><button type="button" class="btn small" data-tier-pref="artist">Artist</button><button type="button" class="btn small" data-tier-pref="plus">Plus</button><button type="button" class="btn small" data-tier-pref="pro">Pro</button></div>
+      <p class="modal-hint" style="margin:16px 0 8px">Notifications</p>
+      <button type="button" id="pushBtn" class="btn small">Turn on notifications</button>
+      <p class="muted small" id="pushStatus" style="margin:8px 0 0"></p>
       <p class="modal-hint" style="margin:16px 0 8px">Backups</p>
       <label for="importProjectInput" class="btn small file-label">Import a backup file</label>
       <p class="modal-hint" style="margin:16px 0 8px">Help</p>
@@ -4758,7 +4761,7 @@ function setThemePref(v) {
 document.addEventListener("click", e => { const b = e.target.closest("[data-theme-pref]"); if (b) setThemePref(b.dataset.themePref); const t = e.target.closest("[data-tier-pref]"); if (t) setTier(t.dataset.tierPref); });
 document.querySelectorAll("[data-tier-pref]").forEach(b => b.classList.toggle("primary", b.dataset.tierPref === TIER));
 if (window.matchMedia) { const mq = matchMedia("(prefers-color-scheme: dark)"); const f = () => { if (themePref === "system") applyTheme(); }; if (mq.addEventListener) mq.addEventListener("change", f); else if (mq.addListener) mq.addListener(f); }
-$("settingsBtn").addEventListener("click", () => $("settingsModal").classList.remove("hidden"));
+$("settingsBtn").addEventListener("click", () => { $("settingsModal").classList.remove("hidden"); const el = $("pushStatus"); if (el) el.textContent = pushState; });
 $("settingsDone").addEventListener("click", () => $("settingsModal").classList.add("hidden"));
 $("settingsModal").addEventListener("click", e => { if (e.target === $("settingsModal")) $("settingsModal").classList.add("hidden"); });
 
@@ -6699,23 +6702,35 @@ if (!BAND_CODE) {
   });
 }
 /* push notifications (iPhone app) */
-var pushWired = false;
+var pushWired = false, pushState = "Not set up yet";
+function pushSay(t, loud) { pushState = t; const el = $("pushStatus"); if (el) el.textContent = t; if (loud) showNotice(t); }
 async function pushSetup(ask) {
-  const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform() || BAND_CODE) return;
+  const C = window.Cap; if (BAND_CODE) return;
+  if (!C) { pushSay("Notifications aren't available here (no app bridge).", ask); return; }
+  if (!C.Capacitor.isNativePlatform()) { pushSay("Notifications work in the iPhone app.", ask); return; }
   const P = C.PushNotifications;
   try {
     let st = await P.checkPermissions();
-    if (st.receive === "prompt" || st.receive === "prompt-with-rationale") { if (!ask) return; st = await P.requestPermissions(); }
-    if (st.receive !== "granted") return;
+    if (st.receive === "prompt" || st.receive === "prompt-with-rationale") { if (!ask) { pushSay("Off. Tap Turn on notifications."); return; } st = await P.requestPermissions(); }
+    if (st.receive === "denied") { pushSay("Blocked. Turn on Notifications for creatrr in the iPhone Settings app.", ask); return; }
+    if (st.receive !== "granted") { pushSay("Permission: " + st.receive, ask); return; }
     if (!pushWired) {
       pushWired = true;
-      P.addListener("registration", async t => { const tok = await bandToken(); if (tok) { try { await bandCall({ action: "push_register", token: t.value }, tok); } catch (e) {} } });
+      P.addListener("registration", async t => {
+        const tok = await bandToken();
+        if (!tok) { pushSay("Allowed. Sign in to finish setting up notifications.", ask); return; }
+        try { const r = await bandCall({ action: "push_register", token: t.value }, tok); pushSay(r.configured ? "On. You'll get a notification when a band finishes." : "Allowed on this phone, but the server has no Apple key yet."); }
+        catch (e) { pushSay("Couldn't register this phone: " + (e.message || e), true); }
+      });
+      P.addListener("registrationError", e => pushSay("Apple wouldn't register this phone: " + ((e && (e.error || e.message)) || JSON.stringify(e)), true));
       P.addListener("pushNotificationReceived", () => checkBandNotes());
       P.addListener("pushNotificationActionPerformed", () => openNotes());
     }
+    pushSay("Allowed. Registering with Apple\u2026");
     await P.register();
-  } catch (e) {}
+  } catch (e) { pushSay("Notification setup failed: " + ((e && e.message) || e), true); }
 }
+document.addEventListener("click", e => { if (e.target.closest("#pushBtn")) pushSetup(true); });
 if (!BAND_CODE) {
   setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); }, 3500);
   setInterval(checkBandNotes, 60000);
