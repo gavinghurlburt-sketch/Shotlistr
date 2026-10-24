@@ -1079,6 +1079,11 @@ details.more > :not(summary) { margin-top: 8px; }
 .banner.has-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.35), transparent 55%); pointer-events: none; }
 .banner > .btn { position: absolute; right: 12px; bottom: 12px; z-index: 2; background-color: var(--pill); color: var(--text); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 .banner-meta { position: absolute; left: 18px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.55); max-width: 62%; }
+.crop-frame { position: relative; width: 100%; aspect-ratio: 2.4 / 1; border-radius: 18px; overflow: hidden; background: #000; margin-top: 12px; touch-action: none; cursor: grab; }
+.crop-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.crop-card { position: absolute; top: 0; bottom: 0; left: 50%; aspect-ratio: 1 / 1; transform: translateX(-50%); border: 2px dashed rgba(255,255,255,.85); border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 999px rgba(0,0,0,.28); display: flex; align-items: flex-end; justify-content: center; }
+.crop-card span { font-size: 11px; font-weight: 700; color: #fff; padding: 0 0 6px; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+#cropZoom { width: 100%; margin: 14px 0 0; accent-color: var(--accent); }
 .banner-date { background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; color: #fff; font-size: 34px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; text-align: left; }
 .banner-date:hover { background: none; }
 .banner-sub { font-size: 13px; font-weight: 600; opacity: .95; }
@@ -1641,6 +1646,15 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 </main>
 
 <!-- ===== modals ===== -->
+<div id="cropModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>Position your photo</h3>
+    <div class="crop-frame"><canvas id="cropCanvas" aria-label="Drag to move the photo, pinch or use the slider to zoom"></canvas><div class="crop-card" aria-hidden="true"><span>Artist card</span></div></div>
+    <p class="muted small" style="margin:8px 0 0">The wide frame is the banner. The square is what shows on artist cards.</p>
+    <input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
+    <div class="modal-actions"><button type="button" id="cropCancel" class="btn">Cancel</button><button type="button" id="cropUse" class="btn primary">Use photo</button></div>
+  </div>
+</div>
 <div id="newModal" class="modal hidden">
   <div class="modal-inner wide">
     <h3>New</h3>
@@ -4820,11 +4834,58 @@ $("detClear").addEventListener("click", () => { setShootDate(""); $("detDate").v
 $("detCal").addEventListener("click", () => { const d = projectDay(false); if (!d) { alert("Pick a date first."); return; } exportDays([d], `${project.docTitle}-${d.date}`); });
 $("detDone").addEventListener("click", () => $("detailsModal").classList.add("hidden"));
 $("detailsModal").addEventListener("click", e => { if (e.target === $("detailsModal")) $("detailsModal").classList.add("hidden"); });
+/* photo cropper: position the picture inside the banner frame, with the artist-card square marked */
+function openCropper(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onerror = () => resolve(null);
+    img.onload = () => {
+      const m = $("cropModal"), cv = $("cropCanvas"), fr = cv.parentElement, zoom = $("cropZoom"), ratio = 2.4;
+      m.classList.remove("hidden");
+      const W = fr.clientWidth, H = Math.round(W / ratio), dpr = Math.min(2, window.devicePixelRatio || 1);
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      const iw = img.naturalWidth, ih = img.naturalHeight, kMin = Math.max(W / iw, H / ih);
+      let v = 1, cx = iw / 2, cy = ih / 2;
+      zoom.value = 1;
+      const clamp = () => { const k = kMin * v; cx = Math.max(W / (2 * k), Math.min(iw - W / (2 * k), cx)); cy = Math.max(H / (2 * k), Math.min(ih - H / (2 * k), cy)); };
+      const draw = () => { clamp(); const k = kMin * v, g = cv.getContext("2d"); g.drawImage(img, cx - W / (2 * k), cy - H / (2 * k), W / k, H / k, 0, 0, cv.width, cv.height); };
+      const ptrs = new Map(); let pinch = 0;
+      const down = e => { ptrs.set(e.pointerId, [e.clientX, e.clientY]); try { fr.setPointerCapture(e.pointerId); } catch (x) {} if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } fr.style.cursor = "grabbing"; };
+      const move = e => {
+        if (!ptrs.has(e.pointerId)) return;
+        const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+        if (ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) { v = Math.max(1, Math.min(4, v * d / pinch)); zoom.value = v; } pinch = d; }
+        else { const k = kMin * v; cx -= (e.clientX - prev[0]) / k; cy -= (e.clientY - prev[1]) / k; }
+        draw();
+      };
+      const up = e => { ptrs.delete(e.pointerId); pinch = 0; fr.style.cursor = ""; };
+      const wheel = e => { e.preventDefault(); v = Math.max(1, Math.min(4, v * (e.deltaY < 0 ? 1.06 : 0.94))); zoom.value = v; draw(); };
+      const slide = () => { v = +zoom.value; draw(); };
+      const done = out => {
+        fr.removeEventListener("pointerdown", down); fr.removeEventListener("pointermove", move); fr.removeEventListener("pointerup", up); fr.removeEventListener("pointercancel", up); fr.removeEventListener("wheel", wheel);
+        zoom.removeEventListener("input", slide); $("cropUse").onclick = null; $("cropCancel").onclick = null;
+        m.classList.add("hidden"); resolve(out);
+      };
+      fr.addEventListener("pointerdown", down); fr.addEventListener("pointermove", move); fr.addEventListener("pointerup", up); fr.addEventListener("pointercancel", up); fr.addEventListener("wheel", wheel, { passive: false });
+      zoom.addEventListener("input", slide);
+      $("cropCancel").onclick = () => done(null);
+      $("cropUse").onclick = () => {
+        const k = kMin * v, o = document.createElement("canvas"); o.width = 1200; o.height = 500;
+        o.getContext("2d").drawImage(img, cx - W / (2 * k), cy - H / (2 * k), W / k, H / k, 0, 0, 1200, 500);
+        done(o.toDataURL("image/jpeg", 0.82));
+      };
+      draw();
+    };
+    img.src = url;
+  });
+}
 $("bannerFile").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f || !project) return;
-  try { project.cover = await fileToDataURL(f, 1000); scheduleSave(); renderBanner(); }
-  catch (err) { alert("That image couldn't be read. Try a JPG or PNG."); }
+  try {
+    const src = await fileToDataURL(f, 2000), out = await openCropper(src);
+    if (out) { project.cover = out; scheduleSave(); renderBanner(); }
+  } catch (err) { alert("That image couldn't be read. Try a JPG or PNG."); }
 });
 function setActiveSong(id) {
   if (!id || id === activeSongId) return;
