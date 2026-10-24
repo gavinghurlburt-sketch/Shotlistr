@@ -1,4 +1,7 @@
 {
+  "installCommand": "true",
+  "buildCommand": "rm -rf site && mkdir site && cp index.html landing.html manifest.json service-worker.js site/ && cp -r assets docs icons site/",
+  "outputDirectory": "site",
   "rewrites": [
     { "source": "/", "has": [{ "type": "query", "key": "band" }], "destination": "/index.html" },
     { "source": "/", "destination": "/landing.html" },

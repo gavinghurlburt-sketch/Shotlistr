@@ -5,3 +5,4 @@ ios/DerivedData/
 .DS_Store
 www/
 scripts/supabase.bundle.js
+site/
