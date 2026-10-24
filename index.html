@@ -1073,6 +1073,8 @@ details.more > :not(summary) { margin-top: 8px; }
 .part-row { flex-wrap: wrap; }
 /* v2.2 */
 .theme-seg { display: flex; gap: 6px; }
+.notif-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; font-size: 14px; }
+.notif-row input { width: 22px; height: 22px; flex: none; }
 .theme-seg .btn { flex: 1; }
 .banner { position: relative; height: 150px; border-radius: 26px; overflow: hidden; margin: 2px 0 14px; background-color: var(--surface); }
 .banner-img { position: absolute; inset: 0; background: linear-gradient(145deg, var(--c1, #888), var(--c2, #555)) center / cover no-repeat; }
@@ -2119,6 +2121,7 @@ let saveTimer = null;
 
 function setSaveStatus(t) { $("saveStatus").textContent = t; }
 function scheduleSave() {
+  if (typeof remindersSoon === "function") remindersSoon();
   if (!project) return;
   setSaveStatus(DEMO_MODE ? "Demo — not saved" : "Saving…");
   clearTimeout(saveTimer);
@@ -6685,6 +6688,43 @@ document.addEventListener("click", async e => {
   try { if (project) await goToProjects(); await openProject(n.id); await markNoteSeen(n); openShare(); } catch (er) {}
 });
 document.addEventListener("change", e => { if (e.target.id === "inboxArtist") inboxPick = e.target.value; });
+/* notification preferences + shoot reminders (server sends them, so they arrive even when the app is closed) */
+var notifPrefs = (function () { let o = {}; try { o = JSON.parse(localStorage.getItem("creatrr_notif_prefs") || "{}"); } catch (e) {} return { finished: o.finished !== false, shootday: o.shootday !== false, calltime: o.calltime !== false }; })();
+function paintNotifPrefs() { document.querySelectorAll("[data-notif]").forEach(el => { el.checked = !!notifPrefs[el.dataset.notif]; }); }
+var remTimer = null;
+function remindersSoon() { clearTimeout(remTimer); remTimer = setTimeout(syncReminders, 6000); }
+async function syncReminders() {
+  if (BAND_CODE || !window.__cloudToken) return;
+  try {
+    const tok = await bandToken(); if (!tok) return;
+    const recs = await listProjects(), items = [], now = Date.now();
+    for (const rec of recs) {
+      if (!rec || rec.type !== "content" || rec.deletedAt) continue;
+      const title = rec.docTitle || "Your shoot", who = rec.artist ? rec.artist + " \u00b7 " : "";
+      for (const d of (rec.shootDays || [])) {
+        if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.date || "")) continue;
+        const clock = d.start ? minToClock(clockToMin(d.start)) : "";
+        if (notifPrefs.shootday) {
+          const at = new Date(d.date + "T08:00:00").getTime();
+          if (at > now) items.push({ key: rec.id + ":" + (d.id || d.date) + ":sd", kind: "shootday", fire_at: new Date(at).toISOString(), title: "Shoot day: " + title, body: who + (clock ? "Call at " + clock : "Today") + (d.location ? " \u00b7 " + d.location : "") });
+        }
+        if (notifPrefs.calltime && d.start && /^\d{1,2}:\d{2}$/.test(d.start)) {
+          const at = new Date(d.date + "T" + (d.start.length < 5 ? "0" + d.start : d.start) + ":00").getTime() - 60 * 60000;
+          if (at > now) items.push({ key: rec.id + ":" + (d.id || d.date) + ":ct", kind: "calltime", fire_at: new Date(at).toISOString(), title: "Call time in an hour: " + title, body: "Call at " + clock + (d.location ? " at " + d.location : "") });
+        }
+      }
+    }
+    await bandCall({ action: "reminders_set", items }, tok);
+  } catch (e) {}
+}
+document.addEventListener("change", async e => {
+  const k = e.target && e.target.dataset && e.target.dataset.notif; if (!k) return;
+  notifPrefs[k] = !!e.target.checked;
+  try { localStorage.setItem("creatrr_notif_prefs", JSON.stringify(notifPrefs)); } catch (x) {}
+  try { const tok = await bandToken(); if (tok) await bandCall({ action: "push_prefs", prefs: notifPrefs }, tok); } catch (x) {}
+  syncReminders();
+});
+document.addEventListener("click", e => { if (e.target.closest("#accountBtn")) paintNotifPrefs(); });
 /* push notifications (iPhone app) */
 var pushWired = false, pushAsked = false, pushState = "Not set up yet";
 function pushSay(t, loud) { pushState = t; const el = $("pushStatus"); if (el) el.textContent = t; if (loud) showNotice(t); }
@@ -6703,7 +6743,7 @@ async function pushSetup(ask) {
       P.addListener("registration", async t => {
         const tok = await bandToken();
         if (!tok) { pushSay("Allowed. Sign in to finish setting up notifications.", ask); return; }
-        try { const r = await bandCall({ action: "push_register", token: t.value }, tok); pushSay(r.configured ? "Notifications are on. You'll get one when a band finishes." : "Allowed on this phone, but the server has no Apple key yet.", pushAsked); }
+        try { const r = await bandCall({ action: "push_register", token: t.value, prefs: notifPrefs }, tok); pushSay(r.configured ? "Notifications are on." : "Allowed on this phone, but the server has no Apple key yet.", pushAsked); }
         catch (e) { pushSay("Couldn't register this phone: " + (e.message || e), true); }
       });
       P.addListener("registrationError", e => pushSay("Apple wouldn't register this phone: " + ((e && (e.error || e.message)) || JSON.stringify(e)), true));
@@ -6717,9 +6757,9 @@ async function pushSetup(ask) {
 document.addEventListener("click", e => { if (e.target.closest("#pushBtn")) pushSetup(true); });
 document.addEventListener("click", e => { if (e.target.closest("#accountBtn")) { const el = $("pushStatus"); if (el) el.textContent = pushState; } });
 if (!BAND_CODE) {
-  setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); }, 3500);
+  setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); syncReminders(); }, 3500);
   setInterval(checkBandNotes, 60000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { checkBandNotes(); inboxDrainNative(); } });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { checkBandNotes(); inboxDrainNative(); remindersSoon(); } });
   try {
     const C = window.Cap;
     if (C && C.Capacitor.isNativePlatform()) {
