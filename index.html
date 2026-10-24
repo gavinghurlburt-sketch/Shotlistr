@@ -6728,7 +6728,7 @@ async function pushSetup(ask) {
     }
     pushSay("Allowed. Registering with Apple\u2026");
     await P.register();
-  } catch (e) { pushSay("Notification setup failed: " + ((e && e.message) || e), true); }
+  } catch (e) { let pl = ""; try { pl = " [native plugins: " + (window.Capacitor && window.Capacitor.PluginHeaders ? window.Capacitor.PluginHeaders.map(h => h.name).join(", ") : "none") + "]"; } catch (x) {} pushSay("Notification setup failed: " + ((e && e.message) || e) + pl, true); }
 }
 document.addEventListener("click", e => { if (e.target.closest("#pushBtn")) pushSetup(true); });
 if (!BAND_CODE) {

@@ -53,6 +53,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 
 class ViewController: CAPBridgeViewController {
+    // Make sure the push and app plugins are registered even if automatic discovery missed them
+    override func capacitorDidLoad() {
+        let wanted: [(js: String, cls: String)] = [("PushNotifications", "PushNotificationsPlugin"), ("App", "AppPlugin")]
+        for w in wanted where bridge?.plugin(withName: w.js) == nil {
+            if let t = NSClassFromString(w.cls) as? CAPPlugin.Type { bridge?.registerPluginInstance(t.init()) }
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         webView?.scrollView.bounces = true
