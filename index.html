@@ -6646,7 +6646,7 @@ function paintBell() {
 }
 async function markNoteSeen(n) {
   let rec = project && project.id === n.id ? project : await getProjectRecord(n.id);
-  if (rec && rec.bandLink) { rec.bandLink.seenFinished = n.at; if (rec === project) scheduleSave(); else await putProjectRecord(rec); }
+  if (rec && rec.bandLink) { rec.bandLink.seenFinished = n.at; if (rec === project) { scheduleSave(); await persistNow(); } else await putProjectRecord(rec); }
   bandNotes = bandNotes.filter(x => x !== n); paintBell();
 }
 const mb = n => (n / 1048576 >= 0.1 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
