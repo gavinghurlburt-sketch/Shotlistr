@@ -4,3 +4,8 @@ window.supabase = { createClient };
 window.lamejs = { Mp3Encoder };
 import { Purchases } from "@revenuecat/purchases-capacitor";
 window.RC = Purchases;
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
+import { App as CapApp } from "@capacitor/app";
+import { Filesystem } from "@capacitor/filesystem";
+window.Cap = { Capacitor, PushNotifications, App: CapApp, Filesystem };

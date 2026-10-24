@@ -1304,6 +1304,10 @@ body.band-mode .banner { height: auto; aspect-ratio: 3 / 2; max-height: 360px; }
 .band-gone h2 { margin: 0 0 8px; font-size: 22px; }
 .bell { position: relative; display: inline-flex; align-items: center; justify-content: center; }
 .bell-dot { position: absolute; top: 2px; right: 3px; min-width: 15px; height: 15px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; background: #e5484d; color: #fff; font-size: 10px; font-weight: 800; line-height: 15px; text-align: center; }
+.inbox-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.inbox-row > div { flex: 1; min-width: 0; }
+.inbox-row b, .inbox-row span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-row span { font-size: 12px; color: var(--muted); }
 .note-row { display: block; width: 100%; text-align: left; padding: 12px 14px; margin: 8px 0; border-radius: 14px; background: var(--surface-2); border: 0; font: inherit; color: var(--text); }
 .note-row b { display: block; }
 .note-row span { font-size: 13px; color: var(--muted); }
@@ -1319,7 +1323,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
     <input type="text" id="docTitleInput" class="doc-title hidden" placeholder="Untitled project" aria-label="Project title">
     <span class="spacer"></span>
     <span id="saveStatus" class="small"></span>
-    <button id="bellBtn" class="btn small bell hidden" aria-label="Notifications"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg><span id="bellDot" class="bell-dot hidden"></span></button>
+    <button id="bellBtn" class="btn small bell" aria-label="Notifications and audio inbox"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg><span id="bellDot" class="bell-dot hidden"></span></button>
     <button id="settingsBtn" class="btn small">Settings</button>
   </div>
   <nav id="wsTabs" class="ws-tabs hidden" aria-label="Workspaces">
@@ -6528,7 +6532,7 @@ async function bandCreate() {
   const btn = document.querySelector('[data-band="create"]'); if (btn) btn.disabled = true;
   try {
     const r = await bandCall({ action: "create", artistName: project.docTitle }, await bandToken());
-    project.bandLink = { code: r.code, expires_at: r.expires_at }; scheduleSave(); renderBandBox();
+    project.bandLink = { code: r.code, expires_at: r.expires_at }; scheduleSave(); renderBandBox(); pushSetup(true);
     renderShare(); refreshShareStatus();
   } catch (e) { renderShare(e.message || "Couldn't create the link."); }
 }
@@ -6578,11 +6582,51 @@ async function bandImport() {
   bandBusy = false;
 }
 
-/* ---------- notifications: bands that have tapped Finish ---------- */
-var bandNotes = [];
+/* ---------- notifications and the audio inbox ---------- */
+var bandNotes = [], inboxPick = "";
+const INBOX_KEY = "creatrr_inbox";
+const inboxList = () => { try { return JSON.parse(localStorage.getItem(INBOX_KEY) || "[]"); } catch (e) { return []; } };
+const inboxSave = l => { try { localStorage.setItem(INBOX_KEY, JSON.stringify(l)); } catch (e) {} paintBell(); };
+const AUDIO_RE = /\.(mp3|m4a|wav|aac|aiff?|flac|ogg|caf|mp4)$/i;
+async function inboxAdd(file) {
+  if (!file || !(AUDIO_RE.test(file.name) || /^audio\//.test(file.type))) return false;
+  const id = uid();
+  await saveTrack("inbox::" + id, file, file.name);
+  const l = inboxList(); l.push({ id, name: file.name, size: file.size, at: new Date().toISOString() }); inboxSave(l);
+  return true;
+}
+/* the iPhone share extension drops files in Documents/Inbox; pull them in */
+async function inboxDrainNative() {
+  const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform() || BAND_CODE) return 0;
+  let n = 0;
+  try {
+    const FS = C.Filesystem, r = await FS.readdir({ path: "Inbox", directory: "DOCUMENTS" });
+    for (const f of r.files || []) {
+      const name = f.name || f; if (!AUDIO_RE.test(name)) continue;
+      try {
+        const u = await FS.getUri({ path: "Inbox/" + name, directory: "DOCUMENTS" });
+        const blob = await (await fetch(C.Capacitor.convertFileSrc(u.uri))).blob();
+        if (await inboxAdd(new File([blob], name, { type: blob.type || "audio/mpeg" }))) { n++; await FS.deleteFile({ path: "Inbox/" + name, directory: "DOCUMENTS" }); }
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return n;
+}
+async function inboxToSong(itemId, artistId) {
+  const l = inboxList(), it = l.find(x => x.id === itemId); if (!it) return null;
+  const t = await loadTrack("inbox::" + itemId); if (!t || !t.blob) { inboxSave(l.filter(x => x.id !== itemId)); return null; }
+  const rec = project && project.id === artistId ? project : await getProjectRecord(artistId); if (!rec) return null;
+  const f = await toMp3(new File([t.blob], it.name, { type: t.blob.type }));
+  const sg = normalizeSong({ name: songNameFromFile(it.name) }); rec.songs.push(sg);
+  await saveTrack(artistId + "::" + sg.id, f, f.name);
+  if (rec === project) { scheduleSave(); renderCurrent(); } else await putProjectRecord(rec);
+  await clearTrack("inbox::" + itemId); inboxSave(inboxList().filter(x => x.id !== itemId));
+  return { song: sg.name, artist: rec.docTitle };
+}
 async function checkBandNotes() {
-  if (BAND_CODE || !window.__cloudToken) return;
-  const tok = await bandToken(); if (!tok) { bandNotes = []; paintBell(false); return; }
+  if (BAND_CODE) return;
+  const tok = window.__cloudToken ? await bandToken() : null;
+  if (!tok) { bandNotes = []; paintBell(); return; }
   let recs = []; try { recs = await listProjects(); } catch (e) { return; }
   const out = [];
   for (const rec of recs) {
@@ -6592,36 +6636,96 @@ async function checkBandNotes() {
       if (sub && sub.finished_at && (!l.seenFinished || Date.parse(sub.finished_at) > Date.parse(l.seenFinished))) out.push({ id: rec.id, name: sub.band_name || rec.docTitle || "A band", at: sub.finished_at, songs: sub.songs, refs: sub.refs, photo: sub.photo });
     } catch (e) {}
   }
-  bandNotes = out; paintBell(true);
+  bandNotes = out; paintBell();
 }
-function paintBell(signed) {
-  const b = $("bellBtn"), d = $("bellDot"); if (!b) return;
-  b.classList.toggle("hidden", !signed);
-  d.textContent = bandNotes.length; d.classList.toggle("hidden", !bandNotes.length);
+function paintBell() {
+  const b = $("bellBtn"), d = $("bellDot"); if (!b || BAND_CODE) return;
+  b.classList.remove("hidden");
+  const n = bandNotes.length + inboxList().length;
+  d.textContent = n; d.classList.toggle("hidden", !n);
 }
 async function markNoteSeen(n) {
   let rec = project && project.id === n.id ? project : await getProjectRecord(n.id);
   if (rec && rec.bandLink) { rec.bandLink.seenFinished = n.at; if (rec === project) scheduleSave(); else await putProjectRecord(rec); }
-  bandNotes = bandNotes.filter(x => x !== n); paintBell(true);
+  bandNotes = bandNotes.filter(x => x !== n); paintBell();
 }
-function renderNotes() {
-  const el = $("notesInner");
-  el.innerHTML = `<h3>Notifications</h3>` + (bandNotes.length ? bandNotes.map((n, i) => {
+const mb = n => (n / 1048576 >= 0.1 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
+async function renderNotes(msg) {
+  const el = $("notesInner"), files = inboxList();
+  const artists = (await listProjects()).filter(r => r && r.type === "artist" && !String(r.id).startsWith("band_")).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  if (!artists.some(a => a.id === inboxPick)) inboxPick = (project && project.type === "artist" ? project.id : "") || (artists[0] && artists[0].id) || "";
+  const notes = bandNotes.length ? bandNotes.map((n, i) => {
     const bits = [n.songs ? n.songs + (n.songs === 1 ? " song" : " songs") : "", n.photo ? "a photo" : "", n.refs ? n.refs + (n.refs === 1 ? " inspiration photo" : " inspiration photos") : ""].filter(Boolean);
     return `<button type="button" class="note-row" data-note="${i}"><b>${esc(n.name)} finished their page</b><span>${esc(bits.join(", ") || "Their details are ready")}. Tap to review and import.</span></button>`;
-  }).join("") : `<p class="muted">You're all caught up. When a band taps Finish on their link, it shows up here.</p>`) + `<div class="modal-actions"><button type="button" class="btn primary" id="notesClose">Done</button></div>`;
+  }).join("") : `<p class="muted small" style="margin:6px 0 0">Nothing new. When a band taps Finish on their link, it shows up here.</p>`;
+  const rows = files.map(f => `<div class="inbox-row"><div><b>${esc(songNameFromFile(f.name))}</b><span>${esc(f.name)} · ${mb(f.size)}</span></div><button type="button" class="btn small primary" data-inbox-add="${esc(f.id)}"${artists.length ? "" : " disabled"}>Add as song</button><button type="button" class="btn small" data-inbox-rm="${esc(f.id)}" aria-label="Remove">×</button></div>`).join("");
+  el.innerHTML = `<h3>Notifications</h3>${notes}<h3 style="margin-top:20px">Audio inbox</h3>
+    <p class="modal-hint">Share an audio file to creatrr from Messages, Files or Voice Memos, or add one here. Then pick the artist and tap Add as song.</p>
+    ${artists.length ? `<label class="band-lab" for="inboxArtist">Add songs to</label><select id="inboxArtist" class="field">${artists.map(a => `<option value="${esc(a.id)}"${a.id === inboxPick ? " selected" : ""}>${esc(a.docTitle || "Untitled artist")}</option>`).join("")}</select>` : `<p class="muted small">Create an artist first, then you can add songs here.</p>`}
+    ${rows || `<p class="muted small" style="margin:10px 0 0">No audio waiting.</p>`}
+    <input type="file" id="inboxFile" accept="audio/*,.mp3,.m4a,.wav,.aac,.aiff,.caf,.flac,.ogg" multiple hidden>
+    <p class="muted small" id="inboxMsg" style="margin:8px 0 0">${esc(msg || "")}</p>
+    <div class="modal-actions"><button type="button" class="btn" id="inboxPickBtn">Add audio files…</button><button type="button" class="btn primary" id="notesClose">Done</button></div>`;
 }
+async function openNotes(msg) { await checkBandNotes(); await renderNotes(msg); $("notesModal").classList.remove("hidden"); }
 document.addEventListener("click", async e => {
-  if (e.target.closest("#bellBtn")) { await checkBandNotes(); renderNotes(); $("notesModal").classList.remove("hidden"); return; }
+  if (e.target.closest("#bellBtn")) { await inboxDrainNative(); openNotes(); return; }
   if (e.target.closest("#notesClose") || e.target === $("notesModal")) { $("notesModal").classList.add("hidden"); return; }
+  if (e.target.closest("#inboxPickBtn")) { $("inboxFile").click(); return; }
+  const add = e.target.closest("[data-inbox-add]");
+  if (add) { add.disabled = true; add.textContent = "Adding…"; const r = await inboxToSong(add.dataset.inboxAdd, ($("inboxArtist") || {}).value || inboxPick); renderNotes(r ? `Added “${r.song}” to ${r.artist}.` : "Couldn't add that file."); return; }
+  const rm = e.target.closest("[data-inbox-rm]");
+  if (rm) { await clearTrack("inbox::" + rm.dataset.inboxRm); inboxSave(inboxList().filter(x => x.id !== rm.dataset.inboxRm)); renderNotes(); return; }
   const row = e.target.closest("[data-note]"); if (!row) return;
   const n = bandNotes[+row.dataset.note]; if (!n) return;
   $("notesModal").classList.add("hidden");
   try { if (project) await goToProjects(); await openProject(n.id); await markNoteSeen(n); openShare(); } catch (er) {}
 });
+document.addEventListener("change", async e => {
+  if (e.target.id === "inboxArtist") { inboxPick = e.target.value; return; }
+  if (e.target.id !== "inboxFile") return;
+  const files = [...e.target.files]; e.target.value = ""; let n = 0;
+  for (const f of files) if (await inboxAdd(f)) n++;
+  renderNotes(n ? `Added ${n} ${n === 1 ? "file" : "files"} to your inbox.` : "Those didn't look like audio files.");
+});
+/* drag audio onto the page on a computer */
 if (!BAND_CODE) {
-  setTimeout(checkBandNotes, 4000); setInterval(checkBandNotes, 60000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkBandNotes(); });
+  ["dragover", "drop"].forEach(t => window.addEventListener(t, e => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files")) e.preventDefault(); }));
+  window.addEventListener("drop", async e => {
+    const fs = [...(e.dataTransfer ? e.dataTransfer.files : [])].filter(f => AUDIO_RE.test(f.name) || /^audio\//.test(f.type)); if (!fs.length) return;
+    for (const f of fs) await inboxAdd(f);
+    openNotes(`Added ${fs.length} ${fs.length === 1 ? "file" : "files"} to your inbox.`);
+  });
+}
+/* push notifications (iPhone app) */
+var pushWired = false;
+async function pushSetup(ask) {
+  const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform() || BAND_CODE) return;
+  const P = C.PushNotifications;
+  try {
+    let st = await P.checkPermissions();
+    if (st.receive === "prompt" || st.receive === "prompt-with-rationale") { if (!ask) return; st = await P.requestPermissions(); }
+    if (st.receive !== "granted") return;
+    if (!pushWired) {
+      pushWired = true;
+      P.addListener("registration", async t => { const tok = await bandToken(); if (tok) { try { await bandCall({ action: "push_register", token: t.value }, tok); } catch (e) {} } });
+      P.addListener("pushNotificationReceived", () => checkBandNotes());
+      P.addListener("pushNotificationActionPerformed", () => openNotes());
+    }
+    await P.register();
+  } catch (e) {}
+}
+if (!BAND_CODE) {
+  setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); }, 3500);
+  setInterval(checkBandNotes, 60000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { checkBandNotes(); inboxDrainNative(); } });
+  try {
+    const C = window.Cap;
+    if (C && C.Capacitor.isNativePlatform()) {
+      C.App.addListener("appStateChange", st => { if (st.isActive) setTimeout(async () => { const n = await inboxDrainNative(); checkBandNotes(); if (n) openNotes(`Added ${n} ${n === 1 ? "file" : "files"} from your share.`); }, 900); });
+      C.App.addListener("appUrlOpen", async () => { await new Promise(r => setTimeout(r, 900)); await inboxDrainNative(); openNotes(); });
+    }
+  } catch (e) {}
 }
 
 /* ---------- band side ---------- */
