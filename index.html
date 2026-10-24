@@ -1026,7 +1026,7 @@ details.more > :not(summary) { margin-top: 8px; }
 .field.need { outline: 2px solid var(--bad, #ef4444); }
 .tempo-ctl { display: flex; gap: 8px; margin: 10px 0 12px; }
 .tempo-ctl .btn { flex: 1; }
-.tap-readout { font-size: 44px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 10px 0 2px; }
+.tap-readout { white-space: nowrap; font-size: 44px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 10px 0 2px; }
 .tap-big { width: 100%; min-height: 104px; border-radius: 28px; font-size: 24px; font-weight: 800; touch-action: manipulation; }
 .btn.primary.tap-big.tapping { background-color: var(--accent); color: #111; }
 .tap-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -1038,6 +1038,16 @@ details.more > :not(summary) { margin-top: 8px; }
 .tap-down { width: 100%; min-height: 64px; border-radius: 22px; font-size: 16px; font-weight: 700; touch-action: manipulation; }
 .tap-down.on { background-color: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); }
 .tap-down:disabled { opacity: .45; }
+.tap-big, .tap-down, .tap-play, .btn.primary.tap-big, .btn.primary.tap-big.tapping, .tap-down.on {
+  background-color: color-mix(in srgb, var(--text) 9%, transparent); color: var(--text);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px var(--ind-edge), 0 8px 24px rgba(0,0,0,.18);
+}
+.btn.primary.tap-big.tapping { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 8px 24px rgba(0,0,0,.18); }
+.tap-down.on { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+.tap-play { flex: none; width: 46px; height: 46px; min-height: 0; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; margin-right: 12px; }
+.tap-play:disabled { opacity: .45; }
+.tap-top .tap-readout { flex: 1; }
 .tap-big.hit { animation: tapHit .18s ease-out; }
 @keyframes tapHit { 0% { transform: scale(.96); filter: brightness(1.25); } 100% { transform: scale(1); filter: none; } }
 .tap-big:active { transform: scale(.985); }
@@ -1342,8 +1352,8 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
     <div class="modal-inner">
       <h3>Tap the tempo</h3>
       <p class="muted small" id="tapHint" style="margin:0 0 6px"></p>
-      <canvas id="tempoWave" class="tempo-wave hidden" aria-hidden="true"></canvas>
-      <div class="tap-top"><div class="tap-readout" id="tapReadout" aria-live="polite">—</div><div class="beat-dots" id="beatDots" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>
+      <canvas id="tempoWave" class="tempo-wave hidden" aria-label="Drag to choose where the song plays from"></canvas>
+      <div class="tap-top"><button type="button" id="tapPlay" class="tap-play" aria-label="Play" disabled>▶</button><div class="tap-readout" id="tapReadout" aria-live="polite">—</div><div class="beat-dots" id="beatDots" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>
       <button type="button" id="tapBtn" class="btn primary tap-big">TAP</button>
       <div class="tempo-ctl"><button type="button" id="tapDown" class="btn tap-down" disabled>Tap on the 1 (start of a measure)</button></div>
       <label class="check snap-row" title="Scrubbing, new sections and moved markers land on the start of a measure"><input type="checkbox" id="snapToggle"> Snap sections to the 1 (start of each measure)</label>
@@ -3625,7 +3635,7 @@ function tapReadout() {
   $("tapHint").textContent = !player.src ? "Upload a track first."
     : tap.downbeat ? "The high click is the 1. When it lines up with the song, press Done."
     : have ? "When the clicks sit on the beat, tap the big button below on the 1 of a measure."
-    : !n ? "Tap along with the beat while the song plays."
+    : !n ? "Drag the waveform to start anywhere, then tap along with the beat."
     : n < 4 ? "Keep tapping, a few more beats."
     : q && q.uneven ? "Those taps were uneven. Keep tapping with the beat."
     : "Keep tapping until the clicks line up with the song.";
@@ -3634,6 +3644,7 @@ function paintTapUI() {
   const b = $("tapBtn"); if (!b) return;
   const playing = isPlaying(), tp = curTempo();
   b.textContent = playing ? "TAP" : "▶ Play again";
+  const pb = $("tapPlay"); if (pb) { pb.disabled = !player.src; pb.textContent = playing ? "❚❚" : "▶"; pb.setAttribute("aria-label", playing ? "Pause" : "Play"); }
   b.classList.toggle("tapping", playing); b.disabled = !player.src;
   const d = $("tapDown"); d.disabled = !(playing && tp.bpm > 0 && tp.offset != null);
   d.textContent = tap.downbeat ? "Tap again to move the 1" : "Tap on the 1 (start of a measure)";
@@ -3676,10 +3687,10 @@ function beatPulse(idx) {
   const dots = $("beatDots").children;
   for (let i = 0; i < dots.length; i++) dots[i].classList.toggle("on", idx < 0 ? true : i === idx);   // before the 1 is set, every beat looks the same
 }
-function startGame() {
+function startGame(from) {
   if (!player.src) return;
   const tp = curTempo();
-  playFrom(tp.songStart != null ? Math.max(0, tp.songStart) : 0, false, 1);
+  playFrom(from != null ? from : tap.start != null ? tap.start : (tp.songStart != null ? Math.max(0, tp.songStart) : 0), false, 1);
   setTimeout(() => { gameClickReset(); paintTapUI(); drawTempoWave(); }, 250);
 }
 function drawTempoWave() {
@@ -3718,6 +3729,30 @@ $("tapBtn").addEventListener("pointerdown", e => {
   const b = $("tapBtn"); b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit");
   applyTaps(); paintTapUI(); drawTempoWave();
 });
+$("tapPlay").addEventListener("click", () => {
+  if (!player.src) return;
+  if (isPlaying()) { stopAndReturn(); paintTapUI(); drawTempoWave(); return; }
+  tap.taps = []; tap.base = tap.downbeat ? tap.base : null; startGame();
+});
+/* drag along the waveform to choose where the song plays from; it starts when you let go */
+(function () {
+  const wv = $("tempoWave"); let on = false;
+  const posAt = e => { const r = wv.getBoundingClientRect(), dur = trackDuration() || 0; return Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width))) * dur; };
+  wv.addEventListener("pointerdown", e => {
+    if (!player.src) return;
+    e.preventDefault(); on = true; try { wv.setPointerCapture(e.pointerId); } catch (x) {}
+    if (isPlaying()) { playToken++; stopCue(false); }
+    const t = posAt(e); playStartPos = t; pausePos = t; drawTempoWave(); updateTimecodes();
+  });
+  wv.addEventListener("pointermove", e => { if (!on) return; const t = posAt(e); playStartPos = t; pausePos = t; drawTempoWave(); });
+  const up = e => {
+    if (!on) return; on = false;
+    const t = posAt(e); tap.start = t; tap.taps = []; tap.base = tap.downbeat ? tap.base : null;
+    startGame(t); setTimeout(() => { gameClickReset(); paintTapUI(); drawTempoWave(); }, 250);
+  };
+  wv.addEventListener("pointerup", up);
+  wv.addEventListener("pointercancel", () => { on = false; });
+})();
 $("tapDown").addEventListener("pointerdown", e => {
   const tp = curTempo();
   if (!isPlaying() || !(tp.bpm > 0) || tp.offset == null) return;
@@ -3731,7 +3766,7 @@ $("tapDown").addEventListener("pointerdown", e => {
 });
 function openTapGame() {
   const tp = curTempo();
-  tap.taps = []; tap.snap = null; tap.base = null; tap.downbeat = false; tap.active = true; tap.prevClick = !!tp.click; tp.click = false;   // the game plays its own click
+  tap.start = null; tap.taps = []; tap.snap = null; tap.base = null; tap.downbeat = false; tap.active = true; tap.prevClick = !!tp.click; tp.click = false;   // the game plays its own click
   $("tempoModal").classList.remove("hidden");
   clearInterval(tap.timer); tap.timer = setInterval(gameClickTick, 80);
   syncTempoInputs(); paintTapUI();
