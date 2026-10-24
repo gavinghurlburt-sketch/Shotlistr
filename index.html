@@ -1026,14 +1026,14 @@ details.more > :not(summary) { margin-top: 8px; }
 .field.need { outline: 2px solid var(--bad, #ef4444); }
 .tempo-ctl { display: flex; gap: 8px; margin: 10px 0 12px; }
 .tempo-ctl .btn { flex: 1; }
-.tap-readout { white-space: nowrap; min-width: 0; font-size: 36px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 10px 0 2px; }
-.tap-big { width: 100%; min-height: 104px; border-radius: 28px; font-size: 24px; font-weight: 800; touch-action: manipulation; }
+.tap-readout { white-space: nowrap; min-width: 0; font-size: 30px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 6px 0 2px; }
+.tap-big { width: 100%; min-height: 72px; border-radius: 28px; font-size: 24px; font-weight: 800; touch-action: manipulation; }
 .btn.primary.tap-big.tapping { background-color: var(--accent); color: #111; }
 .tap-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.beat-dots { display: flex; gap: 8px; }
+.beat-dots { display: flex; gap: 5px; flex: none; }
 .beat-dots i { display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 0; width: 14px; height: 14px; border-radius: 50%; background-color: var(--surface-2); transition: background-color .08s, transform .08s; }
 .beat-dots i.on { background-color: var(--accent); transform: scale(1.25); }
-.beat-dots.counted i { width: 24px; height: 24px; font-size: 13px; font-weight: 800; color: var(--text); }
+.beat-dots.counted i { width: 20px; height: 20px; font-size: 11px; font-weight: 800; color: var(--text); }
 .beat-dots.counted i.on { color: #111; }
 .tap-readout.ok { color: var(--accent); }
 .tap-readout.pop { animation: readPop .5s ease-out; }
@@ -1043,7 +1043,7 @@ details.more > :not(summary) { margin-top: 8px; }
 @keyframes readyPulse { 0%,100% { box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px var(--ind-edge), 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); } 50% { box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px var(--accent), 0 0 22px color-mix(in srgb, var(--accent) 55%, transparent); } }
 .beat-dots i:first-child.on { background-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); }
 .snap-row { display: flex; align-items: center; gap: 10px; margin: 12px 2px 0; font-weight: 600; font-size: 15px; }
-.tap-down { width: 100%; min-height: 64px; border-radius: 22px; font-size: 16px; font-weight: 700; touch-action: manipulation; }
+.tap-down { width: 100%; min-height: 48px; border-radius: 22px; font-size: 16px; font-weight: 700; touch-action: manipulation; }
 .tap-down.on { background-color: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); }
 .tap-down:disabled { opacity: .45; }
 .tap-big, .tap-down, .tap-play, .btn.primary.tap-big, .btn.primary.tap-big.tapping, .tap-down.on {
@@ -1053,7 +1053,7 @@ details.more > :not(summary) { margin-top: 8px; }
 }
 .btn.primary.tap-big.tapping { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 8px 24px rgba(0,0,0,.18); }
 .tap-down.on { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
-.tap-play { flex: none; width: 46px; height: 46px; min-height: 0; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; margin-right: 12px; }
+.tap-play { flex: none; width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; margin-right: 8px; }
 .tap-play:disabled { opacity: .45; }
 .tap-top .tap-readout { flex: 1; }
 .tap-big.hit { animation: tapHit .18s ease-out; }
@@ -1082,6 +1082,8 @@ details.more > :not(summary) { margin-top: 8px; }
 .crop-frame { position: relative; width: 100%; aspect-ratio: 2.4 / 1; border-radius: 18px; overflow: hidden; background: #000; margin-top: 12px; touch-action: none; cursor: grab; }
 .crop-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .crop-card { position: absolute; top: 0; bottom: 0; left: 50%; aspect-ratio: 1 / 1; transform: translateX(-50%); border: 2px dashed rgba(255,255,255,.85); border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 999px rgba(0,0,0,.28); display: flex; align-items: flex-end; justify-content: center; }
+.crop-wide { position: absolute; left: 0; right: 0; top: 50%; aspect-ratio: 2.4 / 1; transform: translateY(-50%); border: 2px dashed rgba(255,255,255,.85); border-radius: 10px; pointer-events: none; display: flex; align-items: flex-start; justify-content: flex-start; }
+.crop-wide span { font-size: 11px; font-weight: 700; color: #fff; padding: 4px 8px; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
 .crop-card span { font-size: 11px; font-weight: 700; color: #fff; padding: 0 0 6px; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
 #cropZoom { width: 100%; margin: 14px 0 0; accent-color: var(--accent); }
 .banner-date { background: none; border: 0; padding: 0; min-height: 0; border-radius: 0; box-shadow: none; font: inherit; color: #fff; font-size: 34px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; text-align: left; }
@@ -1147,6 +1149,13 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .detail-grid input[type="date"], .detail-grid input[type="time"] { width: 100%; }
 /* banner: photo button fades in on tap */
 .banner { cursor: pointer; }
+.band-refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.band-ref { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--surface-2); }
+.band-ref img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.band-ref button:not(.add) { position: absolute; top: 4px; right: 4px; width: 24px; min-width: 24px; height: 24px; min-height: 24px; box-sizing: border-box; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 16px; line-height: 1; }
+.band-ref.add { border: 1px dashed var(--border); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 700; }
+body.band-mode main { max-width: 620px; }
+body.band-mode .banner { height: auto; aspect-ratio: 3 / 2; max-height: 360px; }
 #bannerBtn { opacity: 0; pointer-events: none; transition: opacity .3s ease; }
 .banner.show #bannerBtn, .banner:not(.has-img) #bannerBtn { opacity: 1; pointer-events: auto; }
 .rate-badge { font-size: 12.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background-color: var(--accent); color: var(--accent-fg); }
@@ -1665,8 +1674,8 @@ body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #
 <div id="cropModal" class="modal hidden">
   <div class="modal-inner">
     <h3>Position your photo</h3>
-    <div class="crop-frame"><canvas id="cropCanvas" aria-label="Drag to move the photo, pinch or use the slider to zoom"></canvas><div class="crop-card" aria-hidden="true"><span>Artist card</span></div></div>
-    <p class="muted small" style="margin:8px 0 0">The wide frame is the banner. The square is what shows on artist cards.</p>
+    <div class="crop-frame"><canvas id="cropCanvas" aria-label="Drag to move the photo, pinch or use the slider to zoom"></canvas><div id="cropWide" class="crop-wide hidden" aria-hidden="true"><span>In-app banner</span></div><div class="crop-card" aria-hidden="true"><span>Artist card</span></div></div>
+    <p id="cropNote" class="muted small" style="margin:8px 0 0">The wide frame is the banner. The square is what shows on artist cards.</p>
     <input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
     <div class="modal-actions"><button type="button" id="cropCancel" class="btn">Cancel</button><button type="button" id="cropUse" class="btn primary">Use photo</button></div>
   </div>
@@ -3606,6 +3615,9 @@ $("trackFileInput").addEventListener("change", async e => {
     if (!sg) { sg = addSong(); }
     if (!sg.name || sg.name === "Untitled song") sg.name = f.name.replace(/\.[^.]+$/, "");
     scheduleSave();
+  } else if (project.type === "artist") {
+    const sg = activeSong();
+    if (sg && (!sg.name || sg.name === "Untitled song")) { sg.name = f.name.replace(/\.[^.]+$/, ""); $("songNameInput").value = sg.name; scheduleSave(); }
   }
   curTempo().detected = false;
   loadTrackIntoPlayer(f, f.name, false);
@@ -4852,12 +4864,14 @@ $("detCal").addEventListener("click", () => { const d = projectDay(false); if (!
 $("detDone").addEventListener("click", () => $("detailsModal").classList.add("hidden"));
 $("detailsModal").addEventListener("click", e => { if (e.target === $("detailsModal")) $("detailsModal").classList.add("hidden"); });
 /* photo cropper: position the picture inside the banner frame, with the artist-card square marked */
-function openCropper(url) {
+function openCropper(url, ratio) {
+  ratio = ratio || 2.4;
   return new Promise(resolve => {
     const img = new Image();
     img.onerror = () => resolve(null);
     img.onload = () => {
-      const m = $("cropModal"), cv = $("cropCanvas"), fr = cv.parentElement, zoom = $("cropZoom"), ratio = 2.4;
+      const m = $("cropModal"), cv = $("cropCanvas"), fr = cv.parentElement, zoom = $("cropZoom");
+      fr.style.aspectRatio = ratio + " / 1"; $("cropWide").classList.toggle("hidden", ratio >= 2.4); $("cropNote").textContent = ratio >= 2.4 ? "The wide frame is the banner. The square is what shows on artist cards." : "Drag to position. The dashed boxes show what the photographer sees: the wide banner and the square artist card.";
       m.classList.remove("hidden");
       const W = fr.clientWidth, H = Math.round(W / ratio), dpr = Math.min(2, window.devicePixelRatio || 1);
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
@@ -4887,8 +4901,8 @@ function openCropper(url) {
       zoom.addEventListener("input", slide);
       $("cropCancel").onclick = () => done(null);
       $("cropUse").onclick = () => {
-        const k = kMin * v, o = document.createElement("canvas"); o.width = 1200; o.height = 500;
-        o.getContext("2d").drawImage(img, cx - W / (2 * k), cy - H / (2 * k), W / k, H / k, 0, 0, 1200, 500);
+        const k = kMin * v, o = document.createElement("canvas"); const OH = Math.round(1200 / ratio); o.width = 1200; o.height = OH;
+        o.getContext("2d").drawImage(img, cx - W / (2 * k), cy - H / (2 * k), W / k, H / k, 0, 0, 1200, OH);
         done(o.toDataURL("image/jpeg", 0.82));
       };
       draw();
@@ -4900,7 +4914,7 @@ $("bannerFile").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = "";
   if (!f || !project) return;
   try {
-    const src = await fileToDataURL(f, 2000), out = await openCropper(src);
+    const src = await fileToDataURL(f, 2000), out = await openCropper(src, BAND_CODE ? 1.5 : 2.4);
     if (out) { project.cover = out; scheduleSave(); renderBanner(); }
   } catch (err) { alert("That image couldn't be read. Try a JPG or PNG."); }
 });
@@ -6065,7 +6079,7 @@ async function firstRunSetup() {
 /* ================= first-time tour ================= */
 var BAND_CODE = (function () { try { const c = new URLSearchParams(location.search).get("band"); return c && /^[A-Za-z0-9_-]{16}$/.test(c) ? c : ""; } catch (e) { return ""; } })();
 var TOUR = (function () {
-  const KEY = "creatrr_tour_v1", DKEY = "creatrr_tour_demo";
+  const KEY = BAND_CODE ? "creatrr_band_tour_v1" : "creatrr_tour_v1", DKEY = "creatrr_tour_demo";
   const get = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
   const put = v => { try { localStorage.setItem(KEY, v); } catch (e) {} document.body.classList.toggle("quiet", v === "done"); };
   let idx = -1, timer = 0, layer, hole, rings, card, pill, scrolledFor = -1, demo = null, busy = false, seeded = null, hold = -1;
@@ -6103,14 +6117,14 @@ var TOUR = (function () {
 
   /* the shorter walkthrough on the band's web link: their page, a song, the tempo, the sections, Send */
   const BAND_STEPS = [
-    { ctx: "artist", target: null, title: "Welcome!", body: "This is your artist page. Add your photo, your songs, and where each section starts, then tap Send. It takes about two minutes.", buttons: "next" },
-    { ctx: "artist", target: () => $("bannerBtn"), title: "Add your photo", body: "Tap Add photo, then drag to position it. The wide frame is your banner. The square is what shows on your artist card.", buttons: "next" },
-    { ctx: "artist", target: () => q("#songRows .song-row.add"), title: "Add a song", body: "Tap + Add song, then give it a name.", done: () => songOpen },
+    { ctx: "artist", target: null, title: "Let's set up your first song", body: "We'll walk through one song: upload it, name it, find the tempo, and mark a section. Then you can add more and tap Send. It takes about two minutes.", buttons: "next" },
+    { ctx: "artist", target: () => q("#songRows .song-row.add"), title: "Add a song", body: "Tap + Add song to start.", done: () => songOpen },
     { ctx: "artist", song: true, target: () => $("uploadTrackBtn"), title: "Upload the track", body: "Upload the song file (MP3, M4A or WAV).", extra: '<button class="tc-skip" data-t="practice">No song handy? Use a practice song</button>', done: () => !$("waveformCanvas").classList.contains("hidden") },
-    { ctx: "artist", song: true, target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo and tap along with the beat. Once it locks in, tap Sync on the first beat of any section, like a choreographer counting ‘5, 6, 7, 8’.", done: () => { const t = curTempo(); return !!(t.bpm && t.offset != null); } },
+    { ctx: "artist", song: true, target: () => $("songNameInput"), title: "Name your song", body: "Type the song's name up top. We filled in the file name to start.", buttons: "next" },
+    { ctx: "artist", song: true, target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo and tap along with the beat. Once it locks in, tap Sync on the first beat of any section, like a choreographer counting \u20185, 6, 7, 8\u2019.", done: () => { const t = curTempo(); return !!(t.bpm && t.offset != null); } },
     { ctx: "artist", song: true, align: "top", target: () => [$("draftPlayBtn"), $("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to the start of any section, then tap + Add section. It snaps to the beat automatically. Hit play to check that your placement sounds right.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => project.sections.some(x => x.songId === activeSongId) },
     { ctx: "artist", song: true, target: () => $("songDoneBtn"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Tap Done to go back to your song list.", done: () => !songOpen },
-    { ctx: "artist", target: () => $("bandSendBtn"), title: "Send it", body: "Add more songs if you like, plus any links or notes. When you're ready, tap Send. You can send again any time until the link expires.", buttons: "bandend" }
+    { ctx: "artist", target: () => $("bandSendBtn"), title: "Send it", body: "Add more songs if you like, plus photos, links or notes. When you're ready, tap Send. You can send again any time until the link expires.", buttons: "bandend" }
   ];
   const STEPS = BAND_CODE ? BAND_STEPS : APP_STEPS;
   const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
@@ -6411,6 +6425,9 @@ function renderBandBox() {
       <label class="band-lab" for="bandName">Band name</label><input type="text" id="bandName" value="${esc(nm)}" placeholder="Your band or artist name" autocapitalize="words"></div>`;
     box.innerHTML = `<div class="panel band-box" style="margin-top:18px"><h2 style="margin:0 0 6px">Inspiration <span class="muted small">(optional)</span></h2>
       <label class="band-lab" for="bandLinks">Links (Instagram, TikTok, YouTube… one per line)</label><textarea id="bandLinks" placeholder="https://">${esc(b.links.join("\n"))}</textarea>
+      <label class="band-lab">Photos</label>
+      <div class="band-refs">${(b.refs || []).map((src, i) => `<div class="band-ref"><img src="${src}" alt="Inspiration ${i + 1}"><button type="button" data-band="refx" data-i="${i}" aria-label="Remove photo">\u00d7</button></div>`).join("")}${(b.refs || []).length < 8 ? `<button type="button" class="band-ref add" data-band="refadd">+ Add photos</button>` : ""}</div>
+      <input type="file" id="bandRefFile" accept="image/*,.heic,.heif" multiple hidden>
       <label class="band-lab" for="bandNotes">Notes</label><textarea id="bandNotes" placeholder="Vibe, wardrobe, anything that helps">${esc(b.notes)}</textarea>
       <div class="band-actions"><button type="button" class="btn primary" data-band="send" id="bandSendBtn">Send to ${esc((BAND_INFO && BAND_INFO.artist_name) || "your photographer")}</button></div>
       <p class="muted small" id="bandSendMsg" style="margin:10px 0 0"></p></div>
@@ -6418,11 +6435,21 @@ function renderBandBox() {
     return;
   }
   top.innerHTML = "";
-  const b = project.brief, from = (b.links.length || b.notes) && project.bandImported
-    ? `<div class="panel band-box band-from" style="margin-top:18px"><h2 style="margin:0 0 6px">From the band</h2>${b.links.map(u => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a></div>`).join("")}${b.notes ? `<p>${esc(b.notes)}</p>` : ""}</div>` : "";
+  const b = project.brief, from = (b.links.length || b.notes || (b.refs || []).length) && project.bandImported
+    ? `<div class="panel band-box band-from" style="margin-top:18px"><h2 style="margin:0 0 6px">From the band</h2>${(b.refs || []).length ? `<div class="band-refs">${b.refs.map((src, i) => `<div class="band-ref"><img src="${src}" alt="From the band ${i + 1}"></div>`).join("")}</div>` : ""}${b.links.map(u => `<div class="link-row"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(prettyLink(u))}</a></div>`).join("")}${b.notes ? `<p>${esc(b.notes)}</p>` : ""}</div>` : "";
   const share = window.__cloudToken && !isArtistTier() ? `<button type="button" class="song-row add" data-band="share">${bandLive() ? "Band link" : "Share with the band"}</button>` : "";
   box.innerHTML = share + from;
 }
+document.addEventListener("change", async e => {
+  if (!BAND_CODE || !project || e.target.id !== "bandRefFile") return;
+  const files = [...e.target.files]; e.target.value = "";
+  const b = project.brief; b.refs = b.refs || [];
+  for (const f of files) {
+    if (b.refs.length >= 8) { showNotice("That's the max: 8 photos."); break; }
+    try { b.refs.push(await fileToDataURL(f, 1600)); } catch (er) { showNotice("One photo couldn't be read. Try a JPG or PNG."); }
+  }
+  scheduleSave(); renderBandBox();
+});
 document.addEventListener("input", e => {
   if (!BAND_CODE || !project) return;
   if (e.target.id === "bandName") { project.docTitle = e.target.value; scheduleSave(); }
@@ -6463,7 +6490,7 @@ async function refreshShareStatus() {
     const r = await bandCall({ action: "status", code: l.code }, await bandToken()), s = r.submission;
     if (!$("shareStat")) return;
     if (!s) { $("shareStat").textContent = "Nothing uploaded yet."; return; }
-    const bits = [s.songs ? s.songs + (s.songs === 1 ? " song" : " songs") : "", s.photo ? "a photo" : "", s.links ? "inspiration" : ""].filter(Boolean);
+    const bits = [s.songs ? s.songs + (s.songs === 1 ? " song" : " songs") : "", s.photo ? "a photo" : "", s.links || s.refs ? "inspiration" : ""].filter(Boolean);
     $("shareStat").textContent = (s.band_name ? s.band_name + " sent " : "They sent ") + (bits.join(", ") || "their details") + ".";
     $("shareImportBtn").classList.remove("hidden");
   } catch (e) { if ($("shareStat")) $("shareStat").textContent = e.status === 404 ? "This link is no longer active." : "Couldn't check right now."; }
@@ -6511,6 +6538,8 @@ async function bandImport() {
       if (g.url) { try { const tb = await (await fetch(g.url)).blob(); await saveTrack(project.id + "::" + sg.id, tb, g.track_name || (g.name + "." + g.ext)); } catch (e) {} }
       project.bandImported[g.id] = sg.id; added++;
     }
+    project.brief.refs = project.brief.refs || [];
+    for (const rf of sub.refs || []) { if (!rf.url) continue; try { const d = await blobToDataURL(await (await fetch(rf.url)).blob()); if (!project.brief.refs.includes(d) && project.brief.refs.length < 40) project.brief.refs.push(d); } catch (e) {} }
     (sub.links || []).forEach(u => { if (!project.brief.links.includes(u)) project.brief.links.push(u); });
     if (sub.notes && !project.brief.notes.includes(sub.notes)) project.brief.notes = (project.brief.notes ? project.brief.notes + "\n\n" : "") + sub.notes;
     scheduleSave(); renderCurrent(); renderBanner();
@@ -6571,8 +6600,15 @@ async function bandSend() {
       }
       songs.push(o);
     }
-    if (!songs.length && !hasPhoto) throw new Error("Add a photo or at least one song first.");
-    await bandCall({ action: "band_save", code: BAND_CODE, band_name: nm, photo: hasPhoto, songs, links: project.brief.links, notes: project.brief.notes });
+    const refIds = [];
+    for (const src of (project.brief.refs || []).slice(0, 8)) {
+      let h = 0; for (let i = 0; i < src.length; i += 7) h = (h * 31 + src.charCodeAt(i)) | 0;
+      const id = "r" + (h >>> 0).toString(36) + src.length.toString(36); refIds.push(id);
+      const key = "bandup:" + BAND_CODE + ":ref:" + id; let seen = ""; try { seen = localStorage.getItem(key); } catch (e) {}
+      if (!seen) { say(`Uploading photo ${refIds.length}…`); await bandUp("ref", await (await fetch(src)).blob(), { id }); try { localStorage.setItem(key, "1"); } catch (e) {} }
+    }
+    if (!songs.length && !hasPhoto && !refIds.length) throw new Error("Add a photo or at least one song first.");
+    await bandCall({ action: "band_save", code: BAND_CODE, band_name: nm, photo: hasPhoto, songs, refs: refIds, links: project.brief.links, notes: project.brief.notes });
     say(""); bandDone();
   } catch (e) {
     if (e.status === 410) { bandGone(true); } else say(e.message || "Something went wrong. Try again.");
@@ -6589,7 +6625,9 @@ async function bandRestore(rec, sub) {
     (g.sections || []).forEach((x, i) => { const sec = defaultSection(x.name || "Section", rec.sections.length + i); sec.id = x.id || sec.id; if (x.color) sec.color = x.color; sec.time = x.time || ""; sec.songId = sg.id; rec.sections.push(sec); });
     if (g.url) { try { await saveTrack(rec.id + "::" + sg.id, await (await fetch(g.url)).blob(), g.track_name || (g.name + "." + g.ext)); } catch (e) {} }
   }
-  rec.brief = { refs: [], links: sub.links || [], notes: sub.notes || "" };
+  const refs = [];
+  for (const rf of sub.refs || []) { if (rf.url) { try { refs.push(await blobToDataURL(await (await fetch(rf.url)).blob())); } catch (e) {} } }
+  rec.brief = { refs, links: sub.links || [], notes: sub.notes || "" };
 }
 async function bandBoot() {
   document.body.classList.add("band-mode");
@@ -6617,6 +6655,8 @@ document.addEventListener("click", e => {
     case "revoke": bandRevoke(); break;
     case "import": bandImport(); break;
     case "send": bandSend(); break;
+    case "refadd": { const f = $("bandRefFile"); if (f) f.click(); break; }
+    case "refx": { project.brief.refs.splice(+b.dataset.i, 1); scheduleSave(); renderBandBox(); break; }
     case "again": { const d = $("bandDone"); if (d) d.remove(); break; }
   }
 });
