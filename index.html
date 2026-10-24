@@ -6715,6 +6715,7 @@ async function pushSetup(ask) {
   } catch (e) { let pl = ""; try { pl = " [native plugins: " + (window.Capacitor && window.Capacitor.PluginHeaders ? window.Capacitor.PluginHeaders.map(h => h.name).join(", ") : "none") + "]"; } catch (x) {} pushSay("Notification setup failed: " + ((e && e.message) || e) + pl, true); }
 }
 document.addEventListener("click", e => { if (e.target.closest("#pushBtn")) pushSetup(true); });
+document.addEventListener("click", e => { if (e.target.closest("#accountBtn")) { const el = $("pushStatus"); if (el) el.textContent = pushState; } });
 if (!BAND_CODE) {
   setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); }, 3500);
   setInterval(checkBandNotes, 60000);

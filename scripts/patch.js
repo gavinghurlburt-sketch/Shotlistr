@@ -134,6 +134,7 @@ h = h.replace(clearRe, m => m + "\n" + cloud + "\n" + purchases + "\n");
 const lib = fs.readFileSync("scripts/supabase.bundle.js", "utf8");
 must("bundle has no script end tag", !/<\/script/i.test(lib));
 replaceOnce("supabase lib", "</head>", "<script id=\"supabase-lib\">" + lib + "</script>\n</head>");
+replaceOnce("drop duplicate push block", '      <p class="modal-hint" style="margin:16px 0 8px">Notifications</p>\n      <button type="button" id="pushBtn" class="btn small">Turn on notifications</button>\n      <p class="muted small" id="pushStatus" style="margin:8px 0 0"></p>\n', '');
 replaceOnce("account button", '<button id="settingsBtn" class="btn small">Settings</button>', '<span id="cloudStatus" class="small"></span><button id="accountBtn" class="btn small">Sign in</button><button id="settingsBtn" class="btn small hidden">Settings</button>');
 replaceOnce("home copy", "Everything is saved in this browser.", "Sign in to keep them in your account on every device.");
 replaceOnce("account modal", "</header>", "</header>\n" + fs.readFileSync("scripts/account.html", "utf8"));
