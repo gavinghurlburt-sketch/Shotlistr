@@ -1,18 +1,7 @@
 {
-  "installCommand": "true",
-  "buildCommand": "rm -rf site && mkdir site && cp index.html site/app.html && cp landing.html manifest.json service-worker.js site/ && cp -r assets docs icons site/ && cp landing.html site/index.html && rm site/landing.html",
+  "buildCommand": "node scripts/build-site.js",
   "outputDirectory": "site",
   "routes": [
-    {
-      "src": "/",
-      "has": [
-        {
-          "type": "query",
-          "key": "band"
-        }
-      ],
-      "dest": "/app.html"
-    },
     {
       "src": "/support",
       "dest": "/docs/index.html"
@@ -26,7 +15,65 @@
       "dest": "/docs/privacy.html"
     },
     {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.creatrr.co"
+        }
+      ],
+      "dest": "/app.html"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "band.creatrr.co"
+        },
+        {
+          "type": "query",
+          "key": "band"
+        }
+      ],
+      "dest": "/band.html"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "band.creatrr.co"
+        }
+      ],
+      "dest": "/band-home.html"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "creatrr.co"
+        }
+      ],
+      "dest": "/home.html"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.creatrr.co"
+        }
+      ],
+      "dest": "/home.html"
+    },
+    {
       "handle": "filesystem"
+    },
+    {
+      "src": "/",
+      "dest": "/home.html"
     }
   ]
 }

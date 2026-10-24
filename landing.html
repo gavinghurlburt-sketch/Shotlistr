@@ -1,24 +1,79 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
-<title>creatrr</title>
+<title>creatrr · plan your shoot around the music</title>
+<meta name="description" content="creatrr plans video shoots around the music: mark song sections, plan shots for each one, and log every take on set.">
 <style>
-:root{color-scheme:dark light;--bg:#111;--text:#f2f2f2;--muted:#9a9aa0;--accent:#ffd60a}
-@media(prefers-color-scheme:light){:root{--bg:#f6f6f7;--text:#111;--muted:#666;--accent:#b38f00}}
-*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;box-sizing:border-box}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;text-align:center}
-main{max-width:360px}
-h1{margin:0 0 6px;font-size:34px;letter-spacing:-.02em}
-h1 span{color:var(--accent)}
-p{margin:0 0 14px;color:var(--muted)}
-.box{margin-top:26px;padding:18px;border-radius:20px;background:color-mix(in srgb,var(--text) 7%,transparent);color:var(--text);font-size:16px}
-footer{margin-top:26px;font-size:14px}
-footer a{color:var(--muted);margin:0 8px}
+:root{color-scheme:dark light;--bg:#0f0f10;--card:#1a1a1c;--text:#f3f3f4;--muted:#9a9aa1;--accent:#ffd60a;--accent-fg:#111;--line:#2a2a2d}
+@media(prefers-color-scheme:light){:root{--bg:#f6f6f7;--card:#fff;--text:#111;--muted:#62626a;--accent:#ffd60a;--accent-fg:#111;--line:#e3e3e6}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px;-webkit-text-size-adjust:100%;touch-action:manipulation}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+a{color:inherit}
+nav{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;padding:12px max(18px,calc((100vw - 980px)/2));background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.logo{font-weight:800;font-size:21px;letter-spacing:-.03em;text-decoration:none;margin-right:auto}
+.logo span{color:var(--accent)}
+nav a.l{padding:8px 12px;border-radius:999px;text-decoration:none;font-weight:600;font-size:15px;color:var(--muted)}
+nav a.l:hover{color:var(--text)}
+.btn{display:inline-block;padding:12px 22px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:700;text-decoration:none;font-size:16px}
+.btn.ghost{background:transparent;color:var(--text);border:1.5px solid var(--line)}
+nav .btn{padding:8px 16px;font-size:15px}
+section{max-width:980px;margin:0 auto;padding:64px 18px}
+.hero{padding-top:72px;text-align:center}
+h1{font-size:clamp(38px,8vw,64px);line-height:1.04;letter-spacing:-.035em;margin:0 0 16px}
+h1 em{font-style:normal;color:var(--accent)}
+.lead{max-width:560px;margin:0 auto 26px;color:var(--muted);font-size:19px}
+.cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.soon{margin-top:12px;color:var(--muted);font-size:14px}
+h2{font-size:clamp(28px,5vw,38px);letter-spacing:-.03em;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 28px;max-width:560px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.card{background:var(--card);border-radius:22px;padding:20px;border:1.5px solid transparent}
+.card h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
+.card p{margin:0;color:var(--muted);font-size:15.5px}
+.num{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-fg);font-weight:800;font-size:14px;align-items:center;justify-content:center;margin-bottom:10px}
+.price{font-size:34px;font-weight:800;letter-spacing:-.03em;margin:6px 0 2px}
+.price small{font-size:15px;color:var(--muted);font-weight:600}
+.card.pop{border-color:var(--accent)}
+.tag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--accent);color:var(--accent-fg);border-radius:999px;padding:2px 9px;vertical-align:middle;margin-left:6px}
+.note{margin-top:18px;color:var(--muted);font-size:14.5px}
+footer{max-width:980px;margin:0 auto;padding:30px 18px 50px;border-top:1px solid var(--line);color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:10px 22px}
+footer a{text-decoration:none}
+footer span{margin-right:auto}
+@media(max-width:520px){nav a.l{padding:8px 8px}section{padding:46px 18px}}
 </style></head><body>
-<main>
-<h1>creatrr<span>.</span></h1>
-<p>Plan your video shoot around the music.</p>
-<div class="box"><b>Got a link from your photographer?</b><br>Open it again to add your photo, songs and sections. Links expire after 3 days, so ask for a new one if yours has stopped working.</div>
-<footer><a href="/support">Support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></footer>
-</main>
+<nav>
+  <a class="logo" href="#top">creatrr<span>.</span></a>
+  <a class="l" href="#info">Info</a>
+  <a class="l" href="#pricing">Pricing</a>
+  <a class="btn" href="https://app.creatrr.co">Log in</a>
+</nav>
+<section class="hero" id="top">
+  <h1>Plan your shoot<br>around the <em>music</em>.</h1>
+  <p class="lead">creatrr is a planning tool for music video shoots. Mark where each song section starts, plan the shots for every one, then log every take on set.</p>
+  <div class="cta"><a class="btn" href="https://app.creatrr.co">Open the web app</a><a class="btn ghost" href="#info">How it works</a></div>
+  <p class="soon">iPhone app coming soon to the App Store.</p>
+</section>
+<section id="info">
+  <h2>How it works</h2>
+  <p class="sub">Four steps, in the order a shoot happens. Works for a single artist or a whole roster.</p>
+  <div class="grid">
+    <div class="card"><div class="num">1</div><h3>Draft</h3><p>Upload each song once. Tap the tempo, set the downbeat, and mark sections like intro, verse and chorus. They snap to the beat.</p></div>
+    <div class="card"><div class="num">2</div><h3>Plan</h3><p>Pick the songs and sections you're filming, and build a shot template so every section gets the same coverage.</p></div>
+    <div class="card"><div class="num">3</div><h3>Shoot</h3><p>Play any section with a click, count-in and lead-in. Slow-mo and speed-up playback. Log and rate every take as you roll.</p></div>
+    <div class="card"><div class="num">4</div><h3>Cut</h3><p>Every song's timeline with each section and take in one place. Export the take log for your editor.</p></div>
+  </div>
+  <p class="note"><b>Working with a band?</b> Send them a private link. They add their photo, songs and sections themselves, and you import it when they're done.</p>
+</section>
+<section id="pricing">
+  <h2>Pricing</h2>
+  <p class="sub">Every plan has unlimited songs and every shoot tool. Pick by how many artists you work with.</p>
+  <div class="grid">
+    <div class="card"><h3>Artist</h3><div class="price">$1.99<small> /month</small></div><p>One artist. Plan every shoot for your own music. Starts with a 7-day free trial.</p></div>
+    <div class="card pop"><h3>Plus<span class="tag">Popular</span></h3><div class="price">$9.99<small> /month</small></div><p>Up to 10 artists, plus private links for bands to fill in their own page.</p></div>
+    <div class="card"><h3>Pro</h3><div class="price">$29.99<small> /month</small></div><p>Up to 50 artists, plus video production with call sheets and an on-set tracker.</p></div>
+  </div>
+  <p class="note">Subscriptions are bought in the creatrr iPhone app. Your plan works on the web too: log in with the same account.</p>
+</section>
+<footer><span>© creatrr</span><a href="/support">Support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></footer>
 </body></html>

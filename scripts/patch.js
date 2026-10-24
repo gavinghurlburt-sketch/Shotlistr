@@ -1,6 +1,7 @@
 // Generates www/index.html from the web app's index.html. The web version is never edited.
 const fs = require("fs");
-const file = "www/index.html";
+const WEB = process.env.WEB === "1";                         // the browser build (app.creatrr.co): no Capacitor, no App Store
+const file = process.env.PATCH_FILE || "www/index.html";
 let h = fs.readFileSync(file, "utf8");
 
 function must(label, ok) { if (!ok) { console.error("PATCH FAILED: " + label); process.exit(1); } }
@@ -16,9 +17,10 @@ replaceOnce("viewport", '<meta name="viewport" content="width=device-width, init
 // 2. No service worker inside the native app (assets are bundled)
 replaceOnce("service worker guard",
   'location.protocol !== "file:" && !DEMO_MODE',
-  'location.protocol !== "file:" && !DEMO_MODE && !(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform())');
+  WEB ? 'false && location.protocol !== "file:" && !DEMO_MODE' : 'location.protocol !== "file:" && !DEMO_MODE && !(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform())');
 
 // 3. Downloads: iOS web views ignore <a download>. Write to cache, then open the share sheet.
+if (!WEB) {
 const dl = /function downloadBlob\(blob, name\) \{[\s\S]*?\n\}\n/;
 must("downloadBlob", dl.test(h));
 h = h.replace(dl, () => `function downloadBlob(blob, name) {
@@ -35,6 +37,7 @@ h = h.replace(pr, () => `function printHTML(html) {
   nativePrint();
 }
 `);
+}
 
 // 5. Injected CSS
 const css = `<style id="ios-patch">
@@ -106,7 +109,14 @@ const js = `<script id="ios-bridge">
   };
 })();
 </script>`;
-replaceOnce("bridge", "</head>", js + "\n</head>");
+const webJs = `<script id="web-bridge">
+(function(){
+  ["gesturestart","gesturechange","gestureend"].forEach(function(t){ document.addEventListener(t, function(e){ e.preventDefault(); }, {passive:false}); });
+  var last = 0;
+  document.addEventListener("touchend", function(e){ var n = Date.now(); if (n - last < 300) e.preventDefault(); last = n; }, {passive:false});
+})();
+</script>`;
+replaceOnce("bridge", "</head>", (WEB ? webJs : js) + "\n</head>");
 
 // 6b. Cloud accounts + sync: rename the local storage functions, then layer the cloud versions on top
 const SB_URL = "https://anuybnbilfjthbhsxhdk.supabase.co";
@@ -118,7 +128,7 @@ must("clearTrack end", clearRe.test(h));
 const cloud = fs.readFileSync("scripts/cloud.js", "utf8").replace("__SB_URL__", SB_URL).replace("__SB_KEY__", SB_KEY);
 must("cloud.js has no script end tag", !/<\/script/i.test(cloud));
 const subsCfg = JSON.parse(fs.readFileSync("scripts/subs.config.json", "utf8"));
-const purchases = fs.readFileSync("scripts/purchases.js", "utf8").replace("__SUBS_LIVE__", subsCfg.live === true ? "true" : "false").replace("__RC_KEY__", subsCfg.revenueCatAppleKey || "");
+const purchases = fs.readFileSync(WEB ? "scripts/webplan.js" : "scripts/purchases.js", "utf8").replace("__SUBS_LIVE__", subsCfg.live === true ? "true" : "false").replace("__RC_KEY__", subsCfg.revenueCatAppleKey || "");
 must("purchases.js has no script end tag", !/<\/script/i.test(purchases));
 h = h.replace(clearRe, m => m + "\n" + cloud + "\n" + purchases + "\n");
 const lib = fs.readFileSync("scripts/supabase.bundle.js", "utf8");
