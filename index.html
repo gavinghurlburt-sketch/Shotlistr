@@ -1907,8 +1907,8 @@ function csvCell(v) { return `"${String(v == null ? "" : v).replace(/"/g, '""')}
 function safeName(s) { return (s || "producrr").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "producrr"; }
 /* "Hotel_Lobby_MosesMaster_44.1_16.wav" -> "Hotel Lobby": drop the extension, split on _ - and spaces, stop at the first mastering/format token */
 function songNameFromFile(fn) {
-  const base = String(fn || "").replace(/\.[^.]+$/, "").replace(/\(\d+\)$/, "");
-  const noise = /master|mstr|mix|final|demo|bounce|print|stems?|rough|\bref\b|^v\d+$|^\d+(\.\d+)?(k|khz|bit|b)?$|^(wav|mp3|flac|aiff|m4a|hq|lossless)$/i;
+  const base = String(fn || "").replace(/\.[^.]+$/, "").replace(/\(\d+\)$/, "").replace(/[\s_-]+for[\s_-]+(upload|mixing|mastering|review|approval|client|print|reference|sync).*$/i, "");
+  const noise = /master|mstr|mix|final|demo|bounce|print|stems?|rough|upload(ed)?|export(ed)?|copy|\bref\b|^v\d+$|^(rev|take|ver)\d*$|^\d+([.\/-]\d+){1,2}$|^\d+(\.\d+)?(k|khz|bit|b)?$|^(wav|mp3|flac|aiff|m4a|hq|lossless)$/i;
   const toks = base.split(/[_\s]+|\s*-\s*/).filter(Boolean);
   while (toks.length > 1 && /^\d{1,2}$/.test(toks[0])) toks.shift();   // leading track number
   const keep = []; for (const t of toks) { if (keep.length && noise.test(t)) break; keep.push(t); }

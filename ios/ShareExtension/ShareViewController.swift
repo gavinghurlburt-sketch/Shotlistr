@@ -178,7 +178,8 @@ class ShareViewController: UIViewController {
     static func songName(from file: String) -> String {
         var base = (file as NSString).deletingPathExtension
         base = base.replacingOccurrences(of: "\\(\\d+\\)$", with: "", options: .regularExpression)
-        let noise = try! NSRegularExpression(pattern: "master|mstr|mix|final|demo|bounce|print|stems?|rough|\\bref\\b|^v\\d+$|^\\d+(\\.\\d+)?(k|khz|bit|b)?$|^(wav|mp3|flac|aiff|m4a|hq|lossless)$", options: .caseInsensitive)
+        base = base.replacingOccurrences(of: "[\\s_-]+for[\\s_-]+(upload|mixing|mastering|review|approval|client|print|reference|sync).*$", with: "", options: [.regularExpression, .caseInsensitive])
+        let noise = try! NSRegularExpression(pattern: "master|mstr|mix|final|demo|bounce|print|stems?|rough|upload(ed)?|export(ed)?|copy|\\bref\\b|^v\\d+$|^(rev|take|ver)\\d*$|^\\d+([./-]\\d+){1,2}$|^\\d+(\\.\\d+)?(k|khz|bit|b)?$|^(wav|mp3|flac|aiff|m4a|hq|lossless)$", options: .caseInsensitive)
         var toks = base.replacingOccurrences(of: "\\s*-\\s*", with: " ", options: .regularExpression)
             .components(separatedBy: CharacterSet(charactersIn: "_ ")).filter { !$0.isEmpty }
         while toks.count > 1, toks[0].range(of: "^\\d{1,2}$", options: .regularExpression) != nil { toks.removeFirst() }
