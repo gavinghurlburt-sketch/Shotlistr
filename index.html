@@ -1883,6 +1883,16 @@ function downloadBlob(blob, name) {
 }
 function csvCell(v) { return `"${String(v == null ? "" : v).replace(/"/g, '""')}"`; }
 function safeName(s) { return (s || "producrr").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "producrr"; }
+/* "Hotel_Lobby_MosesMaster_44.1_16.wav" -> "Hotel Lobby": drop the extension, split on _ - and spaces, stop at the first mastering/format token */
+function songNameFromFile(fn) {
+  const base = String(fn || "").replace(/\.[^.]+$/, "").replace(/\(\d+\)$/, "");
+  const noise = /master|mstr|mix|final|demo|bounce|print|stems?|rough|\bref\b|^v\d+$|^\d+(\.\d+)?(k|khz|bit|b)?$|^(wav|mp3|flac|aiff|m4a|hq|lossless)$/i;
+  const toks = base.split(/[_\s]+|\s*-\s*/).filter(Boolean);
+  while (toks.length > 1 && /^\d{1,2}$/.test(toks[0])) toks.shift();   // leading track number
+  const keep = []; for (const t of toks) { if (keep.length && noise.test(t)) break; keep.push(t); }
+  const name = keep.join(" ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+  return name || base.replace(/[_]+/g, " ").trim() || "Untitled song";
+}
 function fileToDataURL(file, maxDim) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -3613,11 +3623,11 @@ $("trackFileInput").addEventListener("change", async e => {
   if (isContent()) {
     let sg = activeSong();
     if (!sg) { sg = addSong(); }
-    if (!sg.name || sg.name === "Untitled song") sg.name = f.name.replace(/\.[^.]+$/, "");
+    if (!sg.name || sg.name === "Untitled song") sg.name = songNameFromFile(f.name);
     scheduleSave();
   } else if (project.type === "artist") {
     const sg = activeSong();
-    if (sg && (!sg.name || sg.name === "Untitled song")) { sg.name = f.name.replace(/\.[^.]+$/, ""); $("songNameInput").value = sg.name; scheduleSave(); }
+    if (sg && (!sg.name || sg.name === "Untitled song")) { sg.name = songNameFromFile(f.name); $("songNameInput").value = sg.name; scheduleSave(); }
   }
   curTempo().detected = false;
   loadTrackIntoPlayer(f, f.name, false);
