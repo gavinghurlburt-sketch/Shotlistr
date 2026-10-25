@@ -2713,7 +2713,7 @@ function sortedTakes(row, hideBad) {
 
 /* ================= audio transport ================= */
 const player = $("player");
-let audioCtx = null, audioBuffer = null, peaks = null, currentTrackUrl = null, decodeToken = 0;
+let audioCtx = null, audioBuffer = null, peaks = null, currentTrackUrl = null, decodeToken = 0, cachedDur = 0, wfPending = null;   // cachedDur / wfPending: a remembered waveform shown before the track is decoded
 let cue = null; // cue playback through Web Audio: { src, ctxStart, offset, rate }
 var playRate = 1;   // 0.5 / 1 / 2: the song plays slower or faster so the artist can perform in sync with sped-up or slow-motion footage
 function isContent() { return !!project && (project.type === "content" || project.type === "artist"); }
@@ -2776,10 +2776,10 @@ function newContext() {
   return c;
 }
 function ctx() { if (!audioCtx || audioCtx.state === "closed") audioCtx = newContext(); return audioCtx; }
-function trackDuration() { return (audioBuffer && audioBuffer.duration) || player.duration || 0; }
+function trackDuration() { return (audioBuffer && audioBuffer.duration) || cachedDur || player.duration || 0; }
 function transportTime() {
   if (cue && (cue.native || audioCtx)) return Math.max(0, cue.offset + Math.max(0, clockNow() - cue.ctxStart) * (cue.rate || 1));
-  if (audioBuffer) return pausePos;
+  if (audioBuffer || cachedDur) return pausePos;
   return player.currentTime || 0;
 }
 function cueCountingIn() { return !!(cue && (cue.native || audioCtx) && clockNow() < cue.ctxStart); }
@@ -2803,7 +2803,7 @@ function setPosition(t) {
   const dur = trackDuration();
   t = Math.max(0, Math.min(dur || t, t));
   playStartPos = t;
-  if (audioBuffer) {
+  if (audioBuffer || (cachedDur && natReady)) {
     const wasPlaying = !!cue && !cueCountingIn();
     stopCue(false);
     pausePos = t;
@@ -3214,7 +3214,7 @@ player.addEventListener("timeupdate", () => { if (!rafOn) { updateTimecodes(); d
 player.addEventListener("loadedmetadata", drawWaveform);
 
 function resetPlayer() {
-  playToken++; natLoadToken++; natReady = false; natPrep = null; natDur = 0; natDirectKey = null;
+  playToken++; natLoadToken++; natReady = false; natPrep = null; natDur = 0; natDirectKey = null; cachedDur = 0;
   stopCue(false);
   pausePos = 0; playStartPos = 0;
   if (currentTrackUrl) URL.revokeObjectURL(currentTrackUrl);
@@ -3234,6 +3234,7 @@ function loadTrackIntoPlayer(blob, name, restored) {
   const keepPlaying = !!(natDirectKey && natDirectKey === loadedTrackKey && cue && cue.native);   // a lock-screen song switch already started this track natively; don't cut it off
   if (!keepPlaying) resetPlayer();
   natDirectKey = null;
+  if (wfPending && wfPending.key === loadedTrackKey && wfPending.s === blob.size) { peaks = wfPending.p; cachedDur = wfPending.d; }
   natPrep = natCapable() ? natPrepare(blob, name, loadedTrackKey) : null;
   currentTrackUrl = URL.createObjectURL(blob);
   // (the <audio> element is deliberately not given the file: once it has media, iOS shows a second lock-screen player)
@@ -3254,7 +3255,8 @@ async function decodeTrack(blob, autoDetect) {
     const buf = await new Promise((res, rej) => { const p = c.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
     if (token !== decodeToken) return;
     audioBuffer = buf;
-    peaks = computePeaks(buf);
+    peaks = computePeaks(buf); cachedDur = 0;
+    if (loadedTrackKey) wfCacheSave(loadedTrackKey, blob.size, buf.duration, peaks);
     drawWaveform(); paintTempo(); paintSectionHints();
     if (autoDetect) runTempoDetect();
   } catch (e) {
@@ -3262,6 +3264,20 @@ async function decodeTrack(blob, autoDetect) {
     if (token === decodeToken) { try { player.src = currentTrackUrl; player.load(); } catch (e2) {} }
     if (token === decodeToken) setTempoStatus("This file plays, but it couldn't be analyzed. An MP3 or WAV usually works.", "fail");
   }
+}
+/* the waveform picture is remembered per track, so it appears at once next time while the audio itself loads in the background */
+function wfKey(k) { return "creatrr.wf1." + k; }
+function wfCacheLoad(k) {
+  try { const o = JSON.parse(localStorage.getItem(wfKey(k)) || "null"); if (!o || !o.p || !o.d) return null; const p = []; for (let i = 0; i + 1 < o.p.length; i += 2) p.push([o.p[i] / 1000, o.p[i + 1] / 1000]); return { d: o.d, s: o.s, p }; } catch (e) { return null; }
+}
+function wfCacheSave(k, size, dur, pk) {
+  try {
+    const flat = []; pk.forEach(x => { flat.push(Math.round(x[0] * 1000), Math.round(x[1] * 1000)); });
+    localStorage.setItem(wfKey(k), JSON.stringify({ d: dur, s: size, p: flat }));
+    let idx = JSON.parse(localStorage.getItem("creatrr.wfIdx") || "[]").filter(x => x !== k); idx.push(k);
+    while (idx.length > 80) { try { localStorage.removeItem(wfKey(idx.shift())); } catch (e) {} }
+    localStorage.setItem("creatrr.wfIdx", JSON.stringify(idx));
+  } catch (e) {}
 }
 function computePeaks(buf) {
   const ch = buf.getChannelData(0), n = 1200, size = Math.max(1, Math.floor(ch.length / n)), out = [];
@@ -4799,9 +4815,13 @@ async function loadActiveTrack() {
   if (!project) return;
   if (isContent() && !activeSong()) { renderAfterTrackChange(); return; }
   const key = trackKey(), pid = project.id;
+  const wf = wfCacheLoad(key);
+  if (wf) { wfPending = Object.assign({ key }, wf); peaks = wf.p; cachedDur = wf.d; $("waveformCanvas").classList.remove("hidden"); $("shootWave").classList.remove("hidden"); drawWaveform(); }
+  else wfPending = null;
   const saved = await loadTrack(key);
   if (!project || project.id !== pid || trackKey() !== key) return;
   loadedTrackKey = key;
+  if (wf && !(saved && saved.blob && saved.blob.size === wf.s)) { wfPending = null; peaks = null; cachedDur = 0; drawWaveform(); }
   if (saved && saved.blob) loadTrackIntoPlayer(saved.blob, saved.name, true);
   renderAfterTrackChange();
 }
