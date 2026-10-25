@@ -2924,6 +2924,7 @@ async function playFrom(target, withCountIn, rate) {
   playStartPos = target;
   pausePos = target;
   if (!audioBuffer) {                      // fallback: plain element, no count-in precision
+    try { if (player.getAttribute("src") !== currentTrackUrl) { player.src = currentTrackUrl; player.load(); } } catch (e) {}
     try { player.currentTime = target; player.preservesPitch = true; player.webkitPreservesPitch = true; player.playbackRate = rt; } catch (e) {}
     player.play().catch(() => showNotice("The browser blocked playback. Press play again."));
     startRaf(); updateTransportUI();
@@ -3127,7 +3128,7 @@ function resetPlayer() {
 function loadTrackIntoPlayer(blob, name, restored) {
   resetPlayer();
   currentTrackUrl = URL.createObjectURL(blob);
-  player.src = currentTrackUrl;
+  // (the <audio> element is deliberately not given the file: once it has media, iOS shows a second lock-screen player)
   $("trackName").textContent = name || "Track";
   $("trackName").classList.remove("muted");
   $("removeTrackBtn").classList.remove("hidden");
@@ -3145,12 +3146,12 @@ async function decodeTrack(blob, autoDetect) {
     const buf = await new Promise((res, rej) => { const p = c.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
     if (token !== decodeToken) return;
     audioBuffer = buf;
-    try { player.pause(); player.removeAttribute("src"); player.load(); } catch (e) {}   // the decoded buffer plays it; an idle media element would show up as a second lock-screen player
     peaks = computePeaks(buf);
     drawWaveform(); paintTempo(); paintSectionHints();
     if (autoDetect) runTempoDetect();
   } catch (e) {
     console.error(e);
+    if (token === decodeToken) { try { player.src = currentTrackUrl; player.load(); } catch (e2) {} }
     if (token === decodeToken) setTempoStatus("This file plays, but it couldn't be analyzed. An MP3 or WAV usually works.", "fail");
   }
 }
@@ -4536,6 +4537,7 @@ function wireSwipeDelete(list) {
     if (!live) {
       if (Math.abs(my) > 10 && Math.abs(my) > Math.abs(mx)) { card = null; return; }
       if (Math.abs(mx) < 8) return;
+      if (mx > 0 && base === 0) { card = null; return; }   // swiping right is "go back", not delete
       live = true; swipeMoved = true; card.classList.add("dragging"); card.parentElement.classList.add("rv");
       try { card.setPointerCapture(id); } catch (x) {}
     }
@@ -6857,7 +6859,7 @@ document.addEventListener("change", e => { if (e.target.id === "inboxArtist") in
 /* swipe right to go back: artist page -> all artists, plan page -> main page */
 (function () {
   let sx = 0, sy = 0, t0 = 0, ok = false;
-  const blockedEl = el => { for (let n = el; n && n !== document.body; n = n.parentElement) { if (!n.classList) return true; if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "songPage" || n.id === "lightbox" || n.id === "shootSongTabs" || n.id === "cutSongTabs" || n.classList.contains("sr-card") || n.draggable) return true; const cs = getComputedStyle(n); if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && n.scrollWidth > n.clientWidth + 2) return true; } return false; };
+  const blockedEl = el => { for (let n = el; n && n !== document.body; n = n.parentElement) { if (!n.classList) return true; if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "songPage" || n.id === "lightbox" || n.id === "shootSongTabs" || n.id === "cutSongTabs" || (n.classList.contains("sr-card") && n.classList.contains("open"))) return true; const cs = getComputedStyle(n); if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && n.scrollWidth > n.clientWidth + 2 && n.scrollLeft > 2) return true; } return false; };
   document.addEventListener("touchstart", e => { ok = e.touches.length === 1 && !!project && !blockedEl(e.target); if (ok) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now(); } }, { passive: true });
   document.addEventListener("touchend", e => {
     if (!ok) return; ok = false;

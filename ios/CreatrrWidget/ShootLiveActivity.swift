@@ -132,10 +132,6 @@ private struct LockScreenView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text("creatrr").font(.system(size: 12, weight: .heavy)).foregroundStyle(accent)
-                        Text(shoot).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
-                    }
                     Text(state.song).font(.system(size: 19, weight: .bold)).foregroundStyle(.white).lineLimit(1)
                     HStack(spacing: 6) {
                         Text(state.section).font(.system(size: 15, weight: .semibold)).foregroundStyle(tint).lineLimit(1)
