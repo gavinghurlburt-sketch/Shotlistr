@@ -152,6 +152,7 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "setArtists", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "drain", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "discard", returnType: CAPPluginReturnPromise),
     ]
     /// Move files the share extension left in the App Group folder into Documents/Inbox. Reports whether the shared folder is reachable at all.
     @objc func drain(_ call: CAPPluginCall) {
@@ -164,29 +165,25 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         let ud = UserDefaults(suiteName: "group.art.gavingeddes.producrr")
         let log = ud?.string(forKey: "shareLog") ?? ""
         if !log.isEmpty { ud?.removeObject(forKey: "shareLog") }
-        var moved = 0, firstErr = ""
-        if !files.isEmpty {
-            do { try fm.createDirectory(atPath: to.path, withIntermediateDirectories: true, attributes: nil) }
-            catch { firstErr = "mkdir: \(error.localizedDescription)" }
+        var list: [[String: String]] = []
+        for f in files where !f.lastPathComponent.hasSuffix(".meta.json") {
+            let metaURL = URL(fileURLWithPath: f.path + ".meta.json")
+            let meta = (try? String(contentsOf: metaURL, encoding: .utf8)) ?? ""
+            list.append(["name": f.lastPathComponent, "path": f.absoluteString, "meta": meta])
         }
-        for f in files {
-            let dest = to.appendingPathComponent(f.lastPathComponent)
-            do {
-                let data = try Data(contentsOf: f)
-                try data.write(to: dest, options: .atomic)
-                try? fm.removeItem(at: f); moved += 1
-            } catch {
-                if firstErr.isEmpty { firstErr = "\(f.lastPathComponent): \(error.localizedDescription) [src \(fm.fileExists(atPath: f.path)), destDir \(fm.fileExists(atPath: to.path))]" }
-            }
+        call.resolve(["groupOk": true, "files": list, "found": list.count, "log": log])
+    }
+    /// Delete shared files (and their .meta.json) once the web side has stored them.
+    @objc func discard(_ call: CAPPluginCall) {
+        let fm = FileManager.default
+        guard let group = fm.containerURL(forSecurityApplicationGroupIdentifier: "group.art.gavingeddes.producrr") else { call.resolve(); return }
+        let dir = group.appendingPathComponent("Inbox", isDirectory: true)
+        for n in call.getArray("names", String.self) ?? [] {
+            let f = dir.appendingPathComponent(n)
+            try? fm.removeItem(at: f)
+            try? fm.removeItem(atPath: f.path + ".meta.json")
         }
-        // older leftovers with spaces/symbols in the name: make them readable (audio + its .meta.json get the same new name pattern)
-        func safeName(_ n: String) -> String { String(n.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_") ? $0 : "_" }) }
-        for f in (try? fm.contentsOfDirectory(at: to, includingPropertiesForKeys: nil)) ?? [] {
-            let n = f.lastPathComponent, s = safeName(n)
-            if s != n, !fm.fileExists(atPath: to.appendingPathComponent(s).path) { try? fm.moveItem(at: f, to: to.appendingPathComponent(s)) }
-        }
-        let waiting = ((try? fm.contentsOfDirectory(atPath: to.path)) ?? []).filter { !$0.hasSuffix(".meta.json") }.count
-        call.resolve(["groupOk": true, "moved": moved, "found": waiting, "log": log, "err": firstErr])
+        call.resolve()
     }
     @objc func setArtists(_ call: CAPPluginCall) {
         UserDefaults(suiteName: "group.art.gavingeddes.producrr")?.set(call.getString("json") ?? "[]", forKey: "artists")

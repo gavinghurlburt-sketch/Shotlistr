@@ -6669,29 +6669,28 @@ function inboxDrainNative() { if (!_drainP) _drainP = inboxDrainNativeRun().fina
 async function inboxDrainNativeRun() {
   const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform() || BAND_CODE) return 0;
   let n = 0; const placed = [];
-  try {   // let the app move anything the share pop-up left in the shared folder
-    const r = await C.Capacitor.registerPlugin("ShareBridge").drain();
-    if (r && (r.log || r.found || r.err)) showNotice("Share check: " + (r.log ? r.log + " · " : "") + "moved " + (r.moved || 0) + ", " + (r.found || 0) + " waiting" + (r.err ? " · error: " + r.err : ""));
-    if (r && r.groupOk === false && !inboxDrainNative.warned) { inboxDrainNative.warned = true; showNotice("Sharing into creatrr isn't linked on this phone yet (App Groups)."); }
-  } catch (e) {}
-  try {
-    const FS = C.Filesystem, r = await FS.readdir({ path: "Inbox", directory: "DOCUMENTS" });
-    for (const f of r.files || []) {
-      const name = f.name || f; if (!AUDIO_RE.test(name)) continue;
-      try {
-        const u = await FS.getUri({ path: "Inbox/" + name, directory: "DOCUMENTS" });
-        const blob = await (await fetch(C.Capacitor.convertFileSrc(u.uri))).blob();
-        let meta = null; try { const m = await FS.readFile({ path: "Inbox/" + name + ".meta.json", directory: "DOCUMENTS", encoding: "utf8" }); meta = JSON.parse(m.data); } catch (e) {}
-        if (await inboxAdd(new File([blob], name, { type: blob.type || "audio/mpeg" }))) {
-          n++; const iid = inboxAdd.lastId;
-          await FS.deleteFile({ path: "Inbox/" + name, directory: "DOCUMENTS" });
-          if (meta) { try { await FS.deleteFile({ path: "Inbox/" + name + ".meta.json", directory: "DOCUMENTS" }); } catch (e) {} }
-          if (meta && meta.orig && !meta.songName) meta.songName = songNameFromFile(meta.orig);
-          if (meta && meta.artistId) { try { const r = await inboxToSong(iid, meta.artistId, meta.songName); if (r) { placed.push(r); n--; } else showNotice("Couldn't file " + name + " into that band. It's waiting in the bell."); } catch (e) { showNotice("Couldn't file " + name + ": " + (e && e.message || e)); } }
+  let r = null; const SB = C.Capacitor.registerPlugin("ShareBridge");
+  try { r = await SB.drain(); } catch (e) { return 0; }
+  if (r && r.log) showNotice("Share check: " + r.log + " · found " + (r.found || 0));
+  if (r && r.groupOk === false && !inboxDrainNative.warned) { inboxDrainNative.warned = true; showNotice("Sharing into creatrr isn't linked on this phone yet (App Groups)."); }
+  for (const f of (r && r.files) || []) {
+    const name = f.name; if (!AUDIO_RE.test(name)) continue;
+    try {
+      const blob = await (await fetch(C.Capacitor.convertFileSrc(f.path))).blob();
+      if (!blob.size) throw new Error("empty file");
+      let meta = null; try { meta = f.meta ? JSON.parse(f.meta) : null; } catch (e) {}
+      if (meta && meta.orig && !meta.songName) meta.songName = songNameFromFile(meta.orig);
+      const shown = (meta && meta.orig) || name;
+      if (await inboxAdd(new File([blob], shown, { type: blob.type || "audio/mp4" }))) {
+        n++; const iid = inboxAdd.lastId;
+        await SB.discard({ names: [name] });
+        if (meta && meta.artistId) {
+          try { const rr = await inboxToSong(iid, meta.artistId, meta.songName); if (rr) { placed.push(rr); n--; } else showNotice("Couldn't file " + shown + " into that band. It's waiting in the bell."); }
+          catch (e) { showNotice("Couldn't file " + shown + ": " + (e && e.message || e)); }
         }
-      } catch (e) { if (!inboxDrainNative.errd) { inboxDrainNative.errd = 1; showNotice("Couldn't read the shared file " + name + ": " + (e && e.message || e)); } }
-    }
-  } catch (e) {}
+      }
+    } catch (e) { showNotice("Couldn't read the shared file " + name + ": " + (e && e.message || e)); }
+  }
   if (placed.length) showNotice("Added " + placed.map(p => p.song + " to " + p.artist).join(", ") + ".");
   return n;
 }
