@@ -1350,7 +1350,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #songPage .panel-head { margin-bottom: 12px; }
 #tempoModal .tempo-wave { background: none; border-radius: 0; }
 .part-row, .part-row.sel { background-image: none; }
-.part-row, .part-row.sel { background-color: color-mix(in srgb, var(--sec) 16%, var(--surface-2)); }   /* sections always wear their colour; the selected one adds an outline */
+.part-row, .part-row.sel { background: color-mix(in srgb, var(--sec) 22%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--sec) 45%, transparent); }   /* sections are always tinted frosted glass in their own colour; the selected one adds an outline */
 .song-play { margin: 12px 0 0; font-size: 34px; }
 #draftPlayBtn.tap-big:not(.on) { background-color: color-mix(in srgb, #2fbf6c 26%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #2fbf6c 60%, transparent), 0 8px 24px rgba(0,0,0,.18); }
 #draftPlayBtn.tap-big.on { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 8px 24px rgba(0,0,0,.18); }
@@ -5326,7 +5326,6 @@ function renderPartsList() {
   $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row ${openPartId === pt.id ? "open" : ""}${selPartId === pt.id ? " sel" : ""}" data-section-id="${pt.id}" aria-selected="${selPartId === pt.id}" style="--sec:${pt.color}">
       <span class="pdot" style="background-color:${pt.color}"></span>
       <input type="text" class="field part-name" data-part-name value="${esc(pt.name)}" aria-label="Part name">
-      <span class="part-time">${pt.time ? esc(pt.time) : "—"}</span>
       ${pt.time ? `<button type="button" class="icon-btn" data-c="part-cue" title="Play from here" aria-label="Play from here">▶</button>` : ""}
       <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color and delete">⋯</button>
       <div class="part-more">
