@@ -5709,7 +5709,7 @@ function renderShootContent() {
   panel.innerHTML = parts.map((p, idx) => {
     const d = p.rows.filter(r => r.checked).length, open = p.id === shootOpenId;
     const complete = p.rows.length && d === p.rows.length;
-    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${complete ? "✓ " : ""}${d} of ${p.rows.length} shots</span><span class="pc-chev"></span></button>`;
+    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${complete ? "✓ " : ""}${d} of ${p.rows.length} shots</span><span class="pc-chev"></span></button>`;
     const pct = p.rows.length ? Math.round(d / p.rows.length * 100) : 0, prog = `<div class="pc-prog" style="--p:${pct}%"><i></i></div>`;
     if (!open) return `<div class="part-card ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}${prog}</div>`;
     const prev = parts[idx - 1], next = parts[idx + 1];
