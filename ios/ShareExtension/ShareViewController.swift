@@ -153,12 +153,11 @@ class ShareViewController: UIViewController {
         try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
         var saved = 0
         for p in pending {
-            let name = p.original
-            var dest = inbox.appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: dest.path) { dest = inbox.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(name)") }
+            let safe = String(p.original.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_") ? $0 : "_" })   // spaces and symbols break the app's file reader
+            let dest = inbox.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(safe)")
             do {
                 try FileManager.default.copyItem(at: p.url, to: dest)
-                var meta: [String: Any] = ["songName": (p.field.text ?? "").trimmingCharacters(in: .whitespaces)]
+                var meta: [String: Any] = ["songName": (p.field.text ?? "").trimmingCharacters(in: .whitespaces), "orig": p.original]
                 if let a = chosen { meta["artistId"] = a.id; meta["artistName"] = a.name }
                 if let data = try? JSONSerialization.data(withJSONObject: meta) {
                     try? data.write(to: dest.appendingPathExtension("meta.json"))   // "<file>.meta.json"

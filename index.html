@@ -6662,9 +6662,10 @@ async function inboxDrainNative() {
           n++; const iid = inboxAdd.lastId;
           await FS.deleteFile({ path: "Inbox/" + name, directory: "DOCUMENTS" });
           if (meta) { try { await FS.deleteFile({ path: "Inbox/" + name + ".meta.json", directory: "DOCUMENTS" }); } catch (e) {} }
+          if (meta && meta.orig && !meta.songName) meta.songName = songNameFromFile(meta.orig);
           if (meta && meta.artistId) { try { const r = await inboxToSong(iid, meta.artistId, meta.songName); if (r) { placed.push(r); n--; } else showNotice("Couldn't file " + name + " into that band. It's waiting in the bell."); } catch (e) { showNotice("Couldn't file " + name + ": " + (e && e.message || e)); } }
         }
-      } catch (e) {}
+      } catch (e) { if (!inboxDrainNative.errd) { inboxDrainNative.errd = 1; showNotice("Couldn't read the shared file " + name + ": " + (e && e.message || e)); } }
     }
   } catch (e) {}
   if (placed.length) showNotice("Added " + placed.map(p => p.song + " to " + p.artist).join(", ") + ".");

@@ -1,6 +1,12 @@
 <style>
-#accountModal { align-items: flex-end; padding: 0; }
-#accountModal .modal-inner { width: 100%; max-width: 520px; max-height: 92vh; border-radius: 28px 28px 0 0; padding: 10px 24px max(28px, env(safe-area-inset-bottom)); transition: transform .22s ease; will-change: transform; }
+#accountModal { align-items: flex-end; padding: 0; background: rgba(0,0,0,.35); -webkit-backdrop-filter: none; backdrop-filter: none; touch-action: none; }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheetFade { from { opacity: 0; } to { opacity: 1; } }
+#accountModal:not(.hidden) { animation: sheetFade .25s ease; }
+#accountModal:not(.hidden) .modal-inner { animation: sheetUp .42s cubic-bezier(.2,.9,.25,1); }
+#accountModal .modal-inner { width: 100%; max-width: 520px; max-height: 92vh; border-radius: 28px 28px 0 0; padding: 10px 24px max(28px, env(safe-area-inset-bottom)); overscroll-behavior: contain; touch-action: pan-y; will-change: transform;
+  background-color: var(--surface); background-color: color-mix(in srgb, var(--surface) 58%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.7); backdrop-filter: blur(30px) saturate(1.7); border-top: 1px solid rgba(255,255,255,.14); box-shadow: 0 -10px 40px rgba(0,0,0,.25); }
 #accountModal .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .45; margin: 0 auto 16px; }
 #accountModal .linkbtn { background: none; border: 0; padding: 0; margin: 6px 0 0; font: inherit; font-size: 13px; color: #ff6b5e; text-decoration: underline; cursor: pointer; }
 #accountModal .sect { margin: 22px 0 8px; font-size: 13px; color: var(--muted); }
@@ -64,11 +70,29 @@
 <script>
 (function () {
   var m = document.getElementById("accountModal"), inner = m && m.querySelector(".modal-inner"); if (!m) return;
-  function close() { m.classList.add("hidden"); var g = document.getElementById("acctMsg"); if (g) g.textContent = ""; if (inner) inner.style.transform = ""; }
+  function reset() { inner.style.transition = ""; inner.style.transform = ""; var g = document.getElementById("acctMsg"); if (g) g.textContent = ""; }
+  function close() {
+    inner.style.transition = "transform .26s cubic-bezier(.4,0,1,1)"; inner.style.transform = "translateY(100%)";
+    setTimeout(function () { m.classList.add("hidden"); reset(); }, 250);
+  }
   m.addEventListener("click", function (e) { if (e.target === m) close(); });
-  var y0 = null, dy = 0;
-  inner.addEventListener("touchstart", function (e) { y0 = (e.touches.length === 1 && inner.scrollTop <= 0) ? e.touches[0].clientY : null; dy = 0; inner.style.transition = "none"; }, { passive: true });
-  inner.addEventListener("touchmove", function (e) { if (y0 === null) return; dy = e.touches[0].clientY - y0; if (dy > 0) inner.style.transform = "translateY(" + dy + "px)"; else { dy = 0; inner.style.transform = ""; } }, { passive: true });
-  inner.addEventListener("touchend", function () { inner.style.transition = ""; if (y0 !== null && dy > 110) close(); else inner.style.transform = ""; y0 = null; });
+  var lastY = 0, offset = 0, t0 = 0, active = false;
+  m.addEventListener("touchstart", function (e) { if (e.touches.length !== 1) return; active = true; lastY = e.touches[0].clientY; offset = 0; t0 = Date.now(); inner.style.transition = "none"; }, { passive: true });
+  m.addEventListener("touchmove", function (e) {
+    if (!active) return;
+    var y = e.touches[0].clientY, d = y - lastY; lastY = y;
+    if (!inner.contains(e.target)) { e.preventDefault(); return; }
+    var atTop = inner.scrollTop <= 0, atBottom = inner.scrollTop + inner.clientHeight >= inner.scrollHeight - 1;
+    if (offset > 0 || (d > 0 && atTop)) { offset = Math.max(0, offset + d); inner.style.transform = "translateY(" + offset + "px)"; e.preventDefault(); }
+    else if (offset < 0 || (d < 0 && atBottom)) { offset = Math.max(-46, Math.min(0, offset + d * 0.35)); inner.style.transform = "translateY(" + offset + "px)"; e.preventDefault(); }
+  }, { passive: false });
+  function end() {
+    if (!active) return; active = false;
+    var fast = offset > 40 && (Date.now() - t0) < 260;
+    if (offset > 110 || fast) { close(); return; }
+    inner.style.transition = "transform .45s cubic-bezier(.2,.9,.25,1)"; inner.style.transform = "translateY(0)";
+    offset = 0; setTimeout(function () { inner.style.transition = ""; inner.style.transform = ""; }, 460);
+  }
+  m.addEventListener("touchend", end); m.addEventListener("touchcancel", end);
 })();
 </script>

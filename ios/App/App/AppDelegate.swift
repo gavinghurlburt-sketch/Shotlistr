@@ -168,6 +168,12 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             if fm.fileExists(atPath: dest.path) { dest = to.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(f.lastPathComponent)") }
             if (try? fm.moveItem(at: f, to: dest)) != nil { moved += 1 }
         }
+        // older leftovers with spaces/symbols in the name: make them readable (audio + its .meta.json get the same new name pattern)
+        func safeName(_ n: String) -> String { String(n.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_") ? $0 : "_" }) }
+        for f in (try? fm.contentsOfDirectory(at: to, includingPropertiesForKeys: nil)) ?? [] {
+            let n = f.lastPathComponent, s = safeName(n)
+            if s != n, !fm.fileExists(atPath: to.appendingPathComponent(s).path) { try? fm.moveItem(at: f, to: to.appendingPathComponent(s)) }
+        }
         call.resolve(["groupOk": true, "moved": moved])
     }
     @objc func setArtists(_ call: CAPPluginCall) {
