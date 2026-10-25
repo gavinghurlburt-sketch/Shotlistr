@@ -6669,7 +6669,7 @@ async function inboxDrainNative() {
   let n = 0; const placed = [];
   try {   // let the app move anything the share pop-up left in the shared folder
     const r = await C.Capacitor.registerPlugin("ShareBridge").drain();
-    if (r && (r.log || r.found)) showNotice("Share check: " + (r.log ? r.log + " · " : "") + "found " + (r.found || 0) + " file(s) waiting");
+    if (r && (r.log || r.found || r.err)) showNotice("Share check: " + (r.log ? r.log + " · " : "") + "moved " + (r.moved || 0) + ", " + (r.found || 0) + " waiting" + (r.err ? " · error: " + r.err : ""));
     if (r && r.groupOk === false && !inboxDrainNative.warned) { inboxDrainNative.warned = true; showNotice("Sharing into creatrr isn't linked on this phone yet (App Groups)."); }
   } catch (e) {}
   try {

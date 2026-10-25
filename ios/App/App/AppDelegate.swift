@@ -165,11 +165,12 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         let log = ud?.string(forKey: "shareLog") ?? ""
         if !log.isEmpty { ud?.removeObject(forKey: "shareLog") }
         if !files.isEmpty { try? fm.createDirectory(at: to, withIntermediateDirectories: true) }
-        var moved = 0
+        var moved = 0, firstErr = ""
         for f in files {
             var dest = to.appendingPathComponent(f.lastPathComponent)
             if fm.fileExists(atPath: dest.path) { dest = to.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(f.lastPathComponent)") }
-            if (try? fm.moveItem(at: f, to: dest)) != nil { moved += 1 }
+            do { try fm.copyItem(at: f, to: dest); try? fm.removeItem(at: f); moved += 1 }
+            catch { if firstErr.isEmpty { firstErr = error.localizedDescription } }
         }
         // older leftovers with spaces/symbols in the name: make them readable (audio + its .meta.json get the same new name pattern)
         func safeName(_ n: String) -> String { String(n.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_") ? $0 : "_" }) }
@@ -178,7 +179,7 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             if s != n, !fm.fileExists(atPath: to.appendingPathComponent(s).path) { try? fm.moveItem(at: f, to: to.appendingPathComponent(s)) }
         }
         let waiting = ((try? fm.contentsOfDirectory(atPath: to.path)) ?? []).filter { !$0.hasSuffix(".meta.json") }.count
-        call.resolve(["groupOk": true, "moved": moved, "found": waiting, "log": log])
+        call.resolve(["groupOk": true, "moved": moved, "found": waiting, "log": log, "err": firstErr])
     }
     @objc func setArtists(_ call: CAPPluginCall) {
         UserDefaults(suiteName: "group.art.gavingeddes.producrr")?.set(call.getString("json") ?? "[]", forKey: "artists")
