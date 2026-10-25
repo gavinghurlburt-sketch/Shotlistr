@@ -283,9 +283,15 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let h = have, want < 0 || h == want, let f = try? AVAudioFile(forReading: url) else { call.resolve(["ok": false]); return }
             self.file = f
             self.dur = Double(f.length) / f.processingFormat.sampleRate
-            // tidy: keep only this track
-            let keep = url.lastPathComponent
-            for u in (try? FileManager.default.contentsOfDirectory(at: self.dir(), includingPropertiesForKeys: nil)) ?? [] where u.lastPathComponent != keep { try? FileManager.default.removeItem(at: u) }
+            // tidy: keep the ten most recently used tracks so switching songs doesn't re-copy the file each time
+            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
+            let keys: [URLResourceKey] = [.contentModificationDateKey]
+            let all: [URL] = (try? FileManager.default.contentsOfDirectory(at: self.dir(), includingPropertiesForKeys: keys)) ?? []
+            let dated: [(url: URL, date: Date)] = all.map { u in
+                (url: u, date: (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast)
+            }
+            let sorted = dated.sorted { $0.date > $1.date }
+            if sorted.count > 10 { for old in sorted.dropFirst(10) { try? FileManager.default.removeItem(at: old.url) } }
             call.resolve(["ok": true, "duration": self.dur])
         }
     }

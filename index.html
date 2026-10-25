@@ -3092,11 +3092,11 @@ function updateTimecodes() {
 }
 function paintRate() { const rb = $("rateBadge"); if (!rb) return; rb.textContent = speedLabel(playRate) + " speed"; rb.classList.toggle("hidden", playRate === 1); }
 /* lock-screen player: a creatrr-styled Live Activity with previous / play-stop / next while a shoot plays (iPhone app) */
-var npOn = false, npWired = false;
+var npOn = false, npWired = false, npSwitching = false;   // npSwitching: a song change from the lock screen is loading, so keep the Live Activity up
 function npPlugin() { const C = window.Cap; if (!C || BAND_CODE || !C.Capacitor.isNativePlatform()) return null; try { return C.Capacitor.registerPlugin("ShootActivity"); } catch (e) { return null; } }
 function nowPlayingSync() {
   const NP = npPlugin(); if (!NP) return;
-  const inShoot = !!(project && project.type === "content" && currentWs === "shoot" && currentTrackUrl);
+  const inShoot = !!(project && project.type === "content" && currentWs === "shoot" && (currentTrackUrl || npSwitching));
   if (!inShoot || (!npOn && !isPlaying())) { if (npOn && !inShoot) { npOn = false; NP.end().catch(() => {}); } return; }
   if (!npWired) { npWired = true; NP.addListener("command", e => npCommand(e && e.name)); }
   npOn = true;
@@ -3121,9 +3121,13 @@ async function npSong(dir) {
   let i = songs.findIndex(sg => sg.id === activeSongId); if (i < 0) i = 0;
   const j = Math.max(0, Math.min(songs.length - 1, i + dir)); if (j === i) return;
   const sg = songs[j], first = shootParts(sg.id).filter(x => x.time)[0];
-  setActiveSong(sg.id); for (let k = 0; k < 60 && !(loadedTrackKey === trackKey() && audioBuffer); k++) await new Promise(res => setTimeout(res, 100));
-  shootPartId = first.id; renderCurrent();
-  playCue(first.time, partRate[first.id] || first.speed || 1);
+  npSwitching = true;
+  try {
+    setActiveSong(sg.id); shootPartId = first.id; nowPlayingSync();   // the lock screen shows the new song right away while its track loads
+    for (let k = 0; k < 100 && !(loadedTrackKey === trackKey() && audioBuffer); k++) await new Promise(res => setTimeout(res, 100));
+    shootPartId = first.id; renderCurrent();
+    playCue(first.time, partRate[first.id] || first.speed || 1);
+  } finally { npSwitching = false; nowPlayingSync(); }
 }
 async function npStep(dir) {
   const rows = shootRows().filter(r => r.p.time); if (!rows.length) return;
@@ -3131,9 +3135,12 @@ async function npStep(dir) {
   let i = rows.findIndex(r => cur && r.p.id === cur.id);
   i = i < 0 ? (dir > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, i + dir));
   const r = rows[i];
-  if (r.sg.id !== activeSongId) { setActiveSong(r.sg.id); for (let k = 0; k < 60 && !(loadedTrackKey === trackKey() && audioBuffer); k++) await new Promise(res => setTimeout(res, 100)); }
-  shootPartId = r.p.id; renderCurrent();
-  playCue(r.p.time, partRate[r.p.id] || r.p.speed || 1);
+  npSwitching = true;
+  try {
+    if (r.sg.id !== activeSongId) { setActiveSong(r.sg.id); shootPartId = r.p.id; nowPlayingSync(); for (let k = 0; k < 100 && !(loadedTrackKey === trackKey() && audioBuffer); k++) await new Promise(res => setTimeout(res, 100)); }
+    shootPartId = r.p.id; renderCurrent();
+    playCue(r.p.time, partRate[r.p.id] || r.p.speed || 1);
+  } finally { npSwitching = false; nowPlayingSync(); }
 }
 function updateTransportUI() {
   ["draftPlayBtn", "shootPlayBtn", "cutPlayBtn"].forEach(id => {
