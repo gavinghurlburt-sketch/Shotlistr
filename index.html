@@ -3928,6 +3928,18 @@ function quantizeTaps(all) {
     const lo = Math.floor(fine), hi = Math.ceil(fine);
     bpm = lo === hi ? lo : (bestGrid(lo) >= bestGrid(hi) ? lo : hi);   // nearest whole BPM that the track's beat agrees with
   }
+  /* keep listening: with a long run of taps, fit the tempo to the taps themselves (so it can settle between whole BPMs), then let the track's beat fine-tune the last decimals */
+  if (taps.length >= 16) {
+    const med = m, ks = [0]; for (let i = 1; i < taps.length; i++) ks.push(ks[i - 1] + Math.max(1, Math.round((taps[i] - taps[i - 1]) / med)));
+    const n2 = taps.length, mx = ks.reduce((a, b) => a + b, 0) / n2, my = taps.reduce((a, b) => a + b, 0) / n2;
+    let num = 0, den = 0; for (let i = 0; i < n2; i++) { num += (ks[i] - mx) * (taps[i] - my); den += (ks[i] - mx) * (ks[i] - mx); }
+    const slope = den > 0 ? num / den : 0, reg = slope > 0 ? 60 / slope : 0;
+    if (reg > 0 && Math.abs(reg - rough) < rough * 0.03) {
+      let b3 = reg;
+      if (info) { let fb = b3, fs = -1; for (let b2 = b3 * 0.99; b2 <= b3 * 1.01; b2 += 0.02) { const sc = bestGrid(b2); if (sc > fs) { fs = sc; fb = b2; } } b3 = fb; }
+      bpm = Math.round(b3 * 100) / 100;
+    }
+  }
   const beat = 60 / bpm, bar = beat * 4, lat = outLatency();
   const t = taps.map(x => x - lat);
   let sx = 0, sy = 0; t.forEach(x => { const a = 2 * Math.PI * ((x % beat) / beat); sx += Math.cos(a); sy += Math.sin(a); });
@@ -3937,7 +3949,10 @@ function quantizeTaps(all) {
     const P = 60 * info.fps / bpm, c = (phase - info.bias) * info.fps;
     let bestO = c, bestS = 0;
     for (let o = c - P / 4; o <= c + P / 4; o += 0.25) { const sc = gridAt(bpm, o); if (sc > bestS) { bestS = sc; bestO = o; } }
-    offsetSec = bestO / info.fps + info.bias;
+    const onsetOff = bestO / info.fps + info.bias;
+    let dlt = (onsetOff - phase) % beat; if (dlt > beat / 2) dlt -= beat; if (dlt < -beat / 2) dlt += beat;
+    const wOnset = Math.max(0, Math.min(1, 1 - (taps.length - 8) / 24));       // the more you tap, the more your taps decide over the track's onsets
+    offsetSec = phase + dlt * wOnset;
   }
   const wrap = x => x - Math.floor(x / bar) * bar;
   let anchor;
