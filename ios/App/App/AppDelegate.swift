@@ -284,15 +284,15 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let h = have, want < 0 || h == want, let f = try? AVAudioFile(forReading: url) else { call.resolve(["ok": false]); return }
             self.file = f
             self.dur = Double(f.length) / f.processingFormat.sampleRate
-            // tidy: keep the thirty most recently used tracks so switching songs doesn't re-copy the file each time
+            // tidy: drop copies not used for two weeks (every song of a shoot stays while the shoot is in use)
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
             let keys: [URLResourceKey] = [.contentModificationDateKey]
             let all: [URL] = (try? FileManager.default.contentsOfDirectory(at: self.dir(), includingPropertiesForKeys: keys)) ?? []
-            let dated: [(url: URL, date: Date)] = all.map { u in
-                (url: u, date: (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast)
+            let cutoff: Date = Date().addingTimeInterval(-14 * 24 * 3600)
+            for u in all {
+                let d: Date = (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+                if d < cutoff { try? FileManager.default.removeItem(at: u) }
             }
-            let sorted = dated.sorted { $0.date > $1.date }
-            if sorted.count > 30 { for old in sorted.dropFirst(30) { try? FileManager.default.removeItem(at: old.url) } }
             call.resolve(["ok": true, "duration": self.dur])
         }
     }
@@ -304,7 +304,9 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
             let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
             let have: Int? = (attrs?[.size] as? NSNumber)?.intValue
             let want: Int = call.getInt("size") ?? -1
-            call.resolve(["ok": have != nil && (want < 0 || have == want)])
+            let ok: Bool = have != nil && (want < 0 || have == want)
+            if ok { try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path) }
+            call.resolve(["ok": ok])
         }
     }
     @objc func write(_ call: CAPPluginCall) {

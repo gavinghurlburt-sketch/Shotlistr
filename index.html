@@ -3126,7 +3126,7 @@ var npOn = false, npWired = false, npSwitching = false;   // npSwitching: a song
 function npPlugin() { const C = window.Cap; if (!C || BAND_CODE || !C.Capacitor.isNativePlatform()) return null; try { return C.Capacitor.registerPlugin("ShootActivity"); } catch (e) { return null; } }
 function nowPlayingSync() {
   const NP = npPlugin(); if (!NP) return;
-  const inShoot = !!(project && project.type === "content" && currentWs === "shoot" && (currentTrackUrl || npSwitching));
+  const inShoot = !!(project && project.type === "content" && currentWs === "shoot" && (currentTrackUrl || npSwitching || (natReady && natDur > 0)));   // a track playing natively counts even while the page is still loading it
   if (!inShoot || (!npOn && !isPlaying())) { if (npOn && !inShoot) { npOn = false; NP.end().catch(() => {}); } return; }
   if (!npWired) { npWired = true; NP.addListener("command", e => npCommand(e && e.name)); }
   npOn = true;
