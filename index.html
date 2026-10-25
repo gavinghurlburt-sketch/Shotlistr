@@ -1474,7 +1474,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
           <span id="tempoStatus" class="tempo-status"></span>
           <button id="tempoManualBtn" class="btn small hidden">Set tempo</button>
         </div>
-        <details id="trackMore" class="more hidden"><summary>Track options</summary>
+        <details id="trackMore" class="more hidden" style="display:none !important"><summary>Track options</summary>
           <button id="removeTrackBtn" class="btn small danger-text">Remove track</button>
         </details>
       </div>
@@ -2943,9 +2943,17 @@ async function natNameFor(blob, fname) {
   return (h >>> 0).toString(36) + "-" + blob.size + "." + ext;
 }
 async function natWrite(NA, name, blob, tok) {
-  const CH = 1536 * 1024;
+  const CH = 3 * 1024 * 1024;
   for (let o = 0; o < blob.size; o += CH) { if (tok != null && tok !== natLoadToken) return false; await NA.write({ name, data: await blobB64(blob.slice(o, o + CH)), append: o > 0 }); }
   return true;
+}
+async function natPeaksFor(NA, name, key, size) {
+  try {
+    const r = await NA.peaks({ name, bins: 1200 });
+    const pk = []; for (let i = 0; i + 1 < r.p.length; i += 2) pk.push([r.p[i] / 1000, r.p[i + 1] / 1000]);
+    wfCacheSave(key, size, r.duration, pk);
+    return { pk, dur: r.duration };
+  } catch (e) { return null; }
 }
 async function natPrepare(blob, fname, key) {
   const tok = ++natLoadToken; natReady = false;
@@ -2956,25 +2964,31 @@ async function natPrepare(blob, fname, key) {
     let r = await NA.openTrack({ name, size: blob.size });
     if (!r.ok) { if (!(await natWrite(NA, name, blob, tok))) return; r = await NA.openTrack({ name, size: blob.size }); }
     if (key) natIndex[key] = { name, size: blob.size };
+    if (key && r.ok && !peaks && !audioBuffer) {                       // show the waveform from the native read while the page is still decoding
+      const w = await natPeaksFor(NA, name, key, blob.size);
+      if (w && tok === natLoadToken && key === loadedTrackKey && !peaks && !audioBuffer) { peaks = w.pk; cachedDur = w.dur; drawWaveform(); }
+    }
     if (tok === natLoadToken) { natReady = !!r.ok; natDur = r.duration || 0; if (natReady) setTimeout(natPrewarm, 1500); }
   } catch (e) { console.error("native audio unavailable", e); if (tok === natLoadToken) natReady = false; }
 }
 /* copy the shoot's other songs to the native cache while the app is open, so the lock screen can switch songs without waking the page's slow loading */
 async function natPrewarm() {
-  if (natWarming || !natCapable() || !project || project.type !== "content") return;
+  if (natWarming || !natCapable() || !project || !(project.type === "content" || project.type === "artist")) return;
   const NA = natPlugin(); if (!NA) return;
   natWarming = true;
   try {
     const pid = project.id;
-    for (const sg of shootSongs()) {
+    const songs = project.type === "artist" ? project.songs : shootSongs();
+    for (const sg of songs) {
       if (!project || project.id !== pid) break;
-      const key = `${trackOwnerId()}::${sg.id}`;
-      if (natIndex[key]) continue;
+      const key = `${trackOwnerId()}::${sg.id}`, have = wfCacheLoad(key);
+      if (natIndex[key] && have) continue;
       const saved = await loadTrack(key); if (!saved || !saved.blob) continue;
       const name = await natNameFor(saved.blob, saved.name);
       const r = await NA.check({ name, size: saved.blob.size });
       if (!r.ok) await natWrite(NA, name, saved.blob);
       natIndex[key] = { name, size: saved.blob.size };
+      if (!have || have.s !== saved.blob.size) await natPeaksFor(NA, name, key, saved.blob.size);
       await wait(60);
     }
   } catch (e) { console.error("prewarm", e); } finally { natWarming = false; }
@@ -3258,6 +3272,7 @@ async function decodeTrack(blob, autoDetect) {
     peaks = computePeaks(buf); cachedDur = 0;
     if (loadedTrackKey) wfCacheSave(loadedTrackKey, blob.size, buf.duration, peaks);
     drawWaveform(); paintTempo(); paintSectionHints();
+    if (suggestWait && activeSong() && activeSong().id === suggestWait.id) { const w = suggestWait; suggestWait = null; runSuggest(w.auto); }
     if (autoDetect) runTempoDetect();
   } catch (e) {
     console.error(e);
@@ -3390,7 +3405,7 @@ function paintTempo() {
   el.textContent = currentTrackUrl ? (tempoMsg || "") : ""; el.className = "tempo-status" + (tempoMsg ? " bad" : " hidden");
   mb.classList.toggle("hidden", !currentTrackUrl);
   mb.textContent = tp.bpm && tp.offset != null ? "Tempo " + Math.round(tp.bpm) + " BPM · change" : "Set tempo";
-  const sb = $("suggestBtn"); if (sb) sb.classList.toggle("hidden", !(isContent() && audioBuffer && tp.bpm && tp.offset != null));
+  const sb = $("suggestBtn"); if (sb) sb.classList.toggle("hidden", !(isContent() && (audioBuffer || currentTrackUrl) && tp.bpm && tp.offset != null));
 }
 function runTempoDetect() {
   if (!audioBuffer) return;
@@ -5360,9 +5375,11 @@ function renderSuggest() {
       <div class="suggest-row"><button type="button" class="btn small primary" data-c="sug-all">Add all</button><button type="button" class="btn small" data-c="sug-dismiss">Dismiss</button></div></div>`
       : `<p class="muted small" style="margin:0 0 10px">Couldn't find clear sections in this track. Add them yourself below.</p>`;
 }
+var suggestWait = null;
 function runSuggest(auto) {
   const sg = activeSong(), tp = curTempo();
-  if (!sg || !audioBuffer || !(tp.bpm && tp.offset != null)) return;
+  if (!sg || !(tp.bpm && tp.offset != null)) return;
+  if (!audioBuffer) { if (!currentTrackUrl) return; suggestMap[sg.id] = { busy: true, items: [] }; suggestWait = { id: sg.id, auto }; renderSuggest(); return; }   // still reading the track: run as soon as it's ready
   suggestMap[sg.id] = { busy: true, items: [] }; renderSuggest();
   setTimeout(() => {
     let items = [];

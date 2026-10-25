@@ -220,6 +220,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "openTrack", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "check", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "peaks", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "write", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "play", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "tempo", returnType: CAPPluginReturnPromise),
@@ -307,6 +308,42 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
             let ok: Bool = have != nil && (want < 0 || have == want)
             if ok { try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path) }
             call.resolve(["ok": ok])
+        }
+    }
+    /// Waveform picture (min/max per bin, x1000) read straight from the copied file: far quicker than decoding it on the page.
+    @objc func peaks(_ call: CAPPluginCall) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let name = call.getString("name") else { call.reject("no name"); return }
+            let url = self.dir().appendingPathComponent(self.safe(name))
+            guard let f = try? AVAudioFile(forReading: url) else { call.reject("can't open"); return }
+            let bins: Int = max(10, call.getInt("bins") ?? 1200)
+            let total: Int = Int(f.length)
+            let per: Int = max(1, total / bins)
+            var mins = [Float](repeating: 0, count: bins)
+            var maxs = [Float](repeating: 0, count: bins)
+            let cap: AVAudioFrameCount = 65536
+            guard let buf = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: cap) else { call.reject("no buffer"); return }
+            var pos: Int = 0
+            while pos < total {
+                do { try f.read(into: buf, frameCount: cap) } catch { break }
+                let n: Int = Int(buf.frameLength)
+                if n == 0 { break }
+                guard let ch = buf.floatChannelData else { break }
+                let p = ch[0]
+                var i: Int = 0
+                while i < n {
+                    let b: Int = min(bins - 1, (pos + i) / per)
+                    let v: Float = p[i]
+                    if v < mins[b] { mins[b] = v }
+                    if v > maxs[b] { maxs[b] = v }
+                    i += 4
+                }
+                pos += n
+            }
+            var flat: [Int] = []
+            flat.reserveCapacity(bins * 2)
+            for b in 0..<bins { flat.append(Int((mins[b] * 1000).rounded())); flat.append(Int((maxs[b] * 1000).rounded())) }
+            call.resolve(["p": flat, "duration": Double(total) / f.processingFormat.sampleRate])
         }
     }
     @objc func write(_ call: CAPPluginCall) {
