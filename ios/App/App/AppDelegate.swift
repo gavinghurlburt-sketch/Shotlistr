@@ -164,14 +164,20 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         let ud = UserDefaults(suiteName: "group.art.gavingeddes.producrr")
         let log = ud?.string(forKey: "shareLog") ?? ""
         if !log.isEmpty { ud?.removeObject(forKey: "shareLog") }
-        if !files.isEmpty { try? fm.createDirectory(at: to, withIntermediateDirectories: true) }
         var moved = 0, firstErr = ""
+        if !files.isEmpty {
+            do { try fm.createDirectory(atPath: to.path, withIntermediateDirectories: true, attributes: nil) }
+            catch { firstErr = "mkdir: \(error.localizedDescription)" }
+        }
         for f in files {
-            if !fm.fileExists(atPath: f.path) { continue }
-            var dest = to.appendingPathComponent(f.lastPathComponent)
-            if fm.fileExists(atPath: dest.path) { dest = to.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(f.lastPathComponent)") }
-            do { try fm.copyItem(at: f, to: dest); try? fm.removeItem(at: f); moved += 1 }
-            catch { if firstErr.isEmpty { firstErr = error.localizedDescription } }
+            let dest = to.appendingPathComponent(f.lastPathComponent)
+            do {
+                let data = try Data(contentsOf: f)
+                try data.write(to: dest, options: .atomic)
+                try? fm.removeItem(at: f); moved += 1
+            } catch {
+                if firstErr.isEmpty { firstErr = "\(f.lastPathComponent): \(error.localizedDescription) [src \(fm.fileExists(atPath: f.path)), destDir \(fm.fileExists(atPath: to.path))]" }
+            }
         }
         // older leftovers with spaces/symbols in the name: make them readable (audio + its .meta.json get the same new name pattern)
         func safeName(_ n: String) -> String { String(n.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_") ? $0 : "_" }) }
