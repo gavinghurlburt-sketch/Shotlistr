@@ -617,8 +617,8 @@ table.sched tr.done-row td { background-color: var(--done); }
 .song-row:hover, .song-row:active { background: none; }
 .song-row .sr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .song-row .sr-title { font-size: 19px; font-weight: 400; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.song-row .sr-status { font-size: 14px; font-weight: 400; color: var(--muted); }
-.song-row .sr-status.todo { color: var(--accent); }
+.song-row .sr-status { font-size: 14px; font-weight: 400; color: var(--accent); }
+.song-row .sr-status.todo { color: var(--muted); }
 .song-row::after { content: "\203A"; font-size: 22px; color: var(--muted); line-height: 1; }
 .song-row.add { color: var(--muted); font-weight: 500; font-size: 17px; }
 .song-row.add::after { content: ""; }
@@ -866,7 +866,7 @@ button:disabled { opacity: .4; }
 #saveStatus { color: var(--muted); font-size: 11px; white-space: nowrap; }
 #cloudStatus { display: none; }
 #backToProjectsBtn { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; font-size: 0; flex: none; }
-#backToProjectsBtn::before { content: "\2039"; font-size: 28px; line-height: 1; font-weight: 400; padding-bottom: 3px; }
+#backToProjectsBtn::before { content: ""; width: 10px; height: 10px; border-left: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor; transform: translateX(2px) rotate(45deg); border-radius: 1px; }
 #accountBtn { flex: none; max-width: 120px; white-space: nowrap; }
 #accountBtn.signed { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; background-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
 #accountBtn.signed:hover { background-color: var(--accent); opacity: .9; }
@@ -1337,6 +1337,11 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #songPage:not(.hidden) { animation: sheetUp .42s cubic-bezier(.2,.9,.25,1); }
 #songPage.hidden, #songScrim.hidden { display: none; }
 #songDoneBtn { display: none; }
+#songPage .panel { background: none; border: 0; box-shadow: none; padding: 0; margin: 0 0 26px; border-radius: 0; }
+#songPage .panel-head { margin-bottom: 12px; }
+#tempoModal .tempo-wave { background: none; border-radius: 0; }
+.part-row, .part-row.sel { background-image: none; }
+.part-row.sel { background-color: color-mix(in srgb, var(--sec) 16%, var(--surface-2)); }
 </style>
 </head>
 <body>
