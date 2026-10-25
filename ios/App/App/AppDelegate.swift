@@ -92,6 +92,16 @@ struct ShootPreviousIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Previous section"
     func perform() async throws -> some IntentResult { ShootBridge.send("previous"); return .result() }
 }
+@available(iOS 17.0, *)
+struct ShootNextSongIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Next song"
+    func perform() async throws -> some IntentResult { ShootBridge.send("nextSong"); return .result() }
+}
+@available(iOS 17.0, *)
+struct ShootPreviousSongIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Previous song"
+    func perform() async throws -> some IntentResult { ShootBridge.send("previousSong"); return .result() }
+}
 
 @available(iOS 16.2, *)
 @objc(ShootActivityPlugin)

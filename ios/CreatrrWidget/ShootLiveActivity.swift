@@ -35,6 +35,14 @@ struct ShootPreviousIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Previous section"
     func perform() async throws -> some IntentResult { ShootBridge.send("previous"); return .result() }
 }
+struct ShootNextSongIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Next song"
+    func perform() async throws -> some IntentResult { ShootBridge.send("nextSong"); return .result() }
+}
+struct ShootPreviousSongIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Previous song"
+    func perform() async throws -> some IntentResult { ShootBridge.send("previousSong"); return .result() }
+}
 
 private let accent = Color(red: 0.96, green: 0.82, blue: 0.26)
 private let ink = Color(red: 0.07, green: 0.07, blue: 0.07)
@@ -74,10 +82,10 @@ private struct Controls: View {
     let hex: String
     var compact = false
     var body: some View {
-        HStack(spacing: compact ? 10 : 14) {
+        HStack(spacing: compact ? 8 : 12) {
             Button(intent: ShootPreviousIntent()) {
-                Image(systemName: "backward.fill").font(.system(size: compact ? 15 : 18, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: compact ? 34 : 40, height: compact ? 34 : 40).background(Color.white.opacity(0.12), in: Circle())
+                Text("‹ Section").font(.system(size: compact ? 12 : 14, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, compact ? 10 : 14).frame(height: compact ? 32 : 38).background(Color.white.opacity(0.12), in: Capsule())
             }.buttonStyle(.plain)
             Button(intent: ShootToggleIntent()) {
                 // play triangle and stop square are one shape; the right-hand points slide apart so it morphs
@@ -90,11 +98,11 @@ private struct Controls: View {
                         .offset(x: playing ? 0 : 1.5)
                         .animation(.timingCurve(0.2, 0.0, 0.1, 1.0, duration: 0.42), value: playing)
                 }
-                .frame(width: compact ? 44 : 54, height: compact ? 44 : 54)
+                .frame(width: compact ? 40 : 46, height: compact ? 40 : 46)
             }.buttonStyle(.plain)
             Button(intent: ShootNextIntent()) {
-                Image(systemName: "forward.fill").font(.system(size: compact ? 15 : 18, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: compact ? 34 : 40, height: compact ? 34 : 40).background(Color.white.opacity(0.12), in: Circle())
+                Text("Section ›").font(.system(size: compact ? 12 : 14, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, compact ? 10 : 14).frame(height: compact ? 32 : 38).background(Color.white.opacity(0.12), in: Capsule())
             }.buttonStyle(.plain)
         }
     }
@@ -121,7 +129,7 @@ private struct LockScreenView: View {
     let shoot: String
     var body: some View {
         let tint = tintColor(state.color)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
@@ -135,11 +143,21 @@ private struct LockScreenView: View {
                     }
                 }
                 Spacer(minLength: 8)
-                Controls(playing: state.playing, hex: state.color)
+                VStack(alignment: .trailing, spacing: 6) {
+                    Button(intent: ShootNextSongIntent()) {
+                        Text("Next song ›").font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.85))
+                            .padding(.horizontal, 10).frame(height: 26).background(Color.white.opacity(0.12), in: Capsule())
+                    }.buttonStyle(.plain)
+                    Button(intent: ShootPreviousSongIntent()) {
+                        Text("‹ Prev song").font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.85))
+                            .padding(.horizontal, 10).frame(height: 26).background(Color.white.opacity(0.12), in: Capsule())
+                    }.buttonStyle(.plain)
+                }
             }
+            Controls(playing: state.playing, hex: state.color).frame(maxWidth: .infinity)
             Dots(position: state.position, colors: state.colors)
         }
-        .padding(16)
+        .padding(14)
     }
 }
 
