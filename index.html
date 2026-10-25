@@ -1350,7 +1350,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #tempoModal .tempo-wave { background: none; border-radius: 0; }
 .part-row, .part-row.sel { background-image: none; }
 .part-row, .part-row.sel { background: color-mix(in srgb, var(--sec) 22%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--sec) 45%, transparent); }   /* sections are always tinted frosted glass in their own colour; the selected one adds an outline */
-.part-row .part-cue { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0 0 0 2px; border: 0; border-radius: 50%; font-size: 13px; line-height: 1; color: #fff; cursor: pointer; background-color: rgba(255,255,255,.16); -webkit-backdrop-filter: blur(10px) saturate(1.5); backdrop-filter: blur(10px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.28); }
+.part-row .part-cue { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; border: 0; border-radius: 0; font-size: 16px; line-height: 1; color: #fff; cursor: pointer; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .part-row .part-cue:active { opacity: .6; }
 .part-row .part-cue:disabled { opacity: .35; }
 .song-play { margin: 12px 0 0; font-size: 34px; }
@@ -3671,6 +3671,15 @@ function drawWaveOn(canvas) {
   const marks = waveMarkers();
   const lay = (isContent() && dur) ? layoutMarkLabels(g, marks, w, dur, selId) : null;   // names that would collide stack on extra rows instead of bunching
   const top = isContent() ? 24 + ((lay ? lay.rows : 1) - 1) * 13 : 0;                    // room above the waveform for section names
+  if (dur && isContent()) {                                       // tint each section's stretch of the track, like the cut page
+    const ord = marks.filter(m => m.t <= dur).slice().sort((a, b) => a.t - b.t);
+    ord.forEach((m, i) => {
+      const end = i + 1 < ord.length ? ord[i + 1].t : dur;
+      g.globalAlpha = (selId && m.id === selId) ? 0.38 : 0.22; g.fillStyle = m.color;
+      g.fillRect((m.t / dur) * w, top, ((end - m.t) / dur) * w, h - top);
+    });
+    g.globalAlpha = 1;
+  }
   drawPeaks(g, w, top, h - top, dur);
   if (!dur) return;
   g.font = "10px -apple-system, sans-serif";
@@ -3682,8 +3691,7 @@ function drawWaveOn(canvas) {
     if (isSel) {
       g.globalAlpha = 1; g.fillStyle = m.color;
       g.fillRect(x - 1.5, top - 4, 3, h - top + 4);
-      if (selHandle) { g.beginPath(); g.arc(x, h - 9, 9, 0, 7); g.fill(); }   // grab handle: only once the marker itself is touched
-      g.beginPath(); g.moveTo(x - 6, top - 8); g.lineTo(x + 6, top - 8); g.lineTo(x, top + 2); g.closePath(); g.fillStyle = m.color; g.fill();
+            g.beginPath(); g.moveTo(x - 6, top - 8); g.lineTo(x + 6, top - 8); g.lineTo(x, top + 2); g.closePath(); g.fillStyle = m.color; g.fill();
       if (m.label) {
         g.font = "700 14px -apple-system, sans-serif";
         const tw = g.measureText(m.label).width, lx = Math.max(2, Math.min(w - tw - 2, x - tw / 2));
