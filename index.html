@@ -6664,7 +6664,9 @@ async function inboxAdd(file) {
   return true;
 }
 /* the iPhone share extension drops files in Documents/Inbox; pull them in */
-async function inboxDrainNative() {
+let _drainP = null;
+function inboxDrainNative() { if (!_drainP) _drainP = inboxDrainNativeRun().finally(() => { _drainP = null; }); return _drainP; }
+async function inboxDrainNativeRun() {
   const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform() || BAND_CODE) return 0;
   let n = 0; const placed = [];
   try {   // let the app move anything the share pop-up left in the shared folder

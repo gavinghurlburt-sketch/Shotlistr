@@ -167,6 +167,7 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         if !files.isEmpty { try? fm.createDirectory(at: to, withIntermediateDirectories: true) }
         var moved = 0, firstErr = ""
         for f in files {
+            if !fm.fileExists(atPath: f.path) { continue }
             var dest = to.appendingPathComponent(f.lastPathComponent)
             if fm.fileExists(atPath: dest.path) { dest = to.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(f.lastPathComponent)") }
             do { try fm.copyItem(at: f, to: dest); try? fm.removeItem(at: f); moved += 1 }
