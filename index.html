@@ -1127,8 +1127,10 @@ details.more > :not(summary) { margin-top: 8px; }
 /* swipe to delete */
 .projects-list { gap: 10px; }
 .pc-wrap { position: relative; border-radius: 24px; overflow: hidden; }
-.pc-wrap .project-card { position: relative; z-index: 1; touch-action: pan-y; transition: transform .22s cubic-bezier(.2,.8,.2,1); -webkit-user-select: none; user-select: none; }
-.pc-wrap .project-card.dragging { transition: none; }
+.sr-wrap { border-radius: 0; }
+.pc-wrap .sr-card { background-color: var(--bg); }
+.pc-wrap .project-card, .pc-wrap .sr-card { position: relative; z-index: 1; touch-action: pan-y; transition: transform .22s cubic-bezier(.2,.8,.2,1); -webkit-user-select: none; user-select: none; }
+.pc-wrap .project-card.dragging, .pc-wrap .sr-card.dragging { transition: none; }
 .pc-del { position: absolute; top: 0; right: 0; bottom: 0; width: 128px; padding: 0 0 0 32px; min-height: 0; border-radius: 0; background-color: var(--danger); color: #fff; font-weight: 700; font-size: 15px; z-index: 0; }
 .pc-del:hover { background-color: var(--danger); }
 .pc-del { opacity: 0; }
@@ -3958,7 +3960,7 @@ $("cutPlayBtn").addEventListener("click", togglePlay);
   function blocked(el) {
     for (let n = el; n && n !== document.body; n = n.parentElement) {
       if (!n.classList) return true;
-      if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.id === "shootSongTabs" || n.id === "cutSongTabs" || n.draggable) return true;
+      if (/^(INPUT|TEXTAREA|SELECT|CANVAS|AUDIO)$/.test(n.tagName) || n.classList.contains("modal") || n.id === "lightbox" || n.id === "shootSongTabs" || n.id === "cutSongTabs" || n.id === "songRows" || n.id === "songPage" || n.draggable) return true;
       const cs = getComputedStyle(n);
       if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && n.scrollWidth > n.clientWidth + 2) return true;
     }
@@ -4405,7 +4407,7 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
   function blocked(el) { for (let n = el; n && n !== document.body; n = n.parentElement) { if (!n.classList) return true; if (/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName) || n.classList.contains("modal")) return true; } return false; }
   document.addEventListener("touchstart", e => {
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false;
-    const card = e.target.closest && e.target.closest(".project-card");
+    const card = e.target.closest && e.target.closest(".project-card, .sr-card");
     onCard = !!card;
     ok = e.touches.length === 1 && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
     if (ok && onCard && homeMode === "projects") ok = false; /* on a project card, swipe-left is Delete */
@@ -4497,12 +4499,12 @@ document.addEventListener("click", e => {
 var swipeMoved = false;
 const DEL_W = 96;
 function closeSwipedCards(except) {
-  document.querySelectorAll(".pc-wrap .project-card.open").forEach(c => { if (c !== except) { c.classList.remove("open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
+  document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open").forEach(c => { if (c !== except) { c.classList.remove("open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
 }
 function wireSwipeDelete(list) {
   let card = null, sx = 0, sy = 0, base = 0, dx = 0, live = false, id = null, t0 = 0;
   list.addEventListener("pointerdown", e => {
-    const c = e.target.closest(".project-card");
+    const c = e.target.closest(".project-card, .sr-card");
     if (!c || (e.pointerType === "mouse" && e.button !== 0)) return;
     closeSwipedCards(c);
     card = c; sx = e.clientX; sy = e.clientY; id = e.pointerId; t0 = Date.now(); live = false; swipeMoved = false;
@@ -4538,12 +4540,13 @@ function wireSwipeDelete(list) {
   list.addEventListener("pointercancel", () => end(true));
   list.addEventListener("click", e => {
     if (swipeMoved) { e.stopImmediatePropagation(); e.preventDefault(); return; }
-    const c = e.target.closest(".project-card");
+    const c = e.target.closest(".project-card, .sr-card");
     if (c && c.classList.contains("open")) { e.stopImmediatePropagation(); e.preventDefault(); closeSwipedCards(); }
   }, true);
 }
 wireSwipeDelete($("projectsList"));
 wireSwipeDelete($("artistsList"));
+wireSwipeDelete($("songRows"));
 $("projectsList").addEventListener("click", async e => {
   const o = e.target.closest("[data-open-id]");
   if (o) { openProject(o.dataset.openId); return; }
@@ -4879,7 +4882,7 @@ function songStatus(sg) {
   return n ? { text: n + (n === 1 ? " section" : " sections"), todo: false } : { text: "0 sections", todo: true };
 }
 function renderSongRows() {
-  $("songRows").innerHTML = project.songs.map(sg => { const st = songStatus(sg); return `<button type="button" class="song-row" data-song-open="${sg.id}"><span class="sr-text"><span class="sr-title">${esc(sg.name)}</span><span class="sr-status ${st.todo ? "todo" : ""}">${st.text}</span></span></button>`; }).join("")
+  $("songRows").innerHTML = project.songs.map(sg => { const st = songStatus(sg); return `<div class="pc-wrap sr-wrap"><button type="button" class="song-row sr-card" data-song-open="${sg.id}"><span class="sr-text"><span class="sr-title">${esc(sg.name)}</span><span class="sr-status ${st.todo ? "todo" : ""}">${st.text}</span></span></button><button type="button" class="btn pc-del" data-song-del="${sg.id}">Delete</button></div>`; }).join("")
     + `<button type="button" class="song-row add" data-c="add-song">+ Add song</button>`;
   renderBandBox();
 }
@@ -4896,7 +4899,19 @@ function closeSongPage() {
 $("songNameInput").addEventListener("input", e => { const sg = activeSong(); if (sg) { sg.name = e.target.value; scheduleSave(); } });
 $("songNameInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
 $("songNameInput").addEventListener("blur", e => { const sg = activeSong(); if (sg && !e.target.value.trim()) { sg.name = "Untitled song"; e.target.value = sg.name; scheduleSave(); } });
-$("songRows").addEventListener("click", e => { const b = e.target.closest("[data-song-open]"); if (b) openSongPage(b.dataset.songOpen); });
+$("songRows").addEventListener("click", e => {
+  const d = e.target.closest("[data-song-del]");
+  if (d) {
+    const sg = project.songs.find(x => x.id === d.dataset.songDel); if (!sg) return;
+    if (!confirm(`Delete "${sg.name}" with its parts, shots, takes and track?`)) { closeSwipedCards(); return; }
+    clearTrack(`${project.id}::${sg.id}`);
+    project.sections = project.sections.filter(x => x.songId !== sg.id);
+    project.songs = project.songs.filter(x => x.id !== sg.id);
+    if (activeSongId === sg.id) { activeSongId = project.songs.length ? project.songs[0].id : null; loadActiveTrack(); }
+    scheduleSave(); renderCurrent(); return;
+  }
+  const b = e.target.closest("[data-song-open]"); if (b) openSongPage(b.dataset.songOpen);
+});
 function ordinal(n) { const v = n % 100; if (v >= 11 && v <= 13) return n + "th"; return n + (["th", "st", "nd", "rd"][n % 10] || "th"); }
 function bigDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short" }) + " " + ordinal(d); }
 /* a content shoot is one day: its date, start time and location live on the project's single shoot day */
