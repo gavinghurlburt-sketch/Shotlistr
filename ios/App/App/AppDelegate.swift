@@ -444,13 +444,26 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         let start: AVAudioFramePosition = AVAudioFramePosition(fromT * sr)
         let remaining: AVAudioFramePosition = max(1, f.length - start)
         let frames: AVAudioFrameCount = AVAudioFrameCount(remaining)
+        // The time-stretch unit pulls its input `rate` times faster than real time, so a player timeline "start at host time X" drifts
+        // (late when slowed, early when sped up). Instead start the player now and queue silence for the count-in, measured in song time.
+        let lead: Double = max(0.0, pitch.latency)
+        let playAt: Double = nowHost() + 0.01
+        let silenceSec: Double = max(0.0, songAtHost - playAt - lead) * rate
+        let silenceFrames: AVAudioFrameCount = AVAudioFrameCount(silenceSec * sr)
+        if silenceFrames > 0 {
+            let fmt: AVAudioFormat = f.processingFormat
+            if let sb = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: silenceFrames) {
+                sb.frameLength = silenceFrames
+                if let ch = sb.floatChannelData {
+                    for c in 0..<Int(fmt.channelCount) { memset(ch[c], 0, Int(silenceFrames) * MemoryLayout<Float>.size) }
+                }
+                song.scheduleBuffer(sb, completionHandler: nil)
+            }
+        }
         song.scheduleSegment(f, startingFrame: start, frameCount: frames, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             self?.songFinished(my)
         }
-        // the time-stretch unit delays the song slightly; start it that much early so the song and clicks line up
-        let lead: Double = max(0.0, pitch.latency)
-        let startHost: Double = songAtHost - lead
-        song.play(at: AVAudioTime(hostTime: AVAudioTime.hostTime(forSeconds: startHost)))
+        song.play()
         playing = true
         resetClicks()
         startPosTimer()

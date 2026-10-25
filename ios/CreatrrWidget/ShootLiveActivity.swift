@@ -46,6 +46,7 @@ struct ShootPreviousSongIntent: LiveActivityIntent {
 
 private let accent = Color(red: 0.96, green: 0.82, blue: 0.26)
 private let ink = Color(red: 0.07, green: 0.07, blue: 0.07)
+private let pill = Color(red: 0.22, green: 0.22, blue: 0.23)   // solid, so the wallpaper never shows through the buttons
 
 private func rgb(_ hex: String) -> (Double, Double, Double)? {
     let h = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
@@ -85,7 +86,7 @@ private struct Controls: View {
         HStack(spacing: compact ? 8 : 12) {
             Button(intent: ShootPreviousIntent()) {
                 Text("‹ Section").font(.system(size: compact ? 12 : 14, weight: .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, compact ? 10 : 14).frame(height: compact ? 32 : 38).background(Color.white.opacity(0.12), in: Capsule())
+                    .padding(.horizontal, compact ? 10 : 14).frame(height: compact ? 32 : 38).background(pill, in: Capsule())
             }.buttonStyle(.plain)
             Button(intent: ShootToggleIntent()) {
                 // play triangle and stop square are one shape; the right-hand points slide apart so it morphs
@@ -102,7 +103,7 @@ private struct Controls: View {
             }.buttonStyle(.plain)
             Button(intent: ShootNextIntent()) {
                 Text("Section ›").font(.system(size: compact ? 12 : 14, weight: .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, compact ? 10 : 14).frame(height: compact ? 32 : 38).background(Color.white.opacity(0.12), in: Capsule())
+                    .padding(.horizontal, compact ? 10 : 14).frame(height: compact ? 32 : 38).background(pill, in: Capsule())
             }.buttonStyle(.plain)
         }
     }
@@ -142,11 +143,11 @@ private struct LockScreenView: View {
                 VStack(alignment: .trailing, spacing: 6) {
                     Button(intent: ShootNextSongIntent()) {
                         Text("Next song ›").font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.85))
-                            .padding(.horizontal, 10).frame(height: 26).background(Color.white.opacity(0.12), in: Capsule())
+                            .padding(.horizontal, 10).frame(height: 26).background(pill, in: Capsule())
                     }.buttonStyle(.plain)
                     Button(intent: ShootPreviousSongIntent()) {
                         Text("‹ Prev song").font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.85))
-                            .padding(.horizontal, 10).frame(height: 26).background(Color.white.opacity(0.12), in: Capsule())
+                            .padding(.horizontal, 10).frame(height: 26).background(pill, in: Capsule())
                     }.buttonStyle(.plain)
                 }
             }
