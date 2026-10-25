@@ -1143,7 +1143,7 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-del:hover { background-color: var(--danger); }
 .pc-del { opacity: 0; }
 .pc-wrap.part-wrap { border-radius: 18px; padding: 3px; margin: -3px 0 -3px; }
-.pc-wrap .part-row { position: relative; z-index: 1; touch-action: pan-y; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+.pc-wrap .part-row { position: relative; z-index: 1; touch-action: pan-y; transition: width .22s cubic-bezier(.2,.8,.2,1); }
 .pc-wrap .part-row.dragging { transition: none; }
 .part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; width: 84px; padding: 0; border-radius: 16px; }
 .pc-wrap.rv .pc-del { opacity: 1; }
@@ -4737,9 +4737,10 @@ document.addEventListener("click", e => {
 /* swipe a project card left to reveal a red Delete, like Mail */
 var swipeMoved = false;
 const DEL_W = 96;
+function swSet(c, px) { if (c.classList.contains("part-row")) c.style.width = px ? `calc(100% - ${-px}px)` : ""; else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
 function oc(c) { return c.classList.contains("part-row") ? "sw-open" : "open"; }
 function closeSwipedCards(except) {
-  document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open, .pc-wrap .part-row.sw-open").forEach(c => { if (c !== except) { c.classList.remove("open", "sw-open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
+  document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open, .pc-wrap .part-row.sw-open").forEach(c => { if (c !== except) { c.classList.remove("open", "sw-open"); swSet(c, 0); setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
 }
 function wireSwipeDelete(list) {
   let card = null, sx = 0, sy = 0, base = 0, dx = 0, live = false, id = null, t0 = 0;
@@ -4762,7 +4763,7 @@ function wireSwipeDelete(list) {
     }
     dx = Math.max(-(window.innerWidth), Math.min(0, base + mx));
     const over = dx < -DEL_W ? -DEL_W + (dx + DEL_W) * 0.5 : dx;
-    card.style.transform = `translate3d(${over}px,0,0)`;
+    swSet(card, over);
   });
   function end(cancelled) {
     if (!card) return;
@@ -4773,7 +4774,7 @@ function wireSwipeDelete(list) {
     const open = !cancelled && (dx < -DEL_W / 2 || (v > 0.5 && dx < base));
     c.classList.toggle(oc(c), open);
     if (!open) setTimeout(() => { if (!c.classList.contains(oc(c))) c.parentElement.classList.remove("rv"); }, 260);
-    c.style.transform = open ? `translate3d(${-DEL_W}px,0,0)` : "";
+    swSet(c, open ? -DEL_W : 0);
     if (open) { try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {} }
     setTimeout(() => { swipeMoved = false; }, 60);
   }
