@@ -219,6 +219,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "NativeAudio"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "openTrack", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "check", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "write", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "play", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "tempo", returnType: CAPPluginReturnPromise),
@@ -283,7 +284,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let h = have, want < 0 || h == want, let f = try? AVAudioFile(forReading: url) else { call.resolve(["ok": false]); return }
             self.file = f
             self.dur = Double(f.length) / f.processingFormat.sampleRate
-            // tidy: keep the ten most recently used tracks so switching songs doesn't re-copy the file each time
+            // tidy: keep the thirty most recently used tracks so switching songs doesn't re-copy the file each time
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
             let keys: [URLResourceKey] = [.contentModificationDateKey]
             let all: [URL] = (try? FileManager.default.contentsOfDirectory(at: self.dir(), includingPropertiesForKeys: keys)) ?? []
@@ -291,8 +292,19 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
                 (url: u, date: (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast)
             }
             let sorted = dated.sorted { $0.date > $1.date }
-            if sorted.count > 10 { for old in sorted.dropFirst(10) { try? FileManager.default.removeItem(at: old.url) } }
+            if sorted.count > 30 { for old in sorted.dropFirst(30) { try? FileManager.default.removeItem(at: old.url) } }
             call.resolve(["ok": true, "duration": self.dur])
+        }
+    }
+    /// Is this track already copied (right size)? Doesn't open it, so it's safe while something is playing.
+    @objc func check(_ call: CAPPluginCall) {
+        q.async {
+            guard let name = call.getString("name") else { call.reject("no name"); return }
+            let url = self.dir().appendingPathComponent(self.safe(name))
+            let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+            let have: Int? = (attrs?[.size] as? NSNumber)?.intValue
+            let want: Int = call.getInt("size") ?? -1
+            call.resolve(["ok": have != nil && (want < 0 || have == want)])
         }
     }
     @objc func write(_ call: CAPPluginCall) {
