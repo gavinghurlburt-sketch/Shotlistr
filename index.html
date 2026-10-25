@@ -1142,8 +1142,8 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-del { position: absolute; top: 0; right: 0; bottom: 0; width: 128px; padding: 0 0 0 32px; min-height: 0; border-radius: 0; background-color: var(--danger); color: #fff; font-weight: 700; font-size: 15px; z-index: 0; }
 .pc-del:hover { background-color: var(--danger); }
 .pc-del { opacity: 0; }
-.pc-wrap.part-wrap { border-radius: 18px; padding: 3px; margin: -3px 0 -3px; }
-.pc-wrap .part-row { position: relative; z-index: 1; touch-action: pan-y; transition: width .22s cubic-bezier(.2,.8,.2,1); }
+.pc-wrap.part-wrap { overflow: visible; border-radius: 18px; padding: 3px; margin: -3px 0 -3px; }
+.pc-wrap .part-row { position: relative; z-index: 1; touch-action: pan-y; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
 .pc-wrap .part-row.dragging { transition: none; }
 .part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; width: 84px; padding: 0; border-radius: 16px; }
 .pc-wrap.rv .pc-del { opacity: 1; }
@@ -4737,7 +4737,7 @@ document.addEventListener("click", e => {
 /* swipe a project card left to reveal a red Delete, like Mail */
 var swipeMoved = false;
 const DEL_W = 96;
-function swSet(c, px) { if (c.classList.contains("part-row")) c.style.width = px ? `calc(100% - ${-px}px)` : ""; else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
+function swSet(c, px) { if (false) {} else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
 function oc(c) { return c.classList.contains("part-row") ? "sw-open" : "open"; }
 function closeSwipedCards(except) {
   document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open, .pc-wrap .part-row.sw-open").forEach(c => { if (c !== except) { c.classList.remove("open", "sw-open"); swSet(c, 0); setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
