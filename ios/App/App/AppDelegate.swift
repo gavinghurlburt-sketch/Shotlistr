@@ -262,7 +262,14 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }
-    private func safe(_ n: String) -> String { String(n.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || $0 == "." || $0 == "-" || $0 == "_" ? Character($0) : "_" }) }
+    private func safe(_ n: String) -> String {
+        var out = ""
+        for u in n.unicodeScalars {
+            let ok: Bool = CharacterSet.alphanumerics.contains(u) || u == "." || u == "-" || u == "_"
+            out.append(ok ? Character(u) : Character("_"))
+        }
+        return out
+    }
     private func nowHost() -> Double { AVAudioTime.seconds(forHostTime: mach_absolute_time()) }
 
     /// Open a previously written track. `ok` is false when the file isn't there (or is the wrong size) so the web side writes it first.
@@ -302,12 +309,19 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         let n = AVAudioFrameCount(0.07 * clickSR)
         let b = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!
         b.frameLength = n
-        let amp = (accent ? 0.55 : 0.32) * vol, f = accent ? 1600.0 : 1050.0
+        let base: Double = accent ? 0.55 : 0.32
+        let amp: Double = base * vol
+        let f: Double = accent ? 1600.0 : 1050.0
         let p = b.floatChannelData![0]
         for i in 0..<Int(n) {
             let t = Double(i) / clickSR
-            let env = t < 0.004 ? amp * (t / 0.004) : amp * pow(0.0001 / amp, min(1, (t - 0.004) / 0.056))
-            p[i] = Float(env * (sin(2 * Double.pi * f * t) >= 0 ? 1 : -1))
+            var env: Double = amp * (t / 0.004)
+            if t >= 0.004 {
+                let k: Double = min(1.0, (t - 0.004) / 0.056)
+                env = amp * pow(0.0001 / amp, k)
+            }
+            let sq: Double = sin(2.0 * Double.pi * f * t) >= 0 ? 1.0 : -1.0
+            p[i] = Float(env * sq)
         }
         bufCache[key] = b
         return b
@@ -325,8 +339,9 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         let now = nowHost()
         for c in countClicks where c.t > now + 0.005 { clickAt(c.t, c.accent, 1) }
         guard (tClick || tGame), tBpm > 0, tOffset > -1e8 else { pump?.cancel(); pump = nil; return }
-        let beat = 60 / tBpm
-        nextK = Int(ceil((max(songNow() + 0.02, fromT) - tOffset) / beat - 1e-6))
+        let beat: Double = 60.0 / tBpm
+        let startT: Double = max(songNow() + 0.02, fromT)
+        nextK = Int(ceil((startT - tOffset) / beat - 1e-6))
         if pump == nil {
             let t = DispatchSource.makeTimerSource(queue: q)
             t.schedule(deadline: .now(), repeating: 0.25)
@@ -337,13 +352,15 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     private func pumpClicks() {
         guard playing, (tClick || tGame), tBpm > 0, tOffset > -1e8 else { return }
-        let beat = 60 / tBpm, horizon = nowHost() + (tGame ? 0.7 : 2.5)
+        let beat: Double = 60.0 / tBpm
+        let ahead: Double = tGame ? 0.7 : 2.5
+        let horizon: Double = nowHost() + ahead
         while true {
-            let songT = tOffset + Double(nextK) * beat
-            let when = songAtHost + (songT - fromT) / rate
+            let songT: Double = tOffset + Double(nextK) * beat
+            let when: Double = songAtHost + (songT - fromT) / rate
             if when > horizon || songT > dur { break }
             if songT >= fromT - 1e-6 && songT >= 0 {
-                let down = ((nextK % 4) + 4) % 4 == 0
+                let down: Bool = ((nextK % 4) + 4) % 4 == 0
                 if tGame { clickAt(when, tDown && down, 0.9) } else { clickAt(when, down, 0.55) }
             }
             nextK += 1
@@ -367,70 +384,99 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func play(_ call: CAPPluginCall) {
-        q.async {
-            guard let f = self.file else { call.reject("no track loaded"); return }
-            self.stopInternal()
-            self.gen += 1
-            let my = self.gen
-            self.fromT = max(0, min(self.dur, call.getDouble("from") ?? 0))
-            self.rate = max(0.25, min(4, call.getDouble("rate") ?? 1))
-            self.applyTempo(call)
-            let beats = call.getInt("countInBeats") ?? 0
-            let countBpm = max(30, call.getDouble("countBpm") ?? 120)
-            do {
-                let s = AVAudioSession.sharedInstance()
-                try s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-                try s.setActive(true)
-                if !self.attached {
-                    for n in [self.song, self.pitch, self.lpf, self.clicker] as [AVAudioNode] { self.engine.attach(n) }
-                    self.attached = true
-                }
-                let fmt = f.processingFormat
-                self.engine.connect(self.song, to: self.pitch, format: fmt)
-                self.engine.connect(self.pitch, to: self.lpf, format: fmt)
-                self.engine.connect(self.lpf, to: self.engine.mainMixerNode, format: fmt)
-                self.clickSR = self.engine.outputNode.outputFormat(forBus: 0).sampleRate
-                if self.clickSR < 8000 { self.clickSR = 44100 }
-                self.engine.connect(self.clicker, to: self.engine.mainMixerNode, format: AVAudioFormat(standardFormatWithSampleRate: self.clickSR, channels: 1)!)
-                self.pitch.rate = Float(self.rate)
-                self.pitch.pitch = 0
-                let b = self.lpf.bands[0]
-                b.filterType = .lowPass; b.frequency = 650; b.bandwidth = 1.0; b.bypass = false
-                self.engine.prepare()
-                try self.engine.start()
-            } catch { call.reject("audio engine: \(error.localizedDescription)"); return }
+        q.async { self.doPlay(call) }
+    }
 
-            let now = self.nowHost()
-            let t0 = now + 0.15
-            let beat = 60 / (countBpm * self.rate)
-            self.songAtHost = t0 + Double(beats) * beat
-            self.countClicks = (0..<beats).map { (t: t0 + Double($0) * beat, accent: $0 % 4 == 0) }
-            let sr = f.processingFormat.sampleRate
-            let start = AVAudioFramePosition(self.fromT * sr)
-            let frames = AVAudioFrameCount(max(1, f.length - start))
-            self.song.scheduleSegment(f, startingFrame: start, frameCount: frames, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-                guard let self = self else { return }
-                self.q.async {
-                    guard self.gen == my, self.playing else { return }
-                    self.stopInternal()
-                    self.notifyListeners("ended", data: [:])
-                }
-            }
-            // the time-stretch unit delays the song slightly; start it that much early so the song and clicks line up
-            let lead = max(0, self.pitch.latency)
-            self.song.play(at: AVAudioTime(hostTime: AVAudioTime.hostTime(forSeconds: self.songAtHost - lead)))
-            self.playing = true
-            self.resetClicks()
-
-            let pt = DispatchSource.makeTimerSource(queue: self.q)
-            pt.schedule(deadline: .now() + 0.5, repeating: 0.5)
-            pt.setEventHandler { [weak self] in
-                guard let self = self, self.playing, self.nowHost() >= self.songAtHost else { return }
-                self.notifyListeners("pos", data: ["t": self.songNow(), "rate": self.rate])
-            }
-            pt.resume(); self.posTimer = pt
-            call.resolve(["songStartIn": self.songAtHost - now, "latency": AVAudioSession.sharedInstance().outputLatency, "enginePitchLatency": lead])
+    private func buildGraph(_ f: AVAudioFile) throws {
+        let s = AVAudioSession.sharedInstance()
+        try s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        try s.setActive(true)
+        if !attached {
+            engine.attach(song)
+            engine.attach(pitch)
+            engine.attach(lpf)
+            engine.attach(clicker)
+            attached = true
         }
+        let fmt: AVAudioFormat = f.processingFormat
+        engine.connect(song, to: pitch, format: fmt)
+        engine.connect(pitch, to: lpf, format: fmt)
+        engine.connect(lpf, to: engine.mainMixerNode, format: fmt)
+        var sr: Double = engine.outputNode.outputFormat(forBus: 0).sampleRate
+        if sr < 8000 { sr = 44100 }
+        clickSR = sr
+        let cf: AVAudioFormat = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1)!
+        engine.connect(clicker, to: engine.mainMixerNode, format: cf)
+        pitch.rate = Float(rate)
+        pitch.pitch = 0
+        let band: AVAudioUnitEQFilterParameters = lpf.bands[0]
+        band.filterType = .lowPass
+        band.frequency = 650
+        band.bandwidth = 1.0
+        band.bypass = false
+        engine.prepare()
+        try engine.start()
+    }
+
+    private func doPlay(_ call: CAPPluginCall) {
+        guard let f = file else { call.reject("no track loaded"); return }
+        stopInternal()
+        gen += 1
+        let my: Int = gen
+        let reqFrom: Double = call.getDouble("from") ?? 0
+        let reqRate: Double = call.getDouble("rate") ?? 1
+        fromT = max(0.0, min(dur, reqFrom))
+        rate = max(0.25, min(4.0, reqRate))
+        applyTempo(call)
+        let beats: Int = call.getInt("countInBeats") ?? 0
+        let countBpm: Double = max(30.0, call.getDouble("countBpm") ?? 120.0)
+        do { try buildGraph(f) } catch { call.reject("audio engine: \(error.localizedDescription)"); return }
+
+        let now: Double = nowHost()
+        let t0: Double = now + 0.15
+        let beat: Double = 60.0 / (countBpm * rate)
+        songAtHost = t0 + Double(beats) * beat
+        var cc: [(t: Double, accent: Bool)] = []
+        for i in 0..<beats { cc.append((t: t0 + Double(i) * beat, accent: i % 4 == 0)) }
+        countClicks = cc
+
+        let sr: Double = f.processingFormat.sampleRate
+        let start: AVAudioFramePosition = AVAudioFramePosition(fromT * sr)
+        let remaining: AVAudioFramePosition = max(1, f.length - start)
+        let frames: AVAudioFrameCount = AVAudioFrameCount(remaining)
+        song.scheduleSegment(f, startingFrame: start, frameCount: frames, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            self?.songFinished(my)
+        }
+        // the time-stretch unit delays the song slightly; start it that much early so the song and clicks line up
+        let lead: Double = max(0.0, pitch.latency)
+        let startHost: Double = songAtHost - lead
+        song.play(at: AVAudioTime(hostTime: AVAudioTime.hostTime(forSeconds: startHost)))
+        playing = true
+        resetClicks()
+        startPosTimer()
+        let outLat: Double = AVAudioSession.sharedInstance().outputLatency
+        call.resolve(["songStartIn": songAtHost - now, "latency": outLat, "enginePitchLatency": lead])
+    }
+
+    private func songFinished(_ my: Int) {
+        q.async {
+            guard self.gen == my, self.playing else { return }
+            self.stopInternal()
+            self.notifyListeners("ended", data: [:])
+        }
+    }
+
+    private func startPosTimer() {
+        let pt = DispatchSource.makeTimerSource(queue: q)
+        pt.schedule(deadline: .now() + 0.5, repeating: 0.5)
+        pt.setEventHandler { [weak self] in
+            guard let self = self, self.playing else { return }
+            if self.nowHost() < self.songAtHost { return }
+            let data: [String: Any] = ["t": self.songNow(), "rate": self.rate]
+            self.notifyListeners("pos", data: data)
+        }
+        pt.resume()
+        posTimer = pt
     }
 
     private func stopInternal() {
