@@ -49,15 +49,14 @@
     </div>
     <p class="sect">Appearance</p>
     <div class="theme-seg"><button type="button" class="btn small" data-theme-pref="system">Device</button><button type="button" class="btn small" data-theme-pref="light">Light</button><button type="button" class="btn small" data-theme-pref="dark">Dark</button></div>
-    <div id="natRow" class="hidden">
+    <div id="natRow">
       <p class="sect">Audio</p>
       <label class="swrow"><span>Native audio engine</span><span class="sw"><input type="checkbox" id="natToggle"><i></i></span></label>
-      <p class="muted small" style="margin:6px 0 0">On: the track plays through iOS directly, so no extra lock-screen player appears. Turn off only if playback ever misbehaves. Takes effect the next time you load a track.</p>
+      <p class="muted small" id="natStatus" style="margin:6px 0 0"></p>
     </div>
     <p class="sect">Plan <span class="muted small">(for testing, purchases come later)</span></p>
     <div class="theme-seg"><button type="button" class="btn small" data-tier-pref="artist">Artist</button><button type="button" class="btn small" data-tier-pref="plus">Plus</button><button type="button" class="btn small" data-tier-pref="pro">Pro</button></div>
     <p class="sect">Notifications</p>
-    <p class="muted small" style="margin:0 0 10px">Phone alerts that arrive even when creatrr is closed. The bell inside the app always lists band uploads and shared files, whatever you pick here.</p>
     <label class="swrow"><span>Allow notifications</span><span class="sw"><input type="checkbox" id="pushToggle"><i></i></span></label>
     <p class="muted small" id="pushStatus" style="margin:6px 0 0"></p>
     <div id="notifSub" class="dim">
@@ -102,12 +101,16 @@
 })();
 
 (function () {
-  try {
-    var C = window.Cap, row = document.getElementById("natRow"), t = document.getElementById("natToggle");
-    if (!row || !t || !C || !C.Capacitor || !C.Capacitor.isNativePlatform()) return;
-    row.classList.remove("hidden");
-    t.checked = localStorage.getItem("creatrr.nativeAudio") !== "0";
-    t.addEventListener("change", function () { try { localStorage.setItem("creatrr.nativeAudio", t.checked ? "1" : "0"); } catch (e) {} });
-  } catch (e) {}
+  var t = document.getElementById("natToggle"), st = document.getElementById("natStatus"), m = document.getElementById("accountModal");
+  if (!t || !st) return;
+  function native() { try { return !!(window.Cap && window.Cap.Capacitor && window.Cap.Capacitor.isNativePlatform()); } catch (e) { return false; } }
+  function paint() {
+    var on = true; try { on = localStorage.getItem("creatrr.nativeAudio") !== "0"; } catch (e) {}
+    t.checked = on; t.disabled = !native();
+    st.textContent = !native() ? "Only in the iPhone app." : on ? "On: no extra lock-screen player." : "Off: using the compatibility player.";
+  }
+  t.addEventListener("change", function () { try { localStorage.setItem("creatrr.nativeAudio", t.checked ? "1" : "0"); } catch (e) {} paint(); });
+  paint();
+  if (m) new MutationObserver(paint).observe(m, { attributes: true, attributeFilter: ["class"] });
 })();
 </script>
