@@ -1715,7 +1715,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 </main>
 
 <!-- ===== modals ===== -->
-<div id="notesModal" class="modal hidden"><div class="modal-inner" id="notesInner"></div></div>
+<div id="notesModal" class="modal sheet hidden"><div class="modal-inner sheet-frost" id="notesInner"></div></div>
 <div id="shareModal" class="modal hidden"><div class="modal-inner" id="shareInner"></div></div>
 <div id="cropModal" class="modal hidden">
   <div class="modal-inner">
@@ -6808,13 +6808,12 @@ async function renderNotes(msg) {
     ${artists.length ? `<select id="inboxArtist" class="field" aria-label="Artist">${artists.map(a => `<option value="${esc(a.id)}"${a.id === inboxPick ? " selected" : ""}>${esc(a.docTitle || "Untitled artist")}</option>`).join("")}</select>` : `<p class="muted small">Create an artist first, then you can add these as songs.</p>`}
     ${files.map(f => `<div class="inbox-row"><div><b>${esc(songNameFromFile(f.name))}</b><span>${esc(f.name)} · ${mb(f.size)}</span></div><button type="button" class="btn small primary" data-inbox-add="${esc(f.id)}"${artists.length ? "" : " disabled"}>Add as song</button><button type="button" class="btn small" data-inbox-rm="${esc(f.id)}" aria-label="Remove">×</button></div>`).join("")}
     <p class="muted small" id="inboxMsg" style="margin:8px 0 0">${esc(msg || "")}</p>` : (msg ? `<p class="muted small" id="inboxMsg">${esc(msg)}</p>` : "");
-  el.innerHTML = `<h3>Notifications</h3>${notes}${shared}<div class="modal-actions"><span></span><button type="button" class="btn primary" id="notesClose">Done</button></div>`;
+  el.innerHTML = `<div class="grab" aria-hidden="true"></div><h3>Notifications</h3>${notes}${shared}`;
 }
 async function openNotes(msg) { await checkBandNotes(); await renderNotes(msg); $("notesModal").classList.remove("hidden"); }
 document.addEventListener("click", async e => {
   if (e.target.closest("#bellBtn")) { await inboxDrainNative(); openNotes(); return; }
-  if (e.target.closest("#notesClose") || e.target === $("notesModal")) { $("notesModal").classList.add("hidden"); return; }
-  const add = e.target.closest("[data-inbox-add]");
+    const add = e.target.closest("[data-inbox-add]");
   if (add) { add.disabled = true; add.textContent = "Adding…"; const r = await inboxToSong(add.dataset.inboxAdd, ($("inboxArtist") || {}).value || inboxPick); renderNotes(r ? `Added “${r.song}” to ${r.artist}.` : "Couldn't add that file."); return; }
   const rm = e.target.closest("[data-inbox-rm]");
   if (rm) { await clearTrack("inbox::" + rm.dataset.inboxRm); inboxSave(inboxList().filter(x => x.id !== rm.dataset.inboxRm)); renderNotes(); return; }
@@ -6852,6 +6851,7 @@ function makeSheet(root, box, onClose, scrim) {
   return { close };
 }
 var tplSheet = makeSheet($("tplModal"), $("tplModal").querySelector(".modal-inner"), () => closeTplModal());
+var notesSheet = makeSheet($("notesModal"), $("notesInner"), () => $("notesModal").classList.add("hidden"));
 var songSheet = makeSheet($("songPage"), $("songPage"), () => closeSongPage(), $("songScrim"));
 /* notification preferences + shoot reminders (server sends them, so they arrive even when the app is closed) */
 var notifPrefs = (function () { let o = {}; try { o = JSON.parse(localStorage.getItem("creatrr_notif_prefs") || "{}"); } catch (e) {} return { finished: o.finished !== false, shootday: o.shootday !== false, calltime: o.calltime !== false }; })();
