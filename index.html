@@ -1632,7 +1632,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
         <div class="panel" id="sectionsPanel">
           <div class="panel-head"><h2>Song sections</h2><span class="spacer"></span><button type="button" id="addSectionBtn" class="btn small primary" data-c="add-section">+ Add section</button><button type="button" id="suggestBtn" class="btn small hidden" data-c="suggest">Suggest sections</button></div>
           <div id="suggestBox"></div>
-          <div class="move-row"><button type="button" id="moveL" class="btn small" aria-label="Nudge the selected section one measure earlier">‹ Nudge</button><button type="button" id="moveR" class="btn small" aria-label="Nudge the selected section one measure later">Nudge ›</button></div>
+          <div class="move-row" style="display:none !important"><button type="button" id="moveL" class="btn small" aria-label="Nudge the selected section one measure earlier">‹ Nudge</button><button type="button" id="moveR" class="btn small" aria-label="Nudge the selected section one measure later">Nudge ›</button></div>
           <div id="partsList"></div>
           <p class="muted small" id="partsHint" style="margin:8px 0 0"></p>
         </div>
@@ -5315,7 +5315,7 @@ function paintSectionHints() {
   ["moveL", "moveR"].forEach(id => { const b = $(id); if (!b) return; b.disabled = !canMove;
     b.title = canMove ? "Nudge the section one measure" : !has ? "Upload the track first" : !tempoOk ? "Set the tempo first" : "Tap a section first"; });
   if (hint) hint.textContent = !has ? "Upload the track, then add the sections you want to shoot."
-    : selPartId ? "Drag the highlighted marker on the track to move it" + (tempoOk ? ", or use Nudge to jump a measure at a time" : "") + ". Tap the section again to let go."
+    : selPartId ? "Drag the highlighted marker on the track to move it. Tap the section again to let go."
     : "Tap a section to highlight it on the track. Drag along the track to move the playhead, then tap + Add section.";
 }
 function moveSelectedBar(dir) {                       // jump the selected marker to the previous / next measure line
