@@ -1143,7 +1143,9 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-del:hover { background-color: var(--danger); }
 .pc-del { opacity: 0; }
 .pc-wrap.part-wrap { overflow: visible; border-radius: 18px; padding: 3px; margin: -3px 0 -3px; }
-.pc-wrap .part-row { position: relative; z-index: 1; touch-action: pan-y; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+.pc-wrap .part-row { position: relative; z-index: 1; touch-action: pan-y; transition: width .22s cubic-bezier(.2,.8,.2,1); overflow: hidden; }
+.pr-in { width: 100%; flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+.pc-wrap .part-row.dragging, .pc-wrap .part-row.dragging .pr-in { transition: none; }
 .pc-wrap .part-row.dragging { transition: none; }
 .part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; width: 84px; padding: 0; border-radius: 16px; }
 .pc-wrap.rv .pc-del { opacity: 1; }
@@ -4737,7 +4739,7 @@ document.addEventListener("click", e => {
 /* swipe a project card left to reveal a red Delete, like Mail */
 var swipeMoved = false;
 const DEL_W = 96;
-function swSet(c, px) { if (false) {} else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
+function swSet(c, px) { if (c.classList.contains("part-row")) { const n = c.firstElementChild; c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - 22) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
 function oc(c) { return c.classList.contains("part-row") ? "sw-open" : "open"; }
 function closeSwipedCards(except) {
   document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open, .pc-wrap .part-row.sw-open").forEach(c => { if (c !== except) { c.classList.remove("open", "sw-open"); swSet(c, 0); setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
@@ -5343,14 +5345,14 @@ function renderPartsList() {
   const parts = songParts(sg.id);
   if (selPartId && !parts.some(x => x.id === selPartId)) selPartId = null;
   paintSectionHints();
-  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="pc-wrap part-wrap" data-section-id="${pt.id}"><div class="part-row ${openPartId === pt.id ? "open" : ""}${selPartId === pt.id ? " sel" : ""}" data-section-id="${pt.id}" aria-selected="${selPartId === pt.id}" style="--sec:${pt.color}">
+  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="pc-wrap part-wrap" data-section-id="${pt.id}"><div class="part-row ${openPartId === pt.id ? "open" : ""}${selPartId === pt.id ? " sel" : ""}" data-section-id="${pt.id}" aria-selected="${selPartId === pt.id}" style="--sec:${pt.color}"><div class="pr-in">
       <button type="button" class="part-cue" data-c="part-cue" title="Play from here" aria-label="Play from here"${pt.time ? "" : " disabled"}>▶</button>
       <input type="text" class="field part-name" data-part-name value="${esc(pt.name)}" aria-label="Part name">
       <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color">⋯</button>
       <div class="part-more">
         <div class="color-pick" role="group" aria-label="Section color">${PALETTE.map(c => `<button type="button" class="cp-dot${c.toLowerCase() === String(pt.color).toLowerCase() ? " on" : ""}" data-c="part-set-color" data-color="${c}" style="background-color:${c}" aria-label="Color ${c}"></button>`).join("")}<label class="cp-dot cp-custom${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : " on"}" style="${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : "background-color:" + pt.color}" title="Pick any color"><input type="color" class="part-color-input" value="${/^#[0-9a-f]{6}$/i.test(pt.color) ? pt.color : "#888888"}" aria-label="Custom color"></label></div>
       </div>
-    </div><button type="button" class="btn pc-del" data-c="part-delete">Delete</button></div>`).join("")
+    </div></div><button type="button" class="btn pc-del" data-c="part-delete">Delete</button></div>`).join("")
     : `<p class="muted small" style="margin:0 0 6px">No sections yet. ${audioBuffer ? "Tap Suggest sections, or add them yourself." : "Upload the track and they'll be suggested for you."}</p>`;
   $("partsList").insertAdjacentHTML("beforeend", `<button type="button" id="addSectionRow" class="song-row add" data-c="add-section" style="margin-top:8px;width:100%">+ Add section</button>`);
   paintSectionHints();
