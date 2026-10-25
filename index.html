@@ -1363,6 +1363,10 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #draftPlayBtn.tap-big:not(.on) { background-color: color-mix(in srgb, #2fbf6c 26%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #2fbf6c 60%, transparent), 0 8px 24px rgba(0,0,0,.18); }
 #draftPlayBtn.tap-big.on { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 8px 24px rgba(0,0,0,.18); }
 #draftPlayBtn.tap-big:disabled { opacity: .45; }
+.project-card { background: linear-gradient(90deg, color-mix(in srgb, var(--c2, #888) 34%, transparent), color-mix(in srgb, var(--c2, #888) 0%, transparent)); -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--c2, #888) 50%, transparent); }   /* project and artist cards: tinted frosted glass, fading to clear */
+.pc-wrap:not(.part-wrap):not(.sr-wrap) .pc-del { width: 96px; padding: 0; }
+.cover { position: relative; overflow: hidden; }
+.cover-date { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 0 4px; text-align: center; font-size: 11px; font-weight: 800; letter-spacing: .01em; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.6)); text-shadow: 0 1px 3px rgba(0,0,0,.5); }
 </style>
 </head>
 <body>
@@ -4496,12 +4500,13 @@ function projectCardHTML(p) {
   const n = countShots(p);
   const kind = p.type === "content" ? `Content shoot · ${(p.songs || []).length} song${(p.songs || []).length === 1 ? "" : "s"}` : "Video production";
   const pd = primaryDate(p, ymd(new Date()));
-  const bits = [pd ? dayLabel(pd, true) : "", p.artist, kind, `${n} shot${n === 1 ? "" : "s"}`].filter(Boolean).map(esc).join(" · ");
+  const dtag = pd ? new Date(pd + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+  const bits = [p.artist, kind, `${n} shot${n === 1 ? "" : "s"}`].filter(Boolean).map(esc).join(" · ");
   return `<div class="pc-wrap">
       <button type="button" class="pc-del" data-delete-id="${p.id}">Delete</button>
-      <div class="project-card">
+      <div class="project-card" style="${coverStyle(p.id)}">
       <div class="project-card-main" data-open-id="${p.id}" role="button" tabindex="0">
-        <div class="cover ${p.shownCover ? "img" : ""}" style="${coverStyle(p.id)}${p.shownCover ? `;background-image:url(${p.shownCover})` : ""}"></div>
+        <div class="cover ${p.shownCover ? "img" : ""}" style="${coverStyle(p.id)}${p.shownCover ? `;background-image:url(${p.shownCover})` : ""}">${dtag ? `<span class="cover-date">${esc(dtag)}</span>` : ""}</div>
         <div class="pc-text">
           <div class="project-card-name">${esc(p.docTitle || "Untitled project")}</div>
           <div class="muted small">${bits}</div>
@@ -4610,7 +4615,7 @@ function renderArtists(recs, projects) {
     const sub = [`${a.songs.length} song${a.songs.length === 1 ? "" : "s"}`, `${ps.length} shoot${ps.length === 1 ? "" : "s"}`, next ? "Next " + dayLabel(next, false) : ""].filter(Boolean).join(" · ");
     return `<div class="pc-wrap">
       ${isArtistTier() ? "" : `<button type="button" class="pc-del" data-delete-artist="${a.id}">Remove</button>`}
-      <div class="project-card"><div class="project-card-main" data-artist-open="${a.id}" role="button" tabindex="0">
+      <div class="project-card" style="${coverStyle(a.id)}"><div class="project-card-main" data-artist-open="${a.id}" role="button" tabindex="0">
         <div class="cover ${withCover ? "img" : "init"}" style="${coverStyle(a.id)}${withCover ? `;background-image:url(${withCover.cover})` : ""}">${withCover ? "" : esc((a.docTitle || "?").trim().charAt(0).toUpperCase())}</div>
         <div class="pc-text"><div class="project-card-name">${esc(a.docTitle)}</div><div class="muted small">${esc(sub)}</div>${isArtistTier() && a.songs.length ? `<div class="muted small" style="margin-top:6px">${esc(a.songs.slice(0, 4).map(x => x.name).join(" · "))}${a.songs.length > 4 ? " …" : ""}</div>` : ""}</div>
       </div></div></div>`;
