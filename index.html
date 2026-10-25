@@ -713,7 +713,11 @@ input.song-name-input, #songNameInput { flex: 1; height: auto; min-height: 0; ba
 .pc-body .part-head { margin-bottom: 12px; }
 .pc-body .part-head .muted { flex: 1 1 100%; }
 .play-row { flex: 1 1 100%; display: flex; gap: 8px; align-items: stretch; }
-.play-row .play-part { flex: 1; }
+.play-row .play-part { flex: 1; font-size: 18px; min-height: 48px; }
+.speed-step { display: inline-flex; align-items: center; gap: 2px; background-color: var(--surface-2); border-radius: 999px; padding: 3px; }
+.speed-step .btn { min-height: 0; width: 38px; height: 38px; padding: 0; border-radius: 50%; background: none; font-size: 20px; font-weight: 600; line-height: 1; }
+.speed-step .btn:disabled { opacity: .3; }
+.speed-val { min-width: 38px; text-align: center; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .opt-row { flex: 1 1 100%; display: flex; gap: 8px; }
 .opt-btn { flex: 1 1 0; min-width: 0; white-space: nowrap; padding-left: 8px; padding-right: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-weight: 700; font-size: 13px; background-color: color-mix(in srgb, var(--sec) 14%, var(--surface-2)); color: var(--text); }
 .pc-body .btn.opt-btn.on { background-color: var(--sec); color: #fff; }
@@ -1445,7 +1449,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <details class="more tempo-more"><summary>More settings</summary>
       <div class="tempo-form">
         <label class="check"><input type="checkbox" id="countInToggle"> Count-in</label>
-        <select id="countInBars" class="field" aria-label="Count-in length"><option value="1">1 bar</option><option value="2">2 bars</option></select>
+        <select id="countInBars" class="field" aria-label="Count-in length"><option value="1">1 bar (4 beats)</option><option value="2">2 bars</option></select>
       </div>
       </details>
     </div>
@@ -1873,7 +1877,7 @@ const DEFAULT_TEMPLATES = [
   { name: "Handheld", detail: "Moving with the energy" },
   { name: "Slow-mo", detail: "60–120 fps" }
 ];
-function defaultTempo() { return { bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 2, snap: true, lead: 0, click: false }; }
+function defaultTempo() { return { bpm: null, offset: null, songStart: null, detected: false, countIn: false, bars: 1, snap: true, lead: 0, click: false }; }
 
 /* ================= helpers ================= */
 const $ = id => document.getElementById(id);
@@ -1982,7 +1986,7 @@ function defaultSection(name, i) { return { id: uid(), name: name || "Unsorted",
 function normalizeSong(s) {
   return {
     id: s.id || uid(), name: s.name || "Untitled song",
-    tempo: Object.assign(defaultTempo(), s.tempo || {}),
+    tempo: (t => { if (!t.barsV2) { t.bars = 1; t.barsV2 = 1; } return t; })(Object.assign(defaultTempo(), s.tempo || {})),
     refs: Array.isArray(s.refs) ? s.refs : [], links: Array.isArray(s.links) ? s.links : [], notes: s.notes || ""
   };
 }
@@ -2045,6 +2049,7 @@ function normalizeRecord(rec) {
   p.schedule = Object.assign({ date: "", start: p.scheduleStart || "", buffer: Number(p.scheduleBuffer) || 20 }, p.schedule || {});
   delete p.scheduleStart; delete p.scheduleBuffer;
   p.tempo = Object.assign(defaultTempo(), p.tempo || {});
+  if (!p.tempo.barsV2) { p.tempo.bars = 1; p.tempo.barsV2 = 1; }   // count-in is one bar (4 beats) now
   p.songs = Array.isArray(p.songs) ? p.songs.map(normalizeSong) : [];
   p.shotTemplates = (p.type === "artist" ? [] : (Array.isArray(p.shotTemplates) ? p.shotTemplates : DEFAULT_TEMPLATES)).map(t => ({ id: t.id || uid(), name: t.name || "Shot", detail: t.detail || "" }));
   p.visionBoard = Array.isArray(p.visionBoard) ? p.visionBoard : [];
@@ -3064,11 +3069,10 @@ function updateTransportUI() {
     btn.disabled = !currentTrackUrl;
   });
   document.querySelectorAll(".play-part").forEach(b => {
-    const on = isPlaying(), ico = b.querySelector(".pp-ico"), txt = b.querySelector(".pp-txt");
-    if (!ico || !txt) return;
-    if (!b.dataset.label) b.dataset.label = txt.textContent;
-    ico.textContent = on ? "■" : "▶"; txt.textContent = on ? "Stop" : b.dataset.label;
-    b.setAttribute("aria-label", on ? "Stop" : "Play " + b.dataset.label.replace(/^Play /, ""));
+    const on = isPlaying(), ico = b.querySelector(".pp-ico");
+    if (!ico) return;
+    ico.textContent = on ? "■" : "▶";
+    b.setAttribute("aria-label", on ? "Stop" : "Play " + (b.dataset.label || ""));
   });
   paintTrackUI(); paintTempo();
   paintTapUI();
@@ -3272,7 +3276,7 @@ function syncTempoInputs() {
   $("clickToggle").classList.toggle("primary", !!tp.click);
   $("clickToggle").setAttribute("aria-pressed", String(!!tp.click));
   $("clickToggle").disabled = !(tp.bpm && tp.offset != null);
-  $("countInBars").value = String(tp.bars || 2);
+  $("countInBars").value = String(tp.bars || 1);
   $("snapToggle").checked = !!tp.snap;
   $("snapToggle").disabled = !(tp.bpm && tp.offset != null);
   $("leadSelect").value = String(tp.lead || 0);
@@ -3952,7 +3956,7 @@ $("clickToggle").addEventListener("click", () => {
   if (cue && !cueCountingIn()) { if (tp.click) startClickPump(); else stopClickPump(); }
 });
 $("countInToggle").addEventListener("change", e => { curTempo().countIn = e.target.checked; scheduleSave(); });
-$("countInBars").addEventListener("change", e => { curTempo().bars = parseInt(e.target.value, 10) || 2; scheduleSave(); });
+$("countInBars").addEventListener("change", e => { curTempo().bars = parseInt(e.target.value, 10) || 1; scheduleSave(); });
 $("snapToggle").addEventListener("change", e => { curTempo().snap = e.target.checked; scheduleSave(); });
 $("shootPlayBtn").addEventListener("click", togglePlay);
 $("cutPlayBtn").addEventListener("click", togglePlay);
@@ -5705,7 +5709,7 @@ function renderShootContent() {
   panel.innerHTML = parts.map((p, idx) => {
     const d = p.rows.filter(r => r.checked).length, open = p.id === shootOpenId;
     const complete = p.rows.length && d === p.rows.length;
-    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${complete ? "✓ " : ""}${d}/${p.rows.length}</span><span class="pc-chev"></span></button>`;
+    const head = `<button type="button" class="pc-head" data-c="toggle-part" data-section-id="${p.id}" aria-expanded="${open}"><span class="dot"></span><span class="pc-name">${esc(partLabel(p))}</span><span class="pc-meta">${p.time ? esc(p.time) + " · " : ""}${complete ? "✓ " : ""}${d} of ${p.rows.length} shots</span><span class="pc-chev"></span></button>`;
     const pct = p.rows.length ? Math.round(d / p.rows.length * 100) : 0, prog = `<div class="pc-prog" style="--p:${pct}%"><i></i></div>`;
     if (!open) return `<div class="part-card ${complete ? "complete" : ""}" data-section-id="${p.id}" style="--sec:${p.color}">${head}${prog}</div>`;
     const prev = parts[idx - 1], next = parts[idx + 1];
@@ -5717,7 +5721,7 @@ function renderShootContent() {
         <div class="part-head">
           ${p.time ? "" : `<div class="muted small">No start time set. Add one on the artist page.</div>`}
           <span class="spacer"></span>
-          ${p.time ? `<div class="play-row"><button type="button" class="btn rate-btn${partRate[p.id] === 0.5 ? " on" : ""}" data-c="rate-toggle" data-rate="0.5" aria-pressed="${partRate[p.id] === 0.5}" aria-label="Half speed" title="Half speed">${ICON_TURTLE}</button><button type="button" class="btn primary big-btn play-part" data-c="play-part"><span class="pp-ico">▶</span> <span class="pp-txt">Play ${esc(partLabel(p))}</span></button><button type="button" class="btn rate-btn${partRate[p.id] === 2 ? " on" : ""}" data-c="rate-toggle" data-rate="2" aria-pressed="${partRate[p.id] === 2}" aria-label="Double speed" title="Double speed">${ICON_RABBIT}</button></div>
+          ${p.time ? `<div class="play-row"><button type="button" class="btn primary big-btn play-part" data-c="play-part" data-label="${esc(partLabel(p))}" aria-label="Play ${esc(partLabel(p))}"><span class="pp-ico">▶</span></button><div class="speed-step" role="group" aria-label="Playback speed"><button type="button" class="btn" data-c="rate-step" data-dir="-1" aria-label="Slower"${(partRate[p.id] || p.speed || 1) <= 0.5 ? " disabled" : ""}>−</button><span class="speed-val">${speedLabel(partRate[p.id] || p.speed || 1)}</span><button type="button" class="btn" data-c="rate-step" data-dir="1" aria-label="Faster"${(partRate[p.id] || p.speed || 1) >= 2 ? " disabled" : ""}>+</button></div></div>
           <div class="opt-row"><button type="button" class="btn opt-btn${tpS.click ? " on" : ""}" data-c="opt-toggle" data-opt="click" aria-pressed="${!!tpS.click}"${clickOk ? "" : " disabled"} title="${clickOk ? "Play a click along with the song" : "Needs a tempo — set it on the artist page"}">${ICON_METRO} Click</button><button type="button" class="btn opt-btn${tpS.countIn ? " on" : ""}" data-c="opt-toggle" data-opt="countIn" aria-pressed="${!!tpS.countIn}"${tpS.bpm ? "" : " disabled"} title="${tpS.bpm ? "Count in before the section starts" : "Needs a tempo — set it on the artist page"}">${ICON_COUNT} Count-in</button><button type="button" class="btn opt-btn${tpS.lead ? " on" : ""}" data-c="opt-lead" aria-pressed="${!!tpS.lead}"${tpS.bpm ? "" : " disabled"} title="${tpS.bpm ? "Start the song 1 or 2 bars before this section. Tap to change." : "Needs a tempo — set it on the artist page"}">${ICON_LEAD} <span class="lead-txt">${leadLabel(tpS.lead || 0)}</span></button></div>` : ""}
         </div>
         <div class="shot-tiles">${p.rows.map(tileHTML).join("")}<button type="button" class="tile-add" data-c="add-extra">+ Extra shot</button></div>
@@ -5834,6 +5838,16 @@ document.addEventListener("click", e => {
       const tp = curTempo(); if (!project) break;
       tp.lead = tp.lead === 1 ? 2 : tp.lead === 2 ? 0 : 1; scheduleSave(); syncTempoInputs();
       document.querySelectorAll('.opt-btn[data-c="opt-lead"]').forEach(x => { x.classList.toggle("on", !!tp.lead); x.setAttribute("aria-pressed", String(!!tp.lead)); const s = x.querySelector(".lead-txt"); if (s) s.textContent = leadLabel(tp.lead); });
+      break;
+    }
+    case "rate-step": {
+      const p = currentShootPart(); if (!p) break;
+      const steps = [0.5, 1, 2], now = partRate[p.id] || p.speed || 1;
+      let i = steps.indexOf(now); if (i < 0) i = 1;
+      i = Math.max(0, Math.min(2, i + (+b.dataset.dir)));
+      partRate[p.id] = steps[i];
+      const g = b.closest(".speed-step");
+      if (g) { g.querySelector(".speed-val").textContent = speedLabel(steps[i]); g.querySelector('[data-dir="-1"]').disabled = i === 0; g.querySelector('[data-dir="1"]').disabled = i === 2; }
       break;
     }
     case "rate-toggle": {
@@ -6224,7 +6238,7 @@ var TOUR = (function () {
     /* 11 */ { ctx: "content", ws: "shoot", target: () => [$("shootDateLine"), $("cShootStatus")].filter(e => e && onScreen(e)), title: "Your shoot day card", body: "The date card shows when you're shooting. The banner below shows the time, shots done, and takes logged so far.", buttons: "next" },
     /* 12 */ { ctx: "content", ws: "shoot", target: () => $("shootSongTabs"), title: "Swipe between songs", body: "Tap or swipe the song titles to jump to another song in your setlist.", buttons: "next" },
     /* 13 */ { ctx: "content", ws: "shoot", target: () => q("#partPanel .pc-head"), title: "Open a section", body: "Tap a section to open its shots and take selector.", done: () => !!shootOpenId },
-    /* 14 */ { ctx: "content", ws: "shoot", open: true, target: () => qa("#partPanel .part-card.open .rate-btn"), title: "Slo-mo and speed-up", body: "The rabbit plays the song at 2×. Use it for slow-mo shots: slow the footage down in post and it lines up. The turtle plays the song at ½×, for footage you'll speed up in post.", buttons: "next" },
+    /* 14 */ { ctx: "content", ws: "shoot", open: true, target: () => qa("#partPanel .part-card.open .speed-step"), title: "Slo-mo and speed-up", body: "Tap + to play the song at 2×. Use it for slow-mo shots: slow the footage down in post and it lines up. Tap − for ½×, for footage you'll speed up in post.", buttons: "next" },
     /* 15 */ { ctx: "content", ws: "shoot", open: true, target: () => q("#partPanel .part-card.open .opt-row"), title: "Click, count-in and lead-in", body: "Click plays a metronome with the song. Count-in gives you a bar of clicks before it starts. Lead-in starts the song a bar or two before the section so everyone can get into it.", buttons: "next" },
     /* 16 */ { ctx: "content", ws: "shoot", open: true, target: () => q("#partPanel .part-card.open .tile"), title: "Log your takes", body: "Tap + Take every time you roll, then rate it. Ratings and locations help your editor find the good ones.", buttons: "next" },
     /* 17 */ { ctx: "content", ws: "shoot", target: () => q('.ws-tab[data-ws="cut"]'), title: "Head to Cut", body: "Tap Cut, or swipe left.", done: () => inContent() && currentWs === "cut", any: true },
