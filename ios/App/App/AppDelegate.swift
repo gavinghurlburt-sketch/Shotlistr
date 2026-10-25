@@ -372,7 +372,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         tDown = call.getBool("downbeat") ?? false
         tBpm = call.getDouble("bpm") ?? 0
         tOffset = call.getDouble("offset") ?? -1e9
-        lpf.bypass = !(call.getBool("lowpass") ?? false)
+        song.volume = (call.getBool("duck") ?? false) ? 0.7 : 1.0   // while tapping the tempo the song is 30% quieter so the click cuts through
     }
 
     @objc func tempo(_ call: CAPPluginCall) {
@@ -413,7 +413,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         band.filterType = .lowPass
         band.frequency = 650
         band.bandwidth = 1.0
-        band.bypass = false
+        band.bypass = true
         engine.prepare()
         try engine.start()
     }

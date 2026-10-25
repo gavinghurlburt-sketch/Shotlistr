@@ -2841,9 +2841,9 @@ async function readyEngine() {
   return null;
 }
 var lpfNode = null;
-function songOut(c) {                                   // while tapping the tempo, roll off the highs so the click cuts through
+function songOut(c) {                                   // while tapping the tempo, turn the song down 30% so the click cuts through
   if (!tap.active) return c.destination;
-  if (!lpfNode || lpfNode.context !== c) { lpfNode = c.createBiquadFilter(); lpfNode.type = "lowpass"; lpfNode.frequency.value = 650; lpfNode.Q.value = 0.6; lpfNode.connect(c.destination); }
+  if (!lpfNode || lpfNode.context !== c) { lpfNode = c.createGain(); lpfNode.gain.value = 0.7; lpfNode.connect(c.destination); }
   return lpfNode;
 }
 function scheduleClick(c, time, accent, vol) {
@@ -2955,7 +2955,7 @@ async function natPrepare(blob, fname) {
 }
 function natTempoArgs() {
   const tp = curTempo();
-  return { click: !!tp.click, bpm: tp.bpm || 0, offset: tp.offset == null ? -1e9 : tp.offset, game: !!tap.active, downbeat: !!tap.downbeat, lowpass: !!tap.active };
+  return { click: !!tp.click, bpm: tp.bpm || 0, offset: tp.offset == null ? -1e9 : tp.offset, game: !!tap.active, downbeat: !!tap.downbeat, duck: !!tap.active };
 }
 function natTempoSync() { if (cue && cue.native) { const NA = natPlugin(); if (NA) NA.tempo(natTempoArgs()).catch(() => {}); } }
 async function playNative(target, withCountIn, rt, token) {
