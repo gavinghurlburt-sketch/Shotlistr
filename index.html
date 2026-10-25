@@ -2762,7 +2762,10 @@ function updateShootTrackInfo() {
 let pausePos = 0;          // playhead when stopped (Web Audio path)
 let playStartPos = 0;      // where the current playback began — stopping returns here
 let ctxWatch = null;
-try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+/* The web audio engine only claims the "playback" session when it really plays (that is what makes iOS show its own lock-screen card);
+   in the app the track plays through the native engine instead, so this never happens there. */
+function webAudioSession() { try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {} }
+function clockNow() { return cue && cue.native ? performance.now() / 1000 : (audioCtx ? audioCtx.currentTime : 0); }
 function newContext() {
   const C = window.AudioContext || window.webkitAudioContext;
   let c;
@@ -2778,15 +2781,16 @@ function newContext() {
 function ctx() { if (!audioCtx || audioCtx.state === "closed") audioCtx = newContext(); return audioCtx; }
 function trackDuration() { return (audioBuffer && audioBuffer.duration) || player.duration || 0; }
 function transportTime() {
-  if (cue && audioCtx) return Math.max(0, cue.offset + Math.max(0, audioCtx.currentTime - cue.ctxStart) * (cue.rate || 1));
+  if (cue && (cue.native || audioCtx)) return Math.max(0, cue.offset + Math.max(0, clockNow() - cue.ctxStart) * (cue.rate || 1));
   if (audioBuffer) return pausePos;
   return player.currentTime || 0;
 }
-function cueCountingIn() { return !!(cue && audioCtx && audioCtx.currentTime < cue.ctxStart); }
+function cueCountingIn() { return !!(cue && (cue.native || audioCtx) && clockNow() < cue.ctxStart); }
 function isPlaying() { return !!cue || (!audioBuffer && !!currentTrackUrl && !player.paused && !player.ended); }
 function stopCue(keepPosition) {
   if (cue) {
     const pos = transportTime();
+    try { if (cue.native) { const NA = natPlugin(); if (NA) NA.stop().catch(() => {}); } } catch (e) {}
     try { if (cue.src) { cue.src.onended = null; cue.src.stop(); } } catch (e) {}
     (cue.clicks || []).forEach(n => { try { n.stop(); } catch (e) {} });
     (cue.timers || []).forEach(clearTimeout);
@@ -2823,6 +2827,7 @@ async function clockRunning(c) {
 /* Called from a tap: wake the engine inside the gesture, then prove its clock is moving.
    A stalled or interrupted engine is thrown away and rebuilt. */
 async function readyEngine() {
+  webAudioSession();
   let c = ctx();
   if (c.state === "interrupted" || c.state === "closed") { try { c.close(); } catch (e) {} audioCtx = null; c = ctx(); }
   unlock(c);
@@ -2915,6 +2920,64 @@ async function stretchedFor(rate, from) {
   catch (e) { console.error("stretch failed", e); return null; }
   finally { clearTimeout(slow); }
 }
+/* ---- native playback (iPhone app): AVAudioEngine plays the track, count-in and click; the page keeps the waveform, tempo and UI ---- */
+var natReady = false, natPrep = null, natLoadToken = 0, natLatency = 0, natWired = false;
+function natCapable() {
+  try { const C = window.Cap; if (!C || BAND_CODE || !C.Capacitor.isNativePlatform()) return false; return localStorage.getItem("creatrr.nativeAudio") !== "0"; } catch (e) { return false; }
+}
+function natPlugin() { try { const C = window.Cap; if (!C || !C.Capacitor.isNativePlatform()) return null; return C.Capacitor.registerPlugin("NativeAudio"); } catch (e) { return null; } }
+function natWire() {
+  if (natWired) return; const NA = natPlugin(); if (!NA) return; natWired = true;
+  NA.addListener("ended", () => { if (cue && cue.native) { (cue.timers || []).forEach(clearTimeout); cue = null; pausePos = playStartPos; updateTransportUI(); drawWaveform(); } });
+  NA.addListener("interrupted", () => { if (cue && cue.native) { stopAndReturn(); showNotice("Playback was interrupted by another app. Press play again."); } });
+  NA.addListener("pos", e => {                                   // gentle re-sync of the on-screen clock to the real playhead
+    if (!cue || !cue.native || !e || typeof e.t !== "number") return;
+    const want = performance.now() / 1000 - (e.t - cue.offset) / (cue.rate || 1);
+    if (Math.abs(want - cue.ctxStart) > 0.03) cue.ctxStart = want;
+  });
+}
+function blobB64(b) { return new Promise((res, rej) => { const r = new FileReader(); r.onloadend = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(b); }); }
+async function natPrepare(blob, fname) {
+  const tok = ++natLoadToken; natReady = false;
+  const NA = natCapable() && natPlugin(); if (!NA) return;
+  natWire();
+  try {
+    const head = new Uint8Array(await blob.slice(0, 16384).arrayBuffer()), tail = new Uint8Array(await blob.slice(Math.max(0, blob.size - 16384)).arrayBuffer());
+    let h = 2166136261; for (const a of [head, tail]) for (let i = 0; i < a.length; i++) { h ^= a[i]; h = Math.imul(h, 16777619); }
+    const m = /\.([a-z0-9]{2,4})$/i.exec(fname || ""), t = (blob.type || "").toLowerCase();
+    const ext = m ? m[1].toLowerCase() : /mp4|m4a|aac/.test(t) ? "m4a" : /wav/.test(t) ? "wav" : /aiff?/.test(t) ? "aif" : /flac/.test(t) ? "flac" : "mp3";
+    const name = (h >>> 0).toString(36) + "-" + blob.size + "." + ext;
+    let r = await NA.openTrack({ name, size: blob.size });
+    if (!r.ok) {
+      const CH = 1536 * 1024;
+      for (let o = 0; o < blob.size; o += CH) { if (tok !== natLoadToken) return; await NA.write({ name, data: await blobB64(blob.slice(o, o + CH)), append: o > 0 }); }
+      r = await NA.openTrack({ name, size: blob.size });
+    }
+    if (tok === natLoadToken) natReady = !!r.ok;
+  } catch (e) { console.error("native audio unavailable", e); if (tok === natLoadToken) natReady = false; }
+}
+function natTempoArgs() {
+  const tp = curTempo();
+  return { click: !!tp.click, bpm: tp.bpm || 0, offset: tp.offset == null ? -1e9 : tp.offset, game: !!tap.active, downbeat: !!tap.downbeat, lowpass: !!tap.active };
+}
+function natTempoSync() { if (cue && cue.native) { const NA = natPlugin(); if (NA) NA.tempo(natTempoArgs()).catch(() => {}); } }
+async function playNative(target, withCountIn, rt, token) {
+  const NA = natPlugin(); if (!NA) return false;
+  const tp = curTempo(), beats = withCountIn ? (tp.bars || 1) * 4 : 0;
+  const offset = Math.min(target, Math.max(0, audioBuffer.duration - 0.05));
+  const sent = performance.now() / 1000;
+  let r;
+  try { r = await NA.play(Object.assign({ from: offset, rate: rt, countInBeats: beats, countBpm: tp.bpm || 120 }, natTempoArgs())); }
+  catch (e) { console.error("native play failed", e); natReady = false; showNotice("Using compatibility audio for this track."); return false; }
+  if (token !== playToken) { NA.stop().catch(() => {}); return true; }
+  const recv = performance.now() / 1000, base = (sent + recv) / 2;     // the call took a moment to come back; assume the native clock was read halfway
+  natLatency = r.latency || 0;
+  const songAt = base + (r.songStartIn || 0), beat = 60 / ((tp.bpm || 120) * rt), timers = [];
+  for (let i = 0; i < beats; i++) timers.push(setTimeout(pulseTimecodes, Math.max(0, (songAt - (beats - i) * beat - recv) * 1000)));
+  cue = { native: true, src: null, ctxStart: songAt, offset, clicks: [], timers, rate: rt };
+  startRaf(); updateTransportUI();
+  return true;
+}
 let playToken = 0;
 async function playFrom(target, withCountIn, rate) {
   const token = ++playToken;
@@ -2923,7 +2986,10 @@ async function playFrom(target, withCountIn, rate) {
   stopCue(false);
   playStartPos = target;
   pausePos = target;
+  if (natCapable() && natPrep) { try { await natPrep; } catch (e) {} if (token !== playToken) return; }
+  if (natReady && audioBuffer) { if (await playNative(target, withCountIn, rt, token)) return; if (token !== playToken) return; }
   if (!audioBuffer) {                      // fallback: plain element, no count-in precision
+    webAudioSession();
     try { if (player.getAttribute("src") !== currentTrackUrl) { player.src = currentTrackUrl; player.load(); } } catch (e) {}
     try { player.currentTime = target; player.preservesPitch = true; player.webkitPreservesPitch = true; player.playbackRate = rt; } catch (e) {}
     player.play().catch(() => showNotice("The browser blocked playback. Press play again."));
@@ -3109,7 +3175,7 @@ player.addEventListener("timeupdate", () => { if (!rafOn) { updateTimecodes(); d
 player.addEventListener("loadedmetadata", drawWaveform);
 
 function resetPlayer() {
-  playToken++;
+  playToken++; natLoadToken++; natReady = false; natPrep = null;
   stopCue(false);
   pausePos = 0; playStartPos = 0;
   if (currentTrackUrl) URL.revokeObjectURL(currentTrackUrl);
@@ -3127,6 +3193,7 @@ function resetPlayer() {
 }
 function loadTrackIntoPlayer(blob, name, restored) {
   resetPlayer();
+  natPrep = natCapable() ? natPrepare(blob, name) : null;
   currentTrackUrl = URL.createObjectURL(blob);
   // (the <audio> element is deliberately not given the file: once it has media, iOS shows a second lock-screen player)
   $("trackName").textContent = name || "Track";
@@ -3142,7 +3209,7 @@ async function decodeTrack(blob, autoDetect) {
   drawWaveform();
   try {
     const ab = await blob.arrayBuffer();
-    const c = ctx();
+    const c = natCapable() ? new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, 1, 44100) : ctx();   // the app plays natively, so the page never opens an audio output
     const buf = await new Promise((res, rej) => { const p = c.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
     if (token !== decodeToken) return;
     audioBuffer = buf;
@@ -3753,7 +3820,7 @@ $("removeTrackBtn").addEventListener("click", () => {
 });
 /* tap tempo: play the track, tap the beat; taps give the rough tempo and the "1", the track's onsets lock it in */
 var tap = { locked: false, taps: [], snap: null, base: null, active: false, sched: [], lastSongT: -1, timer: 0, prevClick: false, downbeat: false };
-function outLatency() { try { return (audioCtx && (audioCtx.outputLatency || audioCtx.baseLatency)) || 0; } catch (e) { return 0; } }
+function outLatency() { try { if (cue && cue.native) return natLatency; return (audioCtx && (audioCtx.outputLatency || audioCtx.baseLatency)) || 0; } catch (e) { return 0; } }
 function quantizeTaps(all) {
   const taps = all.slice(-40);                              // the latest taps decide, so early wobble can't pull it off
   if (taps.length < 4) return null;
@@ -3838,13 +3905,14 @@ function applyTaps() {
 /* the click: scheduled just ahead of the playhead from the CURRENT tempo, so it re-lines up as soon as you tap */
 function songTAt(ctxTime) { return cue.offset + (ctxTime - cue.ctxStart) * (cue.rate || 1); }
 function gameClickReset() {
-  (tap.sched || []).forEach(n => { if (n.when > (audioCtx ? audioCtx.currentTime : 0) + 0.04) { try { n.osc.stop(); } catch (e) {} n.dead = true; } });
-  tap.sched = []; tap.lastSongT = cue && audioCtx ? songTAt(audioCtx.currentTime + 0.05) : -1;
+  (tap.sched || []).forEach(n => { if (n.when > clockNow() + 0.04) { try { n.osc.stop(); } catch (e) {} n.dead = true; } });
+  tap.sched = []; tap.lastSongT = cue && (cue.native || audioCtx) ? songTAt(clockNow() + 0.05) : -1;
+  natTempoSync();
 }
 function gameClickTick() {
   const c = audioCtx, tp = curTempo();
-  if (!tap.active || !cue || !c || !(tp.bpm > 0) || tp.offset == null || cueCountingIn()) return;
-  const beat = 60 / tp.bpm, now = c.currentTime, horizon = songTAt(now + 0.28);
+  if (!tap.active || !cue || !(cue.native || c) || !(tp.bpm > 0) || tp.offset == null || cueCountingIn()) return;
+  const beat = 60 / tp.bpm, now = clockNow(), horizon = songTAt(now + 0.28);
   let k = Math.ceil((Math.max(tap.lastSongT, songTAt(now + 0.02)) - tp.offset) / beat - 1e-6);
   for (;; k++) {
     const songT = tp.offset + k * beat;
@@ -3852,7 +3920,7 @@ function gameClickTick() {
     if (songT <= tap.lastSongT + 1e-6 || songT < 0) continue;
     const when = cue.ctxStart + (songT - cue.offset) / (cue.rate || 1), accent = tap.downbeat && (((k % 4) + 4) % 4) === 0;
     if (when < now) continue;
-    const osc = scheduleClick(c, when, accent, 0.9), rec = { osc, when };
+    const osc = cue.native ? null : scheduleClick(c, when, accent, 0.9), rec = { osc, when };   // (the app plays its click natively)
     tap.sched.push(rec); if (tap.sched.length > 12) tap.sched.shift();
     tap.lastSongT = songT;
     const idx = tap.downbeat ? ((k % 4) + 4) % 4 : -1;

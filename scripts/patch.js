@@ -57,8 +57,6 @@ const js = `<script id="ios-bridge">
   ["gesturestart","gesturechange","gestureend"].forEach(function(t){ document.addEventListener(t, function(e){ e.preventDefault(); }, {passive:false}); });
   var last = 0;
   document.addEventListener("touchend", function(e){ var n = Date.now(); if (n - last < 300) e.preventDefault(); last = n; }, {passive:false});
-  // click track / cue player must sound with the ring switch on silent
-  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch(e){}
   // haptics
   var H = P("Haptics");
   function hap(kind){
