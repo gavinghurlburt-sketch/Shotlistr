@@ -313,9 +313,7 @@ function wireAccountUI() {
     if (cloudUser) { $("acctEmailLine").textContent = cloudUser.email || ""; acctShow("acctSignedIn"); verifyCloud(); }
     else acctShow("acctSignedOut");
   });
-  $("acctClose").addEventListener("click", acctCloseModal);
   $("acctSkip").addEventListener("click", acctCloseModal);
-  $("acctDone").addEventListener("click", acctCloseModal);
   $("acctTabIn").addEventListener("click", () => acctSetMode("in"));
   $("acctTabUp").addEventListener("click", () => acctSetMode("up"));
   $("acctSubmit").addEventListener("click", acctSubmit);
@@ -323,13 +321,6 @@ function wireAccountUI() {
   $("acctForgot").addEventListener("click", acctSendReset);
   $("acctCodeGo").addEventListener("click", acctVerifyCode);
   $("acctNewPassGo").addEventListener("click", acctSetPassword);
-  $("acctSyncNow").addEventListener("click", async () => {
-    $("acctMsg").textContent = "Syncing…";
-    const before = qLoad().length;
-    await syncDown(true);
-    const c = await verifyCloud();
-    $("acctMsg").textContent = !c ? "Couldn't reach your account. Check your connection and try again." : behindCount() ? "Still only on this phone: " + (c.projects.join(", ") || c.tracks + " track(s)") : (before ? "Uploaded " + before + " change" + (before === 1 ? "" : "s") + ". " : "") + "Everything is saved to your account.";
-  });
   $("acctSignOut").addEventListener("click", acctSignOut);
   $("acctDelete").addEventListener("click", acctDelete);
   acctSetMode("in");

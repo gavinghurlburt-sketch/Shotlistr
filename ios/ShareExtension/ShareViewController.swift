@@ -185,7 +185,7 @@ class ShareViewController: UIViewController {
         while toks.count > 1, toks[0].range(of: "^\\d{1,2}$", options: .regularExpression) != nil { toks.removeFirst() }
         var keep: [String] = []
         for t in toks {
-            if !keep.isEmpty, noise.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)) != nil { break }
+            if !keep.isEmpty, noise.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)) != nil || t.range(of: "^[A-Z]{1,3}$", options: .regularExpression) != nil { break }
             keep.append(t)
         }
         var name = keep.joined(separator: " ").replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression).trimmingCharacters(in: .whitespaces)

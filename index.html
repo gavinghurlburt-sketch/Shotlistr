@@ -1914,7 +1914,7 @@ function songNameFromFile(fn) {
   const noise = /master|mstr|mix|final|demo|bounce|print|stems?|rough|upload(ed)?|export(ed)?|copy|\bref\b|^v\d+$|^(rev|take|ver)\d*$|^\d+([.\/-]\d+){1,2}$|^\d+(\.\d+)?(k|khz|bit|b)?$|^(wav|mp3|flac|aiff|m4a|hq|lossless)$/i;
   const toks = base.split(/[_\s]+|\s*-\s*/).filter(Boolean);
   while (toks.length > 1 && /^\d{1,2}$/.test(toks[0])) toks.shift();   // leading track number
-  const keep = []; for (const t of toks) { if (keep.length && noise.test(t)) break; keep.push(t); }
+  const keep = []; for (const t of toks) { if (keep.length && (noise.test(t) || /^[A-Z]{1,3}$/.test(t))) break; keep.push(t); }   // stray initials like CC end the title
   const name = keep.join(" ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
   return name || base.replace(/[_]+/g, " ").trim() || "Untitled song";
 }
@@ -2187,7 +2187,7 @@ function timestampCell(r) {
   return `<div class="ts-cell">${pasteTcHtml(r.timestamp, "paste-ts")}${extra}</div>`;
 }
 function pastePlayhead() {
-  if (!player.src) { alert("Load the track first, then play or click the waveform to the spot you want."); return null; }
+  if (!currentTrackUrl) { alert("Load the track first, then play or click the waveform to the spot you want."); return null; }
   return fmtTC(transportTime());
 }
 const COLUMNS = [
@@ -2712,14 +2712,14 @@ function mountTransport(slotSelector) {
   const el = $("shootTransport"), slot = document.querySelector(slotSelector);
   if (slot && el.parentElement !== slot) slot.appendChild(el);
   $("leadSelect").value = String(curTempo().lead || 0);
-  $("shootWave").classList.toggle("hidden", !player.src);
+  $("shootWave").classList.toggle("hidden", !currentTrackUrl);
   updateShootTrackInfo();
   requestAnimationFrame(drawWaveform);
 }
 function updateShootTrackInfo() {
   const tp = curTempo();
-  $("shootTrackInfo").classList.toggle("hidden", !!player.src);
-  $("shootTrackInfo").textContent = player.src
+  $("shootTrackInfo").classList.toggle("hidden", !!currentTrackUrl);
+  $("shootTrackInfo").textContent = currentTrackUrl
     ? ""
     : (isContent() && !activeSong() ? "No song selected." : (isContent() ? "No track — upload it on the artist page." : "No track — upload it in Draft."));
 }
@@ -2750,7 +2750,7 @@ function transportTime() {
   return player.currentTime || 0;
 }
 function cueCountingIn() { return !!(cue && audioCtx && audioCtx.currentTime < cue.ctxStart); }
-function isPlaying() { return !!cue || (!audioBuffer && !!player.src && !player.paused && !player.ended); }
+function isPlaying() { return !!cue || (!audioBuffer && !!currentTrackUrl && !player.paused && !player.ended); }
 function stopCue(keepPosition) {
   if (cue) {
     const pos = transportTime();
@@ -2774,7 +2774,7 @@ function setPosition(t) {
     stopCue(false);
     pausePos = t;
     if (wasPlaying) playFrom(t, false);
-  } else if (player.src) { try { player.currentTime = t; } catch (e) {} }
+  } else if (currentTrackUrl) { try { player.currentTime = t; } catch (e) {} }
   updateTimecodes(); drawWaveform();
 }
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -2961,7 +2961,7 @@ function startClickPump() {
 function playCue(ts, rate) {
   const t = parseTC(ts);
   if (t == null) { alert(`"${ts || ""}" isn't a timestamp yet. Use a format like 1:05 or 0:42.5.`); return; }
-  if (!player.src) { alert("Load the track first (Draft → Track & tempo)."); return; }
+  if (!currentTrackUrl) { alert("Load the track first (Draft → Track & tempo)."); return; }
   const tp = curTempo();
   const target = Math.max(0, cueTarget(t) - (tp.lead || 0) * 4 * (60 / (tp.bpm || 120)));
   playFrom(target, !!tp.countIn, rate || 1);
@@ -2970,11 +2970,11 @@ function stopAndReturn() {
   playToken++;
   stopCue(false);
   pausePos = playStartPos;
-  if (!audioBuffer && player.src) { try { player.currentTime = playStartPos; } catch (e) {} }
+  if (!audioBuffer && currentTrackUrl) { try { player.currentTime = playStartPos; } catch (e) {} }
   updateTimecodes(); drawWaveform();
 }
 function togglePlay() {
-  if (!player.src) return;
+  if (!currentTrackUrl) return;
   if (isPlaying()) { stopAndReturn(); return; }
   playFrom(transportTime(), false);
 }
@@ -2999,7 +2999,7 @@ var npOn = false, npWired = false;
 function npPlugin() { const C = window.Cap; if (!C || BAND_CODE || !C.Capacitor.isNativePlatform()) return null; try { return C.Capacitor.registerPlugin("ShootActivity"); } catch (e) { return null; } }
 function nowPlayingSync() {
   const NP = npPlugin(); if (!NP) return;
-  const inShoot = !!(project && project.type === "content" && currentWs === "shoot" && player.src);
+  const inShoot = !!(project && project.type === "content" && currentWs === "shoot" && currentTrackUrl);
   if (!inShoot || (!npOn && !isPlaying())) { if (npOn && !inShoot) { npOn = false; NP.end().catch(() => {}); } return; }
   if (!npWired) { npWired = true; NP.addListener("command", e => npCommand(e && e.name)); }
   npOn = true;
@@ -3033,7 +3033,7 @@ function updateTransportUI() {
     btn.classList.toggle("on", isPlaying());
     btn.setAttribute("aria-label", isPlaying() ? "Stop" : "Play");
     btn.title = isPlaying() ? "Stop and return to where playback started" : "Play from the playhead";
-    btn.disabled = !player.src;
+    btn.disabled = !currentTrackUrl;
   });
   document.querySelectorAll(".play-part").forEach(b => {
     const on = isPlaying(), ico = b.querySelector(".pp-ico"), txt = b.querySelector(".pp-txt");
@@ -3102,6 +3102,7 @@ async function decodeTrack(blob, autoDetect) {
     const buf = await new Promise((res, rej) => { const p = c.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
     if (token !== decodeToken) return;
     audioBuffer = buf;
+    try { player.pause(); player.removeAttribute("src"); player.load(); } catch (e) {}   // the decoded buffer plays it; an idle media element would show up as a second lock-screen player
     peaks = computePeaks(buf);
     drawWaveform(); paintTempo(); paintSectionHints();
     if (autoDetect) runTempoDetect();
@@ -3212,14 +3213,14 @@ function analyzeTempo(buf) {
 var tempoMsg = "", tempoKind = "";
 function setTempoStatus(t, kind) { tempoMsg = t || ""; tempoKind = kind || ""; paintTempo(); }
 function paintTrackUI() {
-  const has = !!player.src;
+  const has = !!currentTrackUrl;
   $("uploadTrackBtn").classList.toggle("hidden", has);
   $("trackMore").classList.toggle("hidden", !has);
 }
 function paintTempo() {
   const el = $("tempoStatus"), mb = $("tempoManualBtn"), tp = project ? curTempo() : defaultTempo();
-  el.textContent = player.src ? (tempoMsg || "") : ""; el.className = "tempo-status" + (tempoMsg ? " bad" : " hidden");
-  mb.classList.toggle("hidden", !player.src);
+  el.textContent = currentTrackUrl ? (tempoMsg || "") : ""; el.className = "tempo-status" + (tempoMsg ? " bad" : " hidden");
+  mb.classList.toggle("hidden", !currentTrackUrl);
   mb.textContent = tp.bpm && tp.offset != null ? "Tempo " + Math.round(tp.bpm) + " BPM · change" : "Set tempo";
   const sb = $("suggestBtn"); if (sb) sb.classList.toggle("hidden", !(isContent() && audioBuffer && tp.bpm && tp.offset != null));
 }
@@ -3416,7 +3417,7 @@ function drawPeaks(g, w, top, h, dur) {
   if (!peaks) return;
   if (peaks._norm == null) { let mx = 0.0001; for (let i = 0; i < peaks.length; i++) mx = Math.max(mx, -peaks[i][0], peaks[i][1]); peaks._norm = mx; }
   const pitch = 3.5, bw = 2, n = Math.max(8, Math.floor(w / pitch)), step = w / n, P = peaks.length, mid = top + h / 2;
-  const playX = (dur && player.src) ? (transportTime() / dur) * w : -1;
+  const playX = (dur && currentTrackUrl) ? (transportTime() / dur) * w : -1;
   for (let i = 0; i < n; i++) {
     const s = Math.floor((i * P) / n), e = Math.max(s + 1, Math.floor(((i + 1) * P) / n));
     let sum = 0, mx = 0;
@@ -3437,7 +3438,7 @@ function drawWaveOn(canvas) {
   const dur = trackDuration();
   if (!peaks) {
     g.fillStyle = waveColors().muted; g.font = "12px -apple-system, sans-serif";
-    if (player.src) g.fillText("Reading the waveform…", 10, h / 2);
+    if (currentTrackUrl) g.fillText("Reading the waveform…", 10, h / 2);
     return;
   }
   const top = isContent() ? 24 : 0;                // room above the waveform for section names
@@ -3762,7 +3763,7 @@ function tapReadout() {
   $("tapReadout").classList.toggle("ok", !!tap.locked);
   $("tapBtn").classList.toggle("locked", !!tap.locked && !tap.downbeat);
   $("tapDown").classList.toggle("ready", !!tap.locked && !tap.downbeat);
-  $("tapHint").textContent = !player.src ? "Upload a track first."
+  $("tapHint").textContent = !currentTrackUrl ? "Upload a track first."
     : tap.downbeat ? "Synced! The higher click is the 1, where every count starts. Tap Re-sync to move it, or press Done."
     : tap.locked ? "Locked in! Now sync up. Tap Sync on the first beat of any section, like a choreographer counting ‘5, 6, 7, 8’."
     : !n ? "Drag the waveform to start anywhere, then tap along with the beat."
@@ -3775,8 +3776,8 @@ function paintTapUI() {
   $("beatDots").classList.toggle("counted", !!tap.downbeat);
   const playing = isPlaying(), tp = curTempo();
   b.textContent = playing ? "TAP" : "▶ Play again";
-  const pb = $("tapPlay"); if (pb) { pb.disabled = !player.src; pb.textContent = playing ? "❚❚" : "▶"; pb.setAttribute("aria-label", playing ? "Pause" : "Play"); }
-  b.classList.toggle("tapping", playing); b.disabled = !player.src;
+  const pb = $("tapPlay"); if (pb) { pb.disabled = !currentTrackUrl; pb.textContent = playing ? "❚❚" : "▶"; pb.setAttribute("aria-label", playing ? "Pause" : "Play"); }
+  b.classList.toggle("tapping", playing); b.disabled = !currentTrackUrl;
   const d = $("tapDown"); d.disabled = !(playing && tp.bpm > 0 && tp.offset != null);
   d.textContent = tap.downbeat ? "Re-sync" : "Sync";
   d.classList.toggle("on", !!tap.downbeat);
@@ -3819,7 +3820,7 @@ function beatPulse(idx) {
   for (let i = 0; i < dots.length; i++) dots[i].classList.toggle("on", idx < 0 ? true : i === idx);   // before the 1 is set, every beat looks the same
 }
 function startGame(from) {
-  if (!player.src) return;
+  if (!currentTrackUrl) return;
   const tp = curTempo();
   playFrom(from != null ? from : tap.start != null ? tap.start : (tp.songStart != null ? Math.max(0, tp.songStart) : 0), false, 1);
   setTimeout(() => { gameClickReset(); paintTapUI(); drawTempoWave(); }, 250);
@@ -3850,7 +3851,7 @@ function drawTempoWave() {
   g.fillStyle = C.head; g.fillRect(Math.round(playX) - 1, 0, 2, h);
 }
 $("tapBtn").addEventListener("pointerdown", e => {
-  if (!player.src) return;
+  if (!currentTrackUrl) return;
   e.preventDefault();
   if (!isPlaying()) { tap.taps = []; tap.base = tap.downbeat ? tap.base : null; startGame(); return; }
   const t = transportTime(), last = tap.taps[tap.taps.length - 1];
@@ -3861,7 +3862,7 @@ $("tapBtn").addEventListener("pointerdown", e => {
   applyTaps(); paintTapUI(); drawTempoWave();
 });
 $("tapPlay").addEventListener("click", () => {
-  if (!player.src) return;
+  if (!currentTrackUrl) return;
   if (isPlaying()) { stopAndReturn(); paintTapUI(); drawTempoWave(); return; }
   tap.taps = []; tap.base = tap.downbeat ? tap.base : null; startGame();
 });
@@ -3870,7 +3871,7 @@ $("tapPlay").addEventListener("click", () => {
   const wv = $("tempoWave"); let on = false;
   const posAt = e => { const r = wv.getBoundingClientRect(), dur = trackDuration() || 0; return Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width))) * dur; };
   wv.addEventListener("pointerdown", e => {
-    if (!player.src) return;
+    if (!currentTrackUrl) return;
     e.preventDefault(); on = true; try { wv.setPointerCapture(e.pointerId); } catch (x) {}
     if (isPlaying()) { playToken++; stopCue(false); }
     const t = posAt(e); playStartPos = t; pausePos = t; drawTempoWave(); updateTimecodes();
@@ -5075,7 +5076,7 @@ function renderPartsList() {
 var openPartId = null;
 var selPartId = null;
 function paintSectionHints() {
-  const hint = $("partsHint"), btn = $("addSectionBtn"), has = !!player.src;
+  const hint = $("partsHint"), btn = $("addSectionBtn"), has = !!currentTrackUrl;
   if (btn) { btn.disabled = !has; btn.title = has ? "Add a section at the playhead" : "Upload the track first"; }
   const tp = curTempo(), tempoOk = !!(tp && tp.bpm > 0 && tp.offset != null), canMove = has && !!selPartId && tempoOk;
   ["moveL", "moveR"].forEach(id => { const b = $(id); if (!b) return; b.disabled = !canMove;
@@ -5100,7 +5101,7 @@ $("moveR").addEventListener("click", () => moveSelectedBar(1));
 function selectPart(id) {
   const sec = id && getSection(id);
   selPartId = (sec && selPartId !== id) ? id : null;
-  if (sec && selPartId && !sec.time && player.src) sec.time = fmtTC(transportTime()), scheduleSave();
+  if (sec && selPartId && !sec.time && currentTrackUrl) sec.time = fmtTC(transportTime()), scheduleSave();
   if (sec && selPartId && sec.time && !isPlaying()) { const t = parseTC(sec.time); if (t != null) setPosition(t); }
   renderPartsList(); drawWaveform();
 }
@@ -5129,7 +5130,7 @@ function openSectionModal() {
   if (!project) return;
   if (!activeSong() && project.songs.length) activeSongId = project.songs[0].id;       // never fail silently
   if (!activeSong()) { showNotice("Add a song first."); return; }
-  if (!player.src) { showNotice("Upload this song's track first."); return; }
+  if (!currentTrackUrl) { showNotice("Upload this song's track first."); return; }
   $("secNameInput").value = ""; secDraft.color = PART_PRESETS[0].color;
   $("sectionModal").classList.remove("hidden"); paintSectionModal(); $("secNameInput").focus();
 }
@@ -5875,7 +5876,7 @@ function drawCutTimeline() {
   if (peaks && trackDuration()) drawPeaks(g, w, 0, CUT_WAVE_H, dur);
   else {
     g.fillStyle = waveColors().muted; g.font = "12px -apple-system, sans-serif";
-    g.fillText(player.src ? "Reading the waveform…" : "No track loaded — regions are placed on an estimated timeline.", 10, CUT_WAVE_H / 2 + 4);
+    g.fillText(currentTrackUrl ? "Reading the waveform…" : "No track loaded — regions are placed on an estimated timeline.", 10, CUT_WAVE_H / 2 + 4);
   }
   for (let i = 0; i < lanes; i++) { g.fillStyle = waveColors().lane; g.fillRect(0, CUT_WAVE_H + i * CUT_LANE_H + 3, w, CUT_LANE_H - 3); }
   g.font = "bold 10px -apple-system, sans-serif";
@@ -5890,7 +5891,7 @@ function drawCutTimeline() {
     if (label && room >= 2) { g.fillStyle = "#151515"; g.fillText(label.length > room ? label.slice(0, room - 1) + "…" : label, x0 + 4, y + 13); }
   });
   g.fillStyle = waveColors().head; g.fillRect(Math.round((cutTime / dur) * w) - 1, 0, 2, h);
-  if (player.src) { g.fillStyle = waveColors().played; g.fillRect(Math.round((transportTime() / dur) * w) - 1, 0, 2, CUT_WAVE_H); }
+  if (currentTrackUrl) { g.fillStyle = waveColors().played; g.fillRect(Math.round((transportTime() / dur) * w) - 1, 0, 2, CUT_WAVE_H); }
 }
 function cutCardHTML(r, sec, showLoc) {
   const hideBad = $("cutHideBad").checked;
@@ -5939,7 +5940,7 @@ function renderCutMoment() {
 }
 function seekCut(t, fromUser) {
   cutTime = Math.max(0, t);
-  if (fromUser && player.src) setPosition(cutTime);
+  if (fromUser && currentTrackUrl) setPosition(cutTime);
   renderCutMoment(); drawCutTimeline(); updateTimecodes();
 }
 function followCutPlayhead() {
@@ -5951,7 +5952,7 @@ function renderCut() {
   const content = isContent();
   $("cutSongTabs").classList.toggle("hidden", !content);
   if (content) paintSongTitles($("cutSongTabs"));
-  $("cutInfo").textContent = player.src ? $("trackName").textContent : (content && !activeSong() ? "Add a song in Draft." : "No track loaded — upload it in Draft to hear it here.");
+  $("cutInfo").textContent = currentTrackUrl ? $("trackName").textContent : (content && !activeSong() ? "Add a song in Draft." : "No track loaded — upload it in Draft to hear it here.");
   const lanes = cutLanes();
   $("cutLegend").innerHTML = content ? "" : lanes.map(sec => `<span style="--sec:${sec.color}"><span class="dot"></span>${esc(sec.name || "Untitled")}</span>`).join("")
     + (lanes.length && project.sections.some(s => s.rows.some(r => r.takeType === "full" && r.timestamp)) ? `<span class="muted">Thin bars are full takes, which run to the end.</span>` : "");
@@ -6661,7 +6662,7 @@ async function inboxDrainNative() {
           n++; const iid = inboxAdd.lastId;
           await FS.deleteFile({ path: "Inbox/" + name, directory: "DOCUMENTS" });
           if (meta) { try { await FS.deleteFile({ path: "Inbox/" + name + ".meta.json", directory: "DOCUMENTS" }); } catch (e) {} }
-          if (meta && meta.artistId) { try { const r = await inboxToSong(iid, meta.artistId, meta.songName); if (r) { placed.push(r); n--; } } catch (e) {} }
+          if (meta && meta.artistId) { try { const r = await inboxToSong(iid, meta.artistId, meta.songName); if (r) { placed.push(r); n--; } else showNotice("Couldn't file " + name + " into that band. It's waiting in the bell."); } catch (e) { showNotice("Couldn't file " + name + ": " + (e && e.message || e)); } }
         }
       } catch (e) {}
     }
@@ -6719,7 +6720,7 @@ async function inboxToSong(itemId, artistId, nameOverride) {
   const l = inboxList(), it = l.find(x => x.id === itemId); if (!it) return null;
   const t = await loadTrack("inbox::" + itemId); if (!t || !t.blob) { inboxSave(l.filter(x => x.id !== itemId)); return null; }
   const rec = project && project.id === artistId ? project : await getProjectRecord(artistId); if (!rec) return null;
-  const f = await toMp3(new File([t.blob], it.name, { type: t.blob.type }));
+  const f = new File([t.blob], it.name, { type: t.blob.type || "audio/mp4" });   // keep the original (m4a/mp3 play as-is); converting a whole song here stalled the share
   const sg = normalizeSong({ name: (nameOverride || "").trim() || songNameFromFile(it.name) }); rec.songs.push(sg);
   await saveTrack(artistId + "::" + sg.id, f, f.name);
   if (rec === project) { scheduleSave(); renderCurrent(); } else await putProjectRecord(rec);
@@ -6810,7 +6811,7 @@ async function syncReminders() {
         }
       }
     }
-    await bandCall({ action: "reminders_set", items }, tok);
+    await bandCall({ action: "reminders_set", items: pushOffFlag ? [] : items }, tok);
   } catch (e) {}
 }
 document.addEventListener("change", async e => {
@@ -6820,18 +6821,18 @@ document.addEventListener("change", async e => {
   try { const tok = await bandToken(); if (tok) await bandCall({ action: "push_prefs", prefs: notifPrefs }, tok); } catch (x) {}
   syncReminders();
 });
-document.addEventListener("click", e => { if (e.target.closest("#accountBtn")) paintNotifPrefs(); });
+document.addEventListener("click", e => { if (e.target.closest("#accountBtn")) { paintNotifPrefs(); paintPushUI(); } });
 /* push notifications (iPhone app) */
 var pushWired = false, pushAsked = false, pushState = "Not set up yet";
 function pushSay(t, loud) { pushState = t; const el = $("pushStatus"); if (el) el.textContent = t; if (loud) showNotice(t); }
-async function pushSetup(ask) {
+async function pushSetupInner(ask) {
   const C = window.Cap; if (BAND_CODE) return;
   if (!C) { pushSay("Notifications aren't available here (no app bridge).", ask); return; }
   if (!C.Capacitor.isNativePlatform()) { pushSay("Notifications work in the iPhone app.", ask); return; }
   const P = C.PushNotifications; pushAsked = !!ask;
   try {
     let st = await P.checkPermissions();
-    if (st.receive === "prompt" || st.receive === "prompt-with-rationale") { if (!ask) { pushSay("Off. Tap Turn on notifications."); return; } st = await P.requestPermissions(); }
+    if (st.receive === "prompt" || st.receive === "prompt-with-rationale") { if (!ask) { pushSay("Off. Flip the switch to turn them on."); return; } st = await P.requestPermissions(); }
     if (st.receive === "denied") { pushSay("Blocked. Turn on Notifications for creatrr in the iPhone Settings app.", ask); return; }
     if (st.receive !== "granted") { pushSay("Permission: " + st.receive, ask); return; }
     if (!pushWired) {
@@ -6848,9 +6849,30 @@ async function pushSetup(ask) {
     }
     pushSay("Allowed. Registering with Apple\u2026");
     await P.register();
+    pushOn = true;
   } catch (e) { let pl = ""; try { pl = " [native plugins: " + (window.Capacitor && window.Capacitor.PluginHeaders ? window.Capacitor.PluginHeaders.map(h => h.name).join(", ") : "none") + "]"; } catch (x) {} pushSay("Notification setup failed: " + ((e && e.message) || e) + pl, true); }
 }
-document.addEventListener("click", e => { if (e.target.closest("#pushBtn")) pushSetup(true); });
+var pushOn = false, pushOffFlag = (function () { try { return localStorage.getItem("creatrr_push_on") === "0"; } catch (e) { return false; } })();
+function paintPushUI() {
+  const t = $("pushToggle"); if (t) t.checked = pushOn;
+  const box = $("notifSub"); if (box) box.classList.toggle("dim", !pushOn);
+  document.querySelectorAll("[data-notif]").forEach(el => { el.disabled = !pushOn; });
+}
+async function pushSetup(ask) {
+  if (!ask && pushOffFlag) { pushOn = false; paintPushUI(); return; }
+  pushOn = false;
+  await pushSetupInner(ask);
+  if (pushOn) { pushOffFlag = false; try { localStorage.removeItem("creatrr_push_on"); } catch (e) {} }
+  paintNotifPrefs(); paintPushUI();
+  if (pushOn && ask) { try { const tok = await bandToken(); if (tok) await bandCall({ action: "push_prefs", prefs: notifPrefs }, tok); } catch (e) {} syncReminders(); }
+}
+document.addEventListener("change", async e => {
+  if (!e.target || e.target.id !== "pushToggle") return;
+  if (e.target.checked) { await pushSetup(true); return; }
+  pushOn = false; pushOffFlag = true; try { localStorage.setItem("creatrr_push_on", "0"); } catch (x) {}
+  paintPushUI(); pushSay("Off");
+  try { const tok = await bandToken(); if (tok) { await bandCall({ action: "push_prefs", prefs: { finished: false, shootday: false, calltime: false } }, tok); await bandCall({ action: "reminders_set", items: [] }, tok); } } catch (x) {}
+});
 document.addEventListener("click", e => { if (e.target.closest("#accountBtn")) { const el = $("pushStatus"); if (el) el.textContent = pushState; } });
 if (!BAND_CODE) {
   setTimeout(() => { checkBandNotes(); paintBell(); inboxDrainNative(); pushSetup(false); syncReminders(); publishArtists(); }, 3500);
