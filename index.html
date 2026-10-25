@@ -3682,7 +3682,7 @@ function drawWaveOn(canvas) {
     if (isSel) {
       g.globalAlpha = 1; g.fillStyle = m.color;
       g.fillRect(x - 1.5, top - 4, 3, h - top + 4);
-      g.beginPath(); g.arc(x, h - 9, 9, 0, 7); g.fill();                    // grab handle
+      if (selHandle) { g.beginPath(); g.arc(x, h - 9, 9, 0, 7); g.fill(); }   // grab handle: only once the marker itself is touched
       g.beginPath(); g.moveTo(x - 6, top - 8); g.lineTo(x + 6, top - 8); g.lineTo(x, top + 2); g.closePath(); g.fillStyle = m.color; g.fill();
       if (m.label) {
         g.font = "700 14px -apple-system, sans-serif";
@@ -3813,6 +3813,7 @@ function wireMarkerDrag(canvas) {
     const r = canvas.getBoundingClientRect(), mx = r.left + (t0 / dur()) * r.width;
     if (Math.abs(e.clientX - mx) > 28) return;                    // not on the marker: normal scrubbing
     e.stopImmediatePropagation(); e.preventDefault();
+    selHandle = true; drawWaveform();
     sec = s0; pid = e.pointerId; lastT = t0; det = waveDetents(); det.marks = det.marks.filter(m => Math.abs(m - t0) > 1e-6);
     if (isPlaying() && audioBuffer) { stopCue(true); }
     try { canvas.setPointerCapture(pid); } catch (x) {}
@@ -5340,7 +5341,7 @@ function renderPartsList() {
   renderSuggest();
 }
 var openPartId = null;
-var selPartId = null;
+var selPartId = null, selHandle = false;
 function paintSectionHints() {
   const hint = $("partsHint"), btn = $("addSectionBtn"), has = !!currentTrackUrl;
   if (btn) { btn.disabled = !has; btn.title = has ? "Add a section at the playhead" : "Upload the track first"; }
@@ -5367,7 +5368,7 @@ $("moveL").addEventListener("click", () => moveSelectedBar(-1));
 $("moveR").addEventListener("click", () => moveSelectedBar(1));
 function selectPart(id) {
   const sec = id && getSection(id);
-  selPartId = (sec && selPartId !== id) ? id : null;
+  selPartId = (sec && selPartId !== id) ? id : null; selHandle = false;
   if (sec && selPartId && !sec.time && currentTrackUrl) sec.time = fmtTC(transportTime()), scheduleSave();
   if (sec && selPartId && sec.time && !isPlaying()) { const t = parseTC(sec.time); if (t != null) setPosition(t); }
   renderPartsList(); drawWaveform();
@@ -5416,7 +5417,7 @@ $("secAdd").addEventListener("click", () => {
   if (!sg || !name || secClash(t)) return;
   const sec = addPart(sg, null); sec.name = name; sec.color = secDraft.color; sec.time = fmtTC(t);
   $("sectionModal").classList.add("hidden");
-  selPartId = sec.id; scheduleSave(); renderDraftContent(); drawWaveform();
+  selPartId = sec.id; selHandle = false; scheduleSave(); renderDraftContent(); drawWaveform();
   feel("marker");
 });
 $("partsList").addEventListener("click", e => {
