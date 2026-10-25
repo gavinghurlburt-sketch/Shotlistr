@@ -1077,7 +1077,6 @@ details.more > :not(summary) { margin-top: 8px; }
 .part-row.sel .part-name { cursor: text; pointer-events: auto; }
 .part-row.sel { background: linear-gradient(var(--sec), var(--sec)) 0 0 / 5px 100% no-repeat, color-mix(in srgb, var(--sec) 16%, var(--surface-2)); outline: 2px solid var(--sec); outline-offset: -2px; }
 #sectionModal .preset-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.part-row .pdot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
 .part-row .part-more { display: none; gap: 8px; width: 100%; flex-wrap: wrap; }
 .part-row.open .part-more { display: flex; }
 .part-row { flex-wrap: wrap; }
@@ -1351,6 +1350,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #tempoModal .tempo-wave { background: none; border-radius: 0; }
 .part-row, .part-row.sel { background-image: none; }
 .part-row, .part-row.sel { background: color-mix(in srgb, var(--sec) 22%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--sec) 45%, transparent); }   /* sections are always tinted frosted glass in their own colour; the selected one adds an outline */
+.part-row .part-cue { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0 0 0 2px; border: 0; border-radius: 50%; font-size: 13px; line-height: 1; color: #fff; cursor: pointer; background-color: rgba(255,255,255,.16); -webkit-backdrop-filter: blur(10px) saturate(1.5); backdrop-filter: blur(10px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.28); }
+.part-row .part-cue:active { opacity: .6; }
+.part-row .part-cue:disabled { opacity: .35; }
 .song-play { margin: 12px 0 0; font-size: 34px; }
 #draftPlayBtn.tap-big:not(.on) { background-color: color-mix(in srgb, #2fbf6c 26%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #2fbf6c 60%, transparent), 0 8px 24px rgba(0,0,0,.18); }
 #draftPlayBtn.tap-big.on { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 8px 24px rgba(0,0,0,.18); }
@@ -5324,9 +5326,8 @@ function renderPartsList() {
   if (selPartId && !parts.some(x => x.id === selPartId)) selPartId = null;
   paintSectionHints();
   $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row ${openPartId === pt.id ? "open" : ""}${selPartId === pt.id ? " sel" : ""}" data-section-id="${pt.id}" aria-selected="${selPartId === pt.id}" style="--sec:${pt.color}">
-      <span class="pdot" style="background-color:${pt.color}"></span>
+      <button type="button" class="part-cue" data-c="part-cue" title="Play from here" aria-label="Play from here"${pt.time ? "" : " disabled"}>▶</button>
       <input type="text" class="field part-name" data-part-name value="${esc(pt.name)}" aria-label="Part name">
-      ${pt.time ? `<button type="button" class="icon-btn" data-c="part-cue" title="Play from here" aria-label="Play from here">▶</button>` : ""}
       <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color and delete">⋯</button>
       <div class="part-more">
         <div class="color-pick" role="group" aria-label="Section color">${PALETTE.map(c => `<button type="button" class="cp-dot${c.toLowerCase() === String(pt.color).toLowerCase() ? " on" : ""}" data-c="part-set-color" data-color="${c}" style="background-color:${c}" aria-label="Color ${c}"></button>`).join("")}<label class="cp-dot cp-custom${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : " on"}" style="${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : "background-color:" + pt.color}" title="Pick any color"><input type="color" class="part-color-input" value="${/^#[0-9a-f]{6}$/i.test(pt.color) ? pt.color : "#888888"}" aria-label="Custom color"></label></div>
