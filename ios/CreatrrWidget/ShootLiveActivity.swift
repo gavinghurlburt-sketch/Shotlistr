@@ -46,7 +46,7 @@ struct ShootPreviousSongIntent: LiveActivityIntent {
 
 private let accent = Color(red: 0.96, green: 0.82, blue: 0.26)
 private let ink = Color(red: 0.07, green: 0.07, blue: 0.07)
-private let pill = Color(red: 0.22, green: 0.22, blue: 0.23)   // solid, so the wallpaper never shows through the buttons
+private let pill = ink   // same as the card background, so the buttons read as plain text
 
 private func rgb(_ hex: String) -> (Double, Double, Double)? {
     let h = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
