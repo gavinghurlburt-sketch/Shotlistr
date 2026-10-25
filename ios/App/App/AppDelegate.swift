@@ -242,6 +242,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     private var countClicks: [(t: Double, accent: Bool)] = []
     private var tClick = false, tGame = false, tDown = false, tBpm = 0.0, tOffset = -1e9
     private var nextK = 0
+    private var lastClickT = -1e9          // song time of the latest click already queued
     private var pump: DispatchSourceTimer?
     private var posTimer: DispatchSourceTimer?
     private var bufCache: [String: AVAudioPCMBuffer] = [:]
@@ -393,24 +394,37 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     private func resetClicks() {
         clicker.stop()
         clicker.play()
+        lastClickT = -1e9
         let now = nowHost()
         for c in countClicks where c.t > now + 0.005 { clickAt(c.t, c.accent, 1) }
         guard (tClick || tGame), tBpm > 0, tOffset > -1e8 else { pump?.cancel(); pump = nil; return }
         let beat: Double = 60.0 / tBpm
         let startT: Double = max(songNow() + 0.02, fromT)
         nextK = Int(ceil((startT - tOffset) / beat - 1e-6))
-        if pump == nil {
-            let t = DispatchSource.makeTimerSource(queue: q)
-            t.schedule(deadline: .now(), repeating: 0.25)
-            t.setEventHandler { [weak self] in self?.pumpClicks() }
-            t.resume(); pump = t
-        }
+        ensurePump()
+        pumpClicks()
+    }
+    private func ensurePump() {
+        if pump != nil { return }
+        let t = DispatchSource.makeTimerSource(queue: q)
+        t.schedule(deadline: .now(), repeating: 0.25)
+        t.setEventHandler { [weak self] in self?.pumpClicks() }
+        t.resume()
+        pump = t
+    }
+    /// A tempo or nudge change while playing: clicks already queued play exactly as they were (no cut-out); the new grid takes over from the next beat.
+    private func retargetClicks() {
+        guard (tClick || tGame), tBpm > 0, tOffset > -1e8 else { return }
+        let beat: Double = 60.0 / tBpm
+        let after: Double = max(lastClickT + beat * 0.5, max(songNow() + 0.02, fromT))
+        nextK = Int(ceil((after - tOffset) / beat - 1e-6))
+        ensurePump()
         pumpClicks()
     }
     private func pumpClicks() {
         guard playing, (tClick || tGame), tBpm > 0, tOffset > -1e8 else { return }
         let beat: Double = 60.0 / tBpm
-        let ahead: Double = tGame ? 0.7 : 2.5
+        let ahead: Double = tGame ? 0.5 : 2.5
         let horizon: Double = nowHost() + ahead
         while true {
             let songT: Double = tOffset + Double(nextK) * beat
@@ -419,6 +433,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
             if songT >= fromT - 1e-6 && songT >= 0 {
                 let down: Bool = ((nextK % 4) + 4) % 4 == 0
                 if tGame { clickAt(when, tDown && down, 0.9) } else { clickAt(when, down, 0.55) }
+                lastClickT = songT
             }
             nextK += 1
         }
@@ -435,7 +450,7 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func tempo(_ call: CAPPluginCall) {
         q.async {
             self.applyTempo(call)
-            if self.playing { self.resetClicks() }
+            if self.playing { self.retargetClicks() }
             call.resolve()
         }
     }
