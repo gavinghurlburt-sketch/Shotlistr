@@ -104,6 +104,7 @@ public class ShootActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
     private var activity: Activity<ShootActivityAttributes>?
     private var sessionReady = false
+    private var nowTimer: Timer?
 
     override public func load() {
         NotificationCenter.default.addObserver(forName: ShootBridge.note, object: nil, queue: .main) { [weak self] n in
@@ -116,6 +117,14 @@ public class ShootActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])  // mixWithOthers keeps it out of the system Now Playing
             try? AVAudioSession.sharedInstance().setActive(true)
             sessionReady = true
+        }
+        if nowTimer == nil {   // the web page's audio also posts a generic lock-screen player; keep clearing it so only the creatrr card shows
+            nowTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { _ in
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+                let c = MPRemoteCommandCenter.shared()
+                let cmds: [MPRemoteCommand] = [c.playCommand, c.pauseCommand, c.stopCommand, c.togglePlayPauseCommand, c.nextTrackCommand, c.previousTrackCommand, c.skipForwardCommand, c.skipBackwardCommand, c.seekForwardCommand, c.seekBackwardCommand, c.changePlaybackPositionCommand]
+                for m in cmds { m.isEnabled = false }
+            }
         }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { call.resolve(["enabled": false]); return }
         let state = ShootActivityAttributes.ContentState(
@@ -139,6 +148,7 @@ public class ShootActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             for a in Activity<ShootActivityAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) }
             activity = nil
+            nowTimer?.invalidate(); nowTimer = nil
             call.resolve()
         }
     }

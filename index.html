@@ -1426,8 +1426,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <div class="modal-actions"><span></span><button id="settingsDone" class="btn primary">Done</button></div>
     </div>
   </div>
-  <div id="tempoModal" class="modal hidden">
-    <div class="modal-inner">
+  <div id="tempoModal" class="modal sheet hidden">
+    <div class="modal-inner sheet-frost">
+      <div class="grab" aria-hidden="true"></div>
       <h3>Tap the tempo</h3>
       <p class="muted small" id="tapHint" style="margin:0 0 6px"></p>
       <canvas id="tempoWave" class="tempo-wave hidden" aria-label="Drag to choose where the song plays from"></canvas>
@@ -1441,7 +1442,6 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
         <select id="countInBars" class="field" aria-label="Count-in length"><option value="1">1 bar</option><option value="2">2 bars</option></select>
       </div>
       </details>
-      <div class="modal-actions"><span></span><button id="tempoDone" class="btn primary">Done</button></div>
     </div>
   </div>
 
@@ -3786,7 +3786,7 @@ function tapReadout() {
   $("tapBtn").classList.toggle("locked", !!tap.locked && !tap.downbeat);
   $("tapDown").classList.toggle("ready", !!tap.locked && !tap.downbeat);
   $("tapHint").textContent = !currentTrackUrl ? "Upload a track first."
-    : tap.downbeat ? "Synced! The higher click is the 1, where every count starts. Tap Re-sync to move it, or press Done."
+    : tap.downbeat ? "Synced! The higher click is the 1, where every count starts. Tap Re-sync to move it, or swipe down to finish."
     : tap.locked ? "Locked in! Now sync up. Tap Sync on the first beat of any section, like a choreographer counting ‘5, 6, 7, 8’."
     : !n ? "Drag the waveform to start anywhere, then tap along with the beat."
     : n < 4 ? "Nice, keep tapping with every beat."
@@ -3939,8 +3939,7 @@ $("tempoModal").addEventListener("input", () => requestAnimationFrame(() => { pa
 $("tempoModal").addEventListener("change", () => requestAnimationFrame(() => { paintTapUI(); drawTempoWave(); }));
 window.addEventListener("resize", () => drawTempoWave());
 $("tempoManualBtn").addEventListener("click", openTapGame);
-$("tempoDone").addEventListener("click", tapClose);
-$("tempoModal").addEventListener("click", e => { if (e.target === $("tempoModal")) tapClose(); });
+
 $("clickToggle").addEventListener("click", () => {
   const tp = curTempo(); if (!project) return;
   tp.click = !tp.click; scheduleSave(); syncTempoInputs();
@@ -6852,6 +6851,7 @@ function makeSheet(root, box, onClose, scrim) {
 }
 var tplSheet = makeSheet($("tplModal"), $("tplModal").querySelector(".modal-inner"), () => closeTplModal());
 var notesSheet = makeSheet($("notesModal"), $("notesInner"), () => $("notesModal").classList.add("hidden"));
+var tempoSheet = makeSheet($("tempoModal"), $("tempoModal").querySelector(".modal-inner"), () => tapClose());
 var songSheet = makeSheet($("songPage"), $("songPage"), () => closeSongPage(), $("songScrim"));
 /* notification preferences + shoot reminders (server sends them, so they arrive even when the app is closed) */
 var notifPrefs = (function () { let o = {}; try { o = JSON.parse(localStorage.getItem("creatrr_notif_prefs") || "{}"); } catch (e) {} return { finished: o.finished !== false, shootday: o.shootday !== false, calltime: o.calltime !== false }; })();

@@ -32,6 +32,7 @@ async function verifyCloud() {
   paintCloud();
   return cloudCheck;
 }
+var warnSince = 0;
 function behindCount() { return cloudCheck ? cloudCheck.projects.length + cloudCheck.tracks : 0; }
 
 /* ---- queue of pending pushes (survives restarts) ---- */
@@ -197,7 +198,10 @@ function paintCloud() {
   const btn = $("accountBtn"); if (!btn) return;
   btn.textContent = cloudUser ? String(cloudUser.email || "A").trim().charAt(0).toUpperCase() : "Sign in";
   btn.classList.toggle("signed", !!cloudUser);
-  btn.classList.toggle("warn", !cloudUser ? false : (qLoad().length > 0 || behindCount() > 0));
+  // only flag a real problem: changes that are still unsynced after a minute and a half (not every normal save/refresh)
+  const trouble = !!cloudUser && (qLoad().length > 0 || behindCount() > 0);
+  if (!trouble) warnSince = 0; else if (!warnSince) { warnSince = Date.now(); setTimeout(paintCloud, 95000); }
+  btn.classList.toggle("warn", trouble && Date.now() - warnSince > 90000);
   btn.title = cloudUser ? (cloudUser.email || "Account") : "Sign in";
   const pending = qLoad().length;
   const st = $("cloudStatus");
