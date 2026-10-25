@@ -4079,18 +4079,20 @@ $("tapPlay").addEventListener("click", () => {
 });
 /* drag along the waveform to choose where the song plays from; it starts when you let go */
 (function () {
-  const wv = $("tempoWave"); let on = false;
+  const wv = $("tempoWave"); let on = false, wasPlaying = false;
   const posAt = e => { const r = wv.getBoundingClientRect(), dur = trackDuration() || 0; return Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width))) * dur; };
   wv.addEventListener("pointerdown", e => {
     if (!currentTrackUrl) return;
     e.preventDefault(); on = true; try { wv.setPointerCapture(e.pointerId); } catch (x) {}
-    if (isPlaying()) { playToken++; stopCue(false); }
+    wasPlaying = isPlaying();
+    if (wasPlaying) { playToken++; stopCue(false); }
     const t = posAt(e); playStartPos = t; pausePos = t; drawTempoWave(); updateTimecodes();
   });
   wv.addEventListener("pointermove", e => { if (!on) return; const t = posAt(e); playStartPos = t; pausePos = t; drawTempoWave(); });
   const up = e => {
     if (!on) return; on = false;
     const t = posAt(e); tap.start = t; tap.taps = []; tap.base = tap.downbeat ? tap.base : null;
+    if (!wasPlaying) { playStartPos = t; pausePos = t; updateTimecodes(); paintTapUI(); drawTempoWave(); return; }   // stopped: just choose the spot, the first tap starts the song from here
     startGame(t); setTimeout(() => { gameClickReset(); paintTapUI(); drawTempoWave(); }, 250);
   };
   wv.addEventListener("pointerup", up);
