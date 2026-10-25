@@ -301,8 +301,9 @@ main { padding: 16px; max-width: 1600px; margin: 0 auto; }
 
 /* ---------- vision board ---------- */
 .vision-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
-.vb-item { padding: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; aspect-ratio: 4 / 3; background-color: var(--surface-2); }
-.vb-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vb-item { padding: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background-color: var(--surface-2); align-self: start; }
+.vb-item img { width: 100%; height: auto; object-fit: contain; display: block; }
+.vision-grid { align-items: start; }
 .notes-area { width: 100%; min-height: 96px; }
 
 /* ---------- section tables ---------- */
@@ -381,8 +382,8 @@ tr.sortable-ghost, .board-card.sortable-ghost { opacity: .35; }
 .ts-cell { display: flex; align-items: center; gap: 2px; }
 .ts-cell input { min-width: 0; }
 .ref-cell { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; }
-.ref-thumb-wrap { position: relative; width: 32px; height: 32px; }
-.ref-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border-strong); cursor: pointer; display: block; }
+.ref-thumb-wrap { position: relative; height: 32px; }
+.ref-thumb { height: 32px; width: auto; max-width: 64px; object-fit: contain; border-radius: 4px; border: 1px solid var(--border-strong); cursor: pointer; display: block; }
 .ref-thumb-remove {
   position: absolute; top: -5px; right: -5px;
   width: 15px; height: 15px; padding: 0;
@@ -532,7 +533,7 @@ table.sched tr.done-row td { background-color: var(--done); }
 .cur-times strong { font-size: 16px; }
 .cur-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 .cur-refs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.cur-refs img { width: 64px; height: 48px; object-fit: cover; border-radius: 5px; border: 1px solid var(--border); cursor: pointer; }
+.cur-refs img { height: 64px; width: auto; max-width: 130px; object-fit: contain; border-radius: 5px; border: 1px solid var(--border); cursor: pointer; }
 .takes { border-top: 1px solid var(--border); padding-top: 12px; }
 .takes-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .takes-head h3 { margin: 0; font-size: 14px; }
@@ -978,8 +979,8 @@ table.sched th { background-color: transparent; color: var(--muted); font-weight
 /* v2 fixes */
 .chip-full { background-color: var(--full); color: #0d1b3a; }
 .chip-cut { background-color: var(--cut); color: #2a1a00; }
-.section, .cut-card { box-shadow: none; background: linear-gradient(var(--sec, transparent), var(--sec, transparent)) 0 50% / 4px 56% no-repeat, var(--surface); }
-.part-row, .board-card { box-shadow: none; background: linear-gradient(var(--sec, transparent), var(--sec, transparent)) 0 50% / 3px 56% no-repeat, var(--surface-2); }
+.section, .cut-card { box-shadow: none; background: linear-gradient(var(--sec, transparent), var(--sec, transparent)) 0 0 / 6px 100% no-repeat, var(--surface); }
+.part-row, .board-card { box-shadow: none; background: linear-gradient(var(--sec, transparent), var(--sec, transparent)) 0 0 / 5px 100% no-repeat, var(--surface-2); }
 .board-col { box-shadow: none; }
 @media (max-width: 480px) { #saveStatus { display: none; } }
 table button, table .btn { min-height: 0; }
@@ -1065,7 +1066,7 @@ details.more > :not(summary) { margin-top: 8px; }
 .part-row { cursor: pointer; }
 .part-row .part-name { cursor: pointer; pointer-events: none; }
 .part-row.sel .part-name { cursor: text; pointer-events: auto; }
-.part-row.sel { background: linear-gradient(var(--sec), var(--sec)) 0 50% / 3px 56% no-repeat, color-mix(in srgb, var(--sec) 16%, var(--surface-2)); outline: 2px solid var(--sec); outline-offset: -2px; }
+.part-row.sel { background: linear-gradient(var(--sec), var(--sec)) 0 0 / 5px 100% no-repeat, color-mix(in srgb, var(--sec) 16%, var(--surface-2)); outline: 2px solid var(--sec); outline-offset: -2px; }
 #sectionModal .preset-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .part-row .pdot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
 .part-row .part-more { display: none; gap: 8px; width: 100%; flex-wrap: wrap; }
@@ -1155,8 +1156,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 /* banner: photo button fades in on tap */
 .banner { cursor: pointer; }
 .band-refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-bottom: 8px; }
-.band-ref { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--surface-2); }
-.band-ref img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.band-ref { position: relative; border-radius: 12px; overflow: hidden; background: var(--surface-2); align-self: start; }
+.band-ref img { width: 100%; height: auto; object-fit: contain; display: block; }
+.band-refs { align-items: start; }
 .band-ref button:not(.add) { position: absolute; top: 4px; right: 4px; width: 24px; min-width: 24px; height: 24px; min-height: 24px; box-sizing: border-box; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 16px; line-height: 1; }
 .band-ref.add { border: 1px dashed var(--border); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 700; }
 #bandSyncPill { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); z-index: 40; display: none; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--surface-2, #eee); color: var(--muted, #666); box-shadow: 0 2px 10px rgba(0,0,0,.15); pointer-events: none; }
@@ -1318,6 +1320,21 @@ body.band-mode .banner { height: auto; aspect-ratio: 3 / 2; max-height: 360px; }
 .note-row span { font-size: 13px; color: var(--muted); }
 .note-row .note-go { margin-top: 4px; color: var(--accent, inherit); font-weight: 700; }
 body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #settingsBtn, body.band-mode #docTitleInput, body.band-mode #saveStatus, body.band-mode #artistShoots, body.band-mode .song-opts { display: none !important; }
+</style>
+<style id="sheetcss">
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheetFade { from { opacity: 0; } to { opacity: 1; } }
+.sheet-frost { background-color: var(--surface); background-color: color-mix(in srgb, var(--surface) 58%, transparent); -webkit-backdrop-filter: blur(30px) saturate(1.7); backdrop-filter: blur(30px) saturate(1.7); border-top: 1px solid rgba(255,255,255,.14); box-shadow: 0 -10px 40px rgba(0,0,0,.25); }
+.grab { box-sizing: content-box; width: 40px; height: 5px; padding: 12px 60px; background-clip: content-box; border-radius: 3px; background-color: var(--muted); margin: -6px auto 2px; }
+.modal.sheet { align-items: flex-end; padding: 0; background: rgba(0,0,0,.35); -webkit-backdrop-filter: none; backdrop-filter: none; touch-action: none; }
+.modal.sheet:not(.hidden) { animation: sheetFade .25s ease; }
+.modal.sheet:not(.hidden) .modal-inner { animation: sheetUp .42s cubic-bezier(.2,.9,.25,1); }
+.modal.sheet .modal-inner { width: 100%; max-width: 560px; max-height: 92vh; border-radius: 28px 28px 0 0; padding: 10px 24px max(28px, env(safe-area-inset-bottom)); overscroll-behavior: contain; touch-action: pan-y; will-change: transform; }
+#songScrim { position: fixed; inset: 0; z-index: 170; background: rgba(0,0,0,.35); touch-action: none; animation: sheetFade .25s ease; }
+#songPage { position: fixed; left: 0; right: 0; bottom: 0; top: calc(env(safe-area-inset-top) + 44px); z-index: 175; max-width: 760px; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border-radius: 28px 28px 0 0; padding: 10px 20px max(28px, env(safe-area-inset-bottom)); will-change: transform; }
+#songPage:not(.hidden) { animation: sheetUp .42s cubic-bezier(.2,.9,.25,1); }
+#songPage.hidden, #songScrim.hidden { display: none; }
+#songDoneBtn { display: none; }
 </style>
 </head>
 <body>
@@ -1589,7 +1606,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <div id="songRows" class="song-rows"></div>
       <div id="bandBox"></div>
     </div>
-    <div id="songPage" class="hidden">
+    <div id="songScrim" class="hidden"></div>
+    <div id="songPage" class="hidden sheet-frost">
+      <div class="grab" id="songGrab" aria-hidden="true"></div>
       <div class="song-head">
         <input type="text" id="songNameInput" class="song-name-input" aria-label="Song name" placeholder="Song name" autocapitalize="words">
         <button type="button" id="songDoneBtn" class="btn primary" data-c="song-done">Done</button>
@@ -1720,8 +1739,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
     <div class="modal-actions"><span></span><button type="button" id="closeNewBtn" class="btn">Cancel</button><button type="button" id="newCreateBtn" class="btn primary hidden">Create</button></div>
   </div>
 </div>
-<div id="tplModal" class="modal hidden">
-  <div class="modal-inner wide">
+<div id="tplModal" class="modal sheet hidden">
+  <div class="modal-inner sheet-frost wide">
+    <div class="grab" aria-hidden="true"></div>
     <div class="tpl-title"><h3>Shot template</h3><button type="button" id="tplHelp" aria-label="What is a shot template?" aria-expanded="false">?</button></div>
     <div class="tpl-intro"><b>Your go-to shots, for every section.</b> A shot template is a checklist of the shots you always want to get. Every shot below is added to every song section you pick, so you never forget coverage. Standard Shoot is ready to use. Edit it, or make your own and it's saved for next time.</div>
     <div class="tpl-label">Your templates</div>
@@ -1735,7 +1755,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <button type="button" id="tplApply" class="btn small">Add missing shots to every section</button>
       <span id="tplStatus" class="muted small"></span>
     </div>
-    <div class="modal-actions"><span class="tpl-links"><button type="button" id="tplDup" class="tpl-link">Duplicate</button><button type="button" id="tplDelete" class="tpl-link danger-text">Delete template</button></span><button type="button" id="tplDone" class="btn primary">Done</button></div>
+    <div class="modal-actions"><span class="tpl-links"><button type="button" id="tplDup" class="tpl-link">Duplicate</button><button type="button" id="tplDelete" class="tpl-link danger-text">Delete template</button></span><span></span></div>
   </div>
 </div>
 <div id="detailsModal" class="modal hidden">
@@ -4871,7 +4891,7 @@ function openSongPage(id) {
 }
 function closeSongPage() {
   if (isPlaying()) togglePlay();
-  songOpen = false; renderCurrent(); window.scrollTo(0, 0);
+  songOpen = false; renderCurrent();
 }
 $("songNameInput").addEventListener("input", e => { const sg = activeSong(); if (sg) { sg.name = e.target.value; scheduleSave(); } });
 $("songNameInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
@@ -5019,11 +5039,13 @@ function renderDraftContent() {
   renderArtistShoots();
   const sg = activeSong();
   if (songOpen && !sg) songOpen = false;
-  $("songList").classList.toggle("hidden", songOpen);
+  $("songList").classList.remove("hidden");
   $("songPage").classList.toggle("hidden", !songOpen);
+  $("songScrim").classList.toggle("hidden", !songOpen);
   $("draftIntro").classList.toggle("hidden", songOpen || project.type !== "artist");
   renderBanner();
-  if (!songOpen) { renderSongRows(); return; }
+  renderSongRows();
+  if (!songOpen) return;
   if (document.activeElement !== $("songNameInput")) $("songNameInput").value = sg.name;
   const slot = document.querySelector("#draftCView .track-slot");
   if ($("trackPanel").parentElement !== slot) slot.appendChild($("trackPanel"));
@@ -5514,8 +5536,7 @@ function closeTplModal() {
   $("tplModal").classList.add("hidden");
   renderPlanContent();
 }
-$("tplDone").addEventListener("click", closeTplModal);
-$("tplModal").addEventListener("click", e => { if (e.target === $("tplModal")) closeTplModal(); });
+
 document.querySelectorAll("#planCView [data-csub]").forEach(b => b.addEventListener("click", () => { cPlanSub = b.dataset.csub; renderPlanContent(); }));
 function renderContentBoard() {
   const wrap = $("cBoard");
@@ -6173,11 +6194,11 @@ var TOUR = (function () {
     /* 3 */ { ctx: "artist", target: () => demo ? q('#songRows [data-song-open="' + demo.s2 + '"]') : null, title: "Open Practice Song 2", body: "This is your song list. Practice Song 1 is already set up with its tempo and sections. Song 2 is blank. Tap it to set it up yourself.", done: () => demo && songOpen && activeSongId === demo.s2 },
     /* 4 */ { ctx: "artist", song: "s2", target: () => $("tempoManualBtn"), title: "Set the tempo and downbeat", body: "Tap Set tempo and tap along with the beat. Once it locks in, tap Sync on the first beat of any section, like a choreographer counting ‘5, 6, 7, 8’.", done: () => { const t = curTempo(); return !!(demo && activeSongId === demo.s2 && t.bpm && t.offset != null); } },
     /* 5 */ { ctx: "artist", song: "s2", align: "top", target: () => [$("draftPlayBtn"), $("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to the start of any section, then tap + Add section. It snaps to the beat automatically. Hit play to check that your placement sounds right.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
-    /* 5b */ { ctx: "artist", song: "s2", target: () => $("songDoneBtn"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Tap Done to go back to your song list.", done: () => !songOpen },
+    /* 5b */ { ctx: "artist", song: "s2", target: () => $("songGrab"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Swipe down (or tap outside) to go back to your song list.", done: () => !songOpen },
     /* 6 */ { ctx: "artist", target: () => q("[data-artist-new-shoot]"), title: "Now create a project", body: "Tap + New shoot. Choose your shoot date, then tap Create.", modalId: "newModal", modalHint: "Choose the shoot date, then tap Create.", done: () => inContent(), any: true },
     /* 7 */ { ctx: "content", ws: "plan", target: () => { const b = demo && q('[data-sp-song="' + demo.s2 + '"]'); return b ? b.closest(".sp-card") : null; }, title: "Pick your songs", body: "Practice Song 1 is already ticked. Tick Practice Song 2 too, so your setlist has two songs. You can tick a whole song or just the sections you want.", done: () => !!(demo && project.sections.some(s => s.songId === demo.s2)) },
     /* 8 */ { ctx: "content", ws: "plan", target: () => $("tplCard"), title: "The shot template", body: "Most content shoots are a formula: the same kinds of shots for every section, so you always have coverage to edit from. A template is your list of go-to shots. Tap it to take a look.", done: () => { const m = $("tplModal"); return !!m && !m.classList.contains("hidden"); } },
-    /* 9 */ { ctx: "content", ws: "plan", target: null, title: "Your go-to shots", body: "Every shot in your template is added to every section. Edit them, or make your own.", modalId: "tplModal", modalHint: "Have a look, then tap Done. Tap the ? if you want it explained.", done: () => { const m = $("tplModal"); return !m || m.classList.contains("hidden"); } },
+    /* 9 */ { ctx: "content", ws: "plan", target: null, title: "Your go-to shots", body: "Every shot in your template is added to every section. Edit them, or make your own.", modalId: "tplModal", modalHint: "Have a look, then swipe down to close. Tap the ? if you want it explained.", done: () => { const m = $("tplModal"); return !m || m.classList.contains("hidden"); } },
     /* 9 */ { ctx: "content", ws: "plan", target: () => ["songRefs", "songLinks", "songNotes"].map(panelOf).filter(Boolean), title: "References, links and notes", body: "Add reference images, paste Instagram, TikTok or YouTube links, and jot down notes about energy and wardrobe.", buttons: "next" },
     /* 10 */ { ctx: "content", ws: "plan", target: () => $("wsTabs"), title: "Swipe between tabs", body: "Tap a tab, or swipe left and right, to move between Plan, Shoot and Cut. Tap Shoot, or swipe left, to go there.", done: () => inContent() && currentWs === "shoot", any: true },
     /* 11 */ { ctx: "content", ws: "shoot", target: () => [$("shootDateLine"), $("cShootStatus")].filter(e => e && onScreen(e)), title: "Your shoot day card", body: "The date card shows when you're shooting. The banner below shows the time, shots done, and takes logged so far.", buttons: "next" },
@@ -6203,7 +6224,7 @@ var TOUR = (function () {
     { ctx: "artist", song: true, target: null, title: "Sync the 1", body: "", modalId: "tempoModal", modalHint: "<b>Step 2: tap Sync on the 1.</b> Tempo found! Now tap Sync right on the first beat of a measure, the ‘1’ of a ‘1, 2, 3, 4’ count (like the ‘5’ in ‘5, 6, 7, 8’). Pick the start of any section.", done: () => { const t = curTempo(); return (t.bpm && t.offset != null) || (() => { const m = $("tempoModal"); return !!m && m.classList.contains("hidden"); })(); } },
     { ctx: "artist", song: true, target: null, title: "Synced", body: "", modalId: "tempoModal", modalHint: "<b>Synced!</b> The higher click is the 1. If it sounds off, tap Re-sync on a different beat. Otherwise press Done.", done: () => { const m = $("tempoModal"); return !!m && m.classList.contains("hidden"); } },
     { ctx: "artist", song: true, align: "top", target: () => [$("draftPlayBtn"), $("waveformCanvas"), $("addSectionBtn")], title: "Mark a section", body: "Drag along the timeline to the start of any section, then tap + Add section. It snaps to the beat automatically. Hit play to check that your placement sounds right.", modalId: "sectionModal", modalHint: "Name it, pick a color, then tap Add section.", done: () => project.sections.some(x => x.songId === activeSongId) },
-    { ctx: "artist", song: true, target: () => $("songDoneBtn"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Tap Done to go back to your song list.", done: () => !songOpen },
+    { ctx: "artist", song: true, target: () => $("songGrab"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Swipe down (or tap outside) to go back to your song list.", done: () => !songOpen },
     { ctx: "artist", target: () => $("bandSendBtn"), title: "That's it", body: "Add more songs if you like, plus photos, links or notes. Everything syncs automatically, so when you're done, tap Finish & notify to let your photographer know. You can keep editing until the link expires.", buttons: "bandend" }
   ];
   const STEPS = BAND_CODE ? BAND_STEPS : APP_STEPS;
@@ -6648,6 +6669,7 @@ async function inboxDrainNative() {
   let n = 0; const placed = [];
   try {   // let the app move anything the share pop-up left in the shared folder
     const r = await C.Capacitor.registerPlugin("ShareBridge").drain();
+    if (r && (r.log || r.found)) showNotice("Share check: " + (r.log ? r.log + " · " : "") + "found " + (r.found || 0) + " file(s) waiting");
     if (r && r.groupOk === false && !inboxDrainNative.warned) { inboxDrainNative.warned = true; showNotice("Sharing into creatrr isn't linked on this phone yet (App Groups)."); }
   } catch (e) {}
   try {
@@ -6687,7 +6709,7 @@ async function refreshAll() {
   document.body.appendChild(bar);
   const txt = bar.querySelector("span");
   let y0 = null, pull = 0, busy = false;
-  const open = () => document.querySelector(".modal:not(.hidden)");
+  const open = () => document.querySelector(".modal:not(.hidden), #songPage:not(.hidden)");
   const set = (px, label, spin) => { bar.style.transform = `translate(-50%, ${px - 56}px)`; bar.style.opacity = px > 6 ? 1 : 0; bar.classList.toggle("spin", !!spin); txt.textContent = label; };
   document.addEventListener("touchstart", e => { y0 = (!busy && e.touches.length === 1 && window.scrollY <= 0 && !open()) ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
   document.addEventListener("touchmove", e => {
@@ -6786,6 +6808,35 @@ document.addEventListener("click", async e => {
   try { if (project) await goToProjects(); await openProject(n.id); await markNoteSeen(n); openShare(); } catch (er) {}
 });
 document.addEventListener("change", e => { if (e.target.id === "inboxArtist") inboxPick = e.target.value; });
+
+/* slide-up sheets: swipe down (or tap outside) to close, light rubber-band at the ends, page behind stays put */
+function makeSheet(root, box, onClose, scrim) {
+  let lastY = 0, offset = 0, t0 = 0, active = false;
+  const reset = () => { box.style.transition = ""; box.style.transform = ""; };
+  function close() { box.style.transition = "transform .26s cubic-bezier(.4,0,1,1)"; box.style.transform = "translateY(100%)"; setTimeout(() => { reset(); onClose(); }, 250); }
+  (scrim || root).addEventListener("click", e => { if (e.target === (scrim || root)) close(); });
+  if (scrim) scrim.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+  const skip = t => !!(t && t.closest && t.closest("canvas,input,textarea,select,[data-nodrag]"));
+  root.addEventListener("touchstart", e => { if (e.touches.length !== 1 || skip(e.target)) { active = false; return; } active = true; lastY = e.touches[0].clientY; offset = 0; t0 = Date.now(); box.style.transition = "none"; }, { passive: true });
+  root.addEventListener("touchmove", e => {
+    if (!active) return;
+    const y = e.touches[0].clientY, d = y - lastY; lastY = y;
+    if (!box.contains(e.target)) { e.preventDefault(); return; }
+    const atTop = box.scrollTop <= 0, atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 1;
+    if (offset > 0 || (d > 0 && atTop)) { offset = Math.max(0, offset + d); box.style.transform = "translateY(" + offset + "px)"; e.preventDefault(); }
+    else if (offset < 0 || (d < 0 && atBottom)) { offset = Math.max(-46, Math.min(0, offset + d * 0.35)); box.style.transform = "translateY(" + offset + "px)"; e.preventDefault(); }
+  }, { passive: false });
+  const end = () => {
+    if (!active) return; active = false;
+    if (offset > 110 || (offset > 40 && Date.now() - t0 < 260)) { close(); return; }
+    box.style.transition = "transform .45s cubic-bezier(.2,.9,.25,1)"; box.style.transform = "translateY(0)"; offset = 0;
+    setTimeout(reset, 460);
+  };
+  root.addEventListener("touchend", end); root.addEventListener("touchcancel", end);
+  return { close };
+}
+var tplSheet = makeSheet($("tplModal"), $("tplModal").querySelector(".modal-inner"), () => closeTplModal());
+var songSheet = makeSheet($("songPage"), $("songPage"), () => closeSongPage(), $("songScrim"));
 /* notification preferences + shoot reminders (server sends them, so they arrive even when the app is closed) */
 var notifPrefs = (function () { let o = {}; try { o = JSON.parse(localStorage.getItem("creatrr_notif_prefs") || "{}"); } catch (e) {} return { finished: o.finished !== false, shootday: o.shootday !== false, calltime: o.calltime !== false }; })();
 function paintNotifPrefs() { document.querySelectorAll("[data-notif]").forEach(el => { el.checked = !!notifPrefs[el.dataset.notif]; }); }

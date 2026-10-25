@@ -165,6 +165,8 @@ class ShareViewController: UIViewController {
                 saved += 1
             } catch {}
         }
+        let listed = ((try? FileManager.default.contentsOfDirectory(atPath: inbox.path)) ?? []).count
+        UserDefaults(suiteName: groupId)?.set("shared \(saved) of \(pending.count), shared folder now has \(listed)", forKey: "shareLog")
         if let a = chosen { UserDefaults(suiteName: groupId)?.set(a.id, forKey: "lastArtist") }
         try? FileManager.default.removeItem(at: staging)
         view.endEditing(true)

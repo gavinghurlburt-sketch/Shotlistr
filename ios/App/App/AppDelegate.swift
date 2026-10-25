@@ -161,6 +161,9 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         let from = group.appendingPathComponent("Inbox", isDirectory: true)
         let to = docs.appendingPathComponent("Inbox", isDirectory: true)
         let files = (try? fm.contentsOfDirectory(at: from, includingPropertiesForKeys: nil)) ?? []
+        let ud = UserDefaults(suiteName: "group.art.gavingeddes.producrr")
+        let log = ud?.string(forKey: "shareLog") ?? ""
+        if !log.isEmpty { ud?.removeObject(forKey: "shareLog") }
         if !files.isEmpty { try? fm.createDirectory(at: to, withIntermediateDirectories: true) }
         var moved = 0
         for f in files {
@@ -174,7 +177,8 @@ public class ShareBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             let n = f.lastPathComponent, s = safeName(n)
             if s != n, !fm.fileExists(atPath: to.appendingPathComponent(s).path) { try? fm.moveItem(at: f, to: to.appendingPathComponent(s)) }
         }
-        call.resolve(["groupOk": true, "moved": moved])
+        let waiting = ((try? fm.contentsOfDirectory(atPath: to.path)) ?? []).filter { !$0.hasSuffix(".meta.json") }.count
+        call.resolve(["groupOk": true, "moved": moved, "found": waiting, "log": log])
     }
     @objc func setArtists(_ call: CAPPluginCall) {
         UserDefaults(suiteName: "group.art.gavingeddes.producrr")?.set(call.getString("json") ?? "[]", forKey: "artists")
