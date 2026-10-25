@@ -1350,7 +1350,11 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #songPage .panel-head { margin-bottom: 12px; }
 #tempoModal .tempo-wave { background: none; border-radius: 0; }
 .part-row, .part-row.sel { background-image: none; }
-.part-row.sel { background-color: color-mix(in srgb, var(--sec) 16%, var(--surface-2)); }
+.part-row, .part-row.sel { background-color: color-mix(in srgb, var(--sec) 16%, var(--surface-2)); }   /* sections always wear their colour; the selected one adds an outline */
+.song-play { margin: 12px 0 0; font-size: 34px; }
+#draftPlayBtn.tap-big:not(.on) { background-color: color-mix(in srgb, #2fbf6c 26%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #2fbf6c 60%, transparent), 0 8px 24px rgba(0,0,0,.18); }
+#draftPlayBtn.tap-big.on { background-color: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 8px 24px rgba(0,0,0,.18); }
+#draftPlayBtn.tap-big:disabled { opacity: .45; }
 </style>
 </head>
 <body>
@@ -1470,10 +1474,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
           <input type="file" id="trackFileInput" accept="audio/*,.mp3,.m4a,.wav,.aac,.aiff,.caf,.flac,.ogg" hidden>
           <span id="trackName" class="track-name muted hidden">No track loaded</span>
           <audio id="player" preload="auto" class="hidden"></audio>
-          <button id="draftPlayBtn" class="playsq" aria-label="Play" disabled></button>
-          <span class="tc-display">0:00.0</span>
         </div>
         <canvas id="waveformCanvas" class="waveform hidden" aria-label="Waveform: drag to scrub"></canvas>
+        <button type="button" id="draftPlayBtn" class="btn primary tap-big song-play" aria-label="Play" disabled>▶</button>
         <div class="tempo-line">
           <span id="tempoStatus" class="tempo-status"></span>
           <button id="tempoManualBtn" class="btn small hidden">Set tempo</button>
@@ -3201,6 +3204,8 @@ function updateTransportUI() {
     const btn = $(id);
     btn.classList.toggle("on", isPlaying());
     btn.setAttribute("aria-label", isPlaying() ? "Stop" : "Play");
+    if (id === "draftPlayBtn") btn.textContent = isPlaying() ? "■" : "▶";
+    if (id === "draftPlayBtn") btn.classList.toggle("hidden", !currentTrackUrl);
     btn.title = isPlaying() ? "Stop and return to where playback started" : "Play from the playhead";
     btn.disabled = !currentTrackUrl;
   });
@@ -3630,6 +3635,26 @@ function drawPeaks(g, w, top, h, dur) {
   }
   if (dur && tp.songStart != null) { g.fillStyle = C.muted; g.fillRect(Math.round((tp.songStart / dur) * w), top, 1, h); }
 }
+/* give each section name a row so neighbours never overprint: the selected one stays on the bottom row, the rest drop to higher rows when they'd touch */
+function layoutMarkLabels(g, marks, w, dur, selId) {
+  const items = [];
+  marks.forEach(m => {
+    m._row = 0; if (!m.label || m.t > dur) return;
+    const sel = !!selId && m.id === selId;
+    g.font = sel ? "700 14px -apple-system, sans-serif" : "10px -apple-system, sans-serif";
+    const tw = g.measureText(m.label).width, x = (m.t / dur) * w;
+    const lx = sel ? Math.max(2, Math.min(w - tw - 2, x - tw / 2)) : Math.max(2, Math.min(w - tw - 2, x - tw / 2 + 1));
+    items.push({ m, lx, tw, sel });
+  });
+  items.sort((a, b) => (b.sel - a.sel) || (a.lx - b.lx));
+  const rowsUsed = [[], [], [], []]; let rows = 1;
+  items.forEach(it => {
+    let r = 0;
+    for (; r < 3; r++) { if (!rowsUsed[r].some(o => it.lx < o.lx + o.tw + 5 && it.lx + it.tw + 5 > o.lx)) break; }
+    rowsUsed[r].push(it); it.m._row = r; if (r + 1 > rows) rows = r + 1;
+  });
+  return { rows };
+}
 function drawWaveOn(canvas) {
   if (!canvas || canvas.classList.contains("hidden") || !canvas.offsetParent) return;
   const h = canvas.clientHeight || 88;
@@ -3640,16 +3665,18 @@ function drawWaveOn(canvas) {
     if (currentTrackUrl) g.fillText("Reading the waveform…", 10, h / 2);
     return;
   }
-  const top = isContent() ? 24 : 0;                // room above the waveform for section names
+  const selId = (canvas.id === "waveformCanvas" && isContent()) ? selPartId : null;
+  const marks = waveMarkers();
+  const lay = (isContent() && dur) ? layoutMarkLabels(g, marks, w, dur, selId) : null;   // names that would collide stack on extra rows instead of bunching
+  const top = isContent() ? 24 + ((lay ? lay.rows : 1) - 1) * 13 : 0;                    // room above the waveform for section names
   drawPeaks(g, w, top, h - top, dur);
   if (!dur) return;
   g.font = "10px -apple-system, sans-serif";
-  const selId = (canvas.id === "waveformCanvas" && isContent()) ? selPartId : null;
-  const marks = waveMarkers();
   marks.sort((a, b) => (a.id === selId) - (b.id === selId));      // selected one paints last, on top
   marks.forEach(m => {
     if (m.t > dur) return;
-    const x = (m.t / dur) * w, isSel = !!selId && m.id === selId;
+    const x = (m.t / dur) * w, isSel = !!selId && m.id === selId, lrow = m._row || 0;
+    const leader = (ly, a) => { if (lrow > 0) { g.globalAlpha = a; g.fillRect(Math.round(x), ly + 2, 1, top - 8 - ly); } };
     if (isSel) {
       g.globalAlpha = 1; g.fillStyle = m.color;
       g.fillRect(x - 1.5, top - 4, 3, h - top + 4);
@@ -3658,7 +3685,7 @@ function drawWaveOn(canvas) {
       if (m.label) {
         g.font = "700 14px -apple-system, sans-serif";
         const tw = g.measureText(m.label).width, lx = Math.max(2, Math.min(w - tw - 2, x - tw / 2));
-        g.fillStyle = m.color; g.fillText(m.label, lx, top - 11);
+        g.fillStyle = m.color; g.fillText(m.label, lx, top - 11 - lrow * 13); leader(top - 11 - lrow * 13, 0.5);
         g.font = "10px -apple-system, sans-serif";
       }
       return;
@@ -3667,7 +3694,7 @@ function drawWaveOn(canvas) {
     g.fillStyle = m.color;
     if (isContent()) { g.fillRect(x, top - 4, 2, h - top + 4); }
     g.beginPath(); g.moveTo(x - 4, top - 4); g.lineTo(x + 5, top - 4); g.lineTo(x + 0.5, top + 3); g.closePath(); g.fill();
-    if (m.label) { g.fillStyle = waveColors().text; const tw = g.measureText(m.label).width; g.fillText(m.label, Math.max(2, Math.min(w - tw - 2, x - tw / 2 + 1)), top - 9); }
+    if (m.label) { g.fillStyle = waveColors().text; const tw = g.measureText(m.label).width; g.fillText(m.label, Math.max(2, Math.min(w - tw - 2, x - tw / 2 + 1)), top - 9 - lrow * 13); g.fillStyle = m.color; leader(top - 9 - lrow * 13, selId ? 0.2 : 0.35); }
     g.globalAlpha = 1;
   });
   g.fillStyle = waveColors().head; g.fillRect(Math.round((transportTime() / dur) * w) - 1, top, 2, h - top);
