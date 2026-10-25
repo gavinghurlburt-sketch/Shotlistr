@@ -620,6 +620,9 @@ table.sched tr.done-row td { background-color: var(--done); }
 .song-row .sr-status { font-size: 14px; font-weight: 400; color: var(--accent); }
 .song-row .sr-status.todo { color: var(--muted); }
 .song-row::after { content: "\203A"; font-size: 22px; color: var(--muted); line-height: 1; }
+.suggest-link { background: none !important; border: 0 !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; padding: 6px 2px; min-height: 0; font: inherit; font-size: 15px; font-weight: 500; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.suggest-link:active { opacity: .6; }
+.suggest-link.hidden { display: none !important; }
 .song-row.add { color: var(--muted); font-weight: 500; font-size: 17px; }
 .song-row.add::after { content: ""; }
 .song-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
@@ -1630,7 +1633,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <div class="stack">
         <div class="track-slot"></div>
         <div class="panel" id="sectionsPanel">
-          <div class="panel-head"><h2>Song sections</h2><span class="spacer"></span><button type="button" id="addSectionBtn" class="btn small primary hidden" data-c="add-section" style="display:none !important">+ Add section</button><button type="button" id="suggestBtn" class="btn small hidden" data-c="suggest">Suggest sections</button></div>
+          <div class="panel-head"><h2>Song sections</h2><span class="spacer"></span><button type="button" id="addSectionBtn" class="btn small primary hidden" data-c="add-section" style="display:none !important">+ Add section</button><button type="button" id="suggestBtn" class="suggest-link hidden" data-c="suggest">Suggest sections</button></div>
           <div id="suggestBox"></div>
           <div class="move-row" style="display:none !important"><button type="button" id="moveL" class="btn small" aria-label="Nudge the selected section one measure earlier">‹ Nudge</button><button type="button" id="moveR" class="btn small" aria-label="Nudge the selected section one measure later">Nudge ›</button></div>
           <div id="partsList"></div>
