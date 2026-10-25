@@ -1142,6 +1142,10 @@ details.more > :not(summary) { margin-top: 8px; }
 .pc-del { position: absolute; top: 0; right: 0; bottom: 0; width: 128px; padding: 0 0 0 32px; min-height: 0; border-radius: 0; background-color: var(--danger); color: #fff; font-weight: 700; font-size: 15px; z-index: 0; }
 .pc-del:hover { background-color: var(--danger); }
 .pc-del { opacity: 0; }
+.pc-wrap.part-wrap { border-radius: 18px; padding: 3px; margin: -3px 0 -3px; }
+.pc-wrap .part-row { position: relative; z-index: 1; touch-action: pan-y; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+.pc-wrap .part-row.dragging { transition: none; }
+.part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; border-radius: 16px; }
 .pc-wrap.rv .pc-del { opacity: 1; }
 /* home: Projects / Artists */
 .projects-title.home-tabs { display: flex; align-items: baseline; gap: 20px; justify-content: space-between; }
@@ -3584,6 +3588,7 @@ function waveMarkers() {
   project.sections.forEach(sec => sec.rows.forEach(r => { const t = parseTC(r.timestamp); if (t != null) out.push({ t, color: sec.color, label: r.shotNum }); }));
   return out;
 }
+function hexA(c, a) { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(c)); return m ? `rgba(${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)},${a})` : c; }
 function drawWaveBase(canvas, h) {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth;
@@ -3675,10 +3680,11 @@ function drawWaveOn(canvas) {
     const ord = marks.filter(m => m.t <= dur).slice().sort((a, b) => a.t - b.t);
     ord.forEach((m, i) => {
       const end = i + 1 < ord.length ? ord[i + 1].t : dur;
-      g.globalAlpha = (selId && m.id === selId) ? 0.38 : 0.22; g.fillStyle = m.color;
-      g.fillRect((m.t / dur) * w, top, ((end - m.t) / dur) * w, h - top);
+      const x0 = (m.t / dur) * w, x1 = (end / dur) * w, a = (selId && m.id === selId) ? 0.5 : 0.32;
+      const gr = g.createLinearGradient(x0, 0, x1, 0);               // strongest at the marker, fading out to the right
+      gr.addColorStop(0, hexA(m.color, a)); gr.addColorStop(1, hexA(m.color, 0));
+      g.fillStyle = gr; g.fillRect(x0, top, x1 - x0, h - top);
     });
-    g.globalAlpha = 1;
   }
   drawPeaks(g, w, top, h - top, dur);
   if (!dur) return;
@@ -4731,17 +4737,18 @@ document.addEventListener("click", e => {
 /* swipe a project card left to reveal a red Delete, like Mail */
 var swipeMoved = false;
 const DEL_W = 96;
+function oc(c) { return c.classList.contains("part-row") ? "sw-open" : "open"; }
 function closeSwipedCards(except) {
-  document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open").forEach(c => { if (c !== except) { c.classList.remove("open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
+  document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open, .pc-wrap .part-row.sw-open").forEach(c => { if (c !== except) { c.classList.remove("open", "sw-open"); c.style.transform = ""; setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
 }
 function wireSwipeDelete(list) {
   let card = null, sx = 0, sy = 0, base = 0, dx = 0, live = false, id = null, t0 = 0;
   list.addEventListener("pointerdown", e => {
-    const c = e.target.closest(".project-card, .sr-card");
-    if (!c || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const c = e.target.closest(".project-card, .sr-card, .part-row");
+    if (!c || e.target.closest(".part-more") || (e.pointerType === "mouse" && e.button !== 0)) return;
     closeSwipedCards(c);
     card = c; sx = e.clientX; sy = e.clientY; id = e.pointerId; t0 = Date.now(); live = false; swipeMoved = false;
-    base = c.classList.contains("open") ? -DEL_W : 0; dx = base;
+    base = c.classList.contains(oc(c)) ? -DEL_W : 0; dx = base;
   });
   list.addEventListener("pointermove", e => {
     if (!card || e.pointerId !== id) return;
@@ -4764,8 +4771,8 @@ function wireSwipeDelete(list) {
     live = false;
     const v = Math.abs(dx - base) / Math.max(1, Date.now() - t0);
     const open = !cancelled && (dx < -DEL_W / 2 || (v > 0.5 && dx < base));
-    c.classList.toggle("open", open);
-    if (!open) setTimeout(() => { if (!c.classList.contains("open")) c.parentElement.classList.remove("rv"); }, 260);
+    c.classList.toggle(oc(c), open);
+    if (!open) setTimeout(() => { if (!c.classList.contains(oc(c))) c.parentElement.classList.remove("rv"); }, 260);
     c.style.transform = open ? `translate3d(${-DEL_W}px,0,0)` : "";
     if (open) { try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {} }
     setTimeout(() => { swipeMoved = false; }, 60);
@@ -4774,13 +4781,14 @@ function wireSwipeDelete(list) {
   list.addEventListener("pointercancel", () => end(true));
   list.addEventListener("click", e => {
     if (swipeMoved) { e.stopImmediatePropagation(); e.preventDefault(); return; }
-    const c = e.target.closest(".project-card, .sr-card");
-    if (c && c.classList.contains("open")) { e.stopImmediatePropagation(); e.preventDefault(); closeSwipedCards(); }
+    const c = e.target.closest(".project-card, .sr-card, .part-row");
+    if (c && c.classList.contains(oc(c))) { e.stopImmediatePropagation(); e.preventDefault(); closeSwipedCards(); }
   }, true);
 }
 wireSwipeDelete($("projectsList"));
 wireSwipeDelete($("artistsList"));
 wireSwipeDelete($("songRows"));
+wireSwipeDelete($("partsList"));
 $("projectsList").addEventListener("click", async e => {
   const o = e.target.closest("[data-open-id]");
   if (o) { openProject(o.dataset.openId); return; }
@@ -5334,15 +5342,14 @@ function renderPartsList() {
   const parts = songParts(sg.id);
   if (selPartId && !parts.some(x => x.id === selPartId)) selPartId = null;
   paintSectionHints();
-  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="part-row ${openPartId === pt.id ? "open" : ""}${selPartId === pt.id ? " sel" : ""}" data-section-id="${pt.id}" aria-selected="${selPartId === pt.id}" style="--sec:${pt.color}">
+  $("partsList").innerHTML = parts.length ? parts.map(pt => `<div class="pc-wrap part-wrap" data-section-id="${pt.id}"><div class="part-row ${openPartId === pt.id ? "open" : ""}${selPartId === pt.id ? " sel" : ""}" data-section-id="${pt.id}" aria-selected="${selPartId === pt.id}" style="--sec:${pt.color}">
       <button type="button" class="part-cue" data-c="part-cue" title="Play from here" aria-label="Play from here"${pt.time ? "" : " disabled"}>▶</button>
       <input type="text" class="field part-name" data-part-name value="${esc(pt.name)}" aria-label="Part name">
-      <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color and delete">⋯</button>
+      <button type="button" class="icon-btn" data-c="part-more" aria-label="More" title="Color">⋯</button>
       <div class="part-more">
         <div class="color-pick" role="group" aria-label="Section color">${PALETTE.map(c => `<button type="button" class="cp-dot${c.toLowerCase() === String(pt.color).toLowerCase() ? " on" : ""}" data-c="part-set-color" data-color="${c}" style="background-color:${c}" aria-label="Color ${c}"></button>`).join("")}<label class="cp-dot cp-custom${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : " on"}" style="${PALETTE.some(c => c.toLowerCase() === String(pt.color).toLowerCase()) ? "" : "background-color:" + pt.color}" title="Pick any color"><input type="color" class="part-color-input" value="${/^#[0-9a-f]{6}$/i.test(pt.color) ? pt.color : "#888888"}" aria-label="Custom color"></label></div>
-        <button type="button" class="btn small danger-text" data-c="part-delete">Delete section</button>
       </div>
-    </div>`).join("")
+    </div><button type="button" class="btn pc-del" data-c="part-delete">Delete</button></div>`).join("")
     : `<p class="muted small" style="margin:0 0 6px">No sections yet. ${audioBuffer ? "Tap Suggest sections, or add them yourself." : "Upload the track and they'll be suggested for you."}</p>`;
   $("partsList").insertAdjacentHTML("beforeend", `<button type="button" id="addSectionRow" class="song-row add" data-c="add-section" style="margin-top:8px;width:100%">+ Add section</button>`);
   paintSectionHints();
