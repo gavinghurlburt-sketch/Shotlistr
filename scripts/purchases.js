@@ -168,7 +168,7 @@ async function onCloudUser(u) {                                     // called by
   try {
     const api = rcApi();
     if (u) { const r = await api.logIn({ appUserID: u.id }); rcLoggedIn = true; handleCustomerInfo(r.customerInfo); }
-    else if (rcLoggedIn) { rcLoggedIn = false; const r = await api.logOut(); handleCustomerInfo(r.customerInfo); }
+    else if (rcLoggedIn) { rcLoggedIn = false; const r = await api.logOut(); handleCustomerInfo(r.customerInfo); if (!subs.tier) { try { const rr = await api.restorePurchases(); handleCustomerInfo(rr.customerInfo); } catch (e2) {} } }   // signing out must not lock the user out of a plan they paid for
   } catch (e) { console.error("purchases login", e); }
 }
 window.onCloudUser = onCloudUser;
