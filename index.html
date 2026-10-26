@@ -1399,6 +1399,7 @@ body.art-sheet .appbar-top > * { visibility: hidden; }
 /* swipe-to-delete: a frosted red button that sits on top and grows from a thin line as you swipe */
 .pc-wrap .pc-del, .pc-wrap .pc-del:hover { z-index: 2; top: 0; bottom: 0; right: 0; width: max(3px, calc(var(--rev, 0) * 1px - 10px)); min-width: 0; padding: 0; overflow: hidden; white-space: nowrap; border-radius: 20px; background: color-mix(in srgb, #ff453a 36%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #ff453a 70%, transparent); color: rgba(255,255,255,calc((var(--rev, 0) - 56) / 36)); transition: width .22s cubic-bezier(.2,.8,.2,1); }
 .pc-wrap:has(.dragging) .pc-del { transition: none; }
+.pc-wrap:not(.part-wrap):not(.sr-wrap) .pc-del { border-radius: 24px; }   /* same curve as the card wrapper so the right corners line up */
 .pc-wrap.part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; border-radius: 16px; }
 </style>
 </head>
