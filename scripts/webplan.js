@@ -7,7 +7,7 @@ function webGateEl() {
   let el = document.getElementById("webGate");
   if (el) return el;
   const st = document.createElement("style");
-  st.textContent = "#webGate{position:fixed;inset:0;z-index:100000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:28px;text-align:center}#webGate>div{max-width:360px}#webGate h2{font-size:26px;letter-spacing:-.02em;margin:0 0 8px}#webGate p{color:var(--muted);margin:0 0 18px}#webGate .btn{min-width:180px;justify-content:center;margin:4px}";
+  st.textContent = "#webGate{position:fixed;inset:0;z-index:100000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:28px;text-align:center}#webGate>div{max-width:360px}#webGate h2{font-size:26px;letter-spacing:-.02em;margin:0 0 8px}#webGate p{color:var(--muted);margin:0 0 18px}#webGate .btn{min-width:180px;justify-content:center;margin:4px}#accountModal{z-index:100001}";
   document.head.appendChild(st);
   el = document.createElement("div"); el.id = "webGate"; el.className = "hidden";
   document.body.appendChild(el);
