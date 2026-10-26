@@ -34,14 +34,14 @@ async function webCheck(u) {
   try {
     const { data } = await sb.auth.getSession(), tok = data.session && data.session.access_token;
     const r = await fetch(SB_URL + "/functions/v1/my-plan", { method: "POST", headers: { "Content-Type": "application/json", apikey: SB_KEY, Authorization: "Bearer " + tok }, body: "{}" });
-    if (!r.ok) throw new Error("plan check " + r.status);
+    if (!r.ok) { let why = ""; try { why = (await r.json()).error || ""; } catch (e) {} const er = new Error("plan check " + r.status + (why ? " " + why : "")); er.code = r.status + (why ? " · " + why : ""); throw er; }
     const j = await r.json();
     if (j.tier && TIERS[j.tier]) { try { localStorage.setItem(WEB_PLAN_KEY, JSON.stringify({ tier: j.tier, at: Date.now() })); } catch (e) {} setTier(j.tier); webGateOff(); return; }
     webGate("No active plan", "Plans are bought in the creatrr iPhone app. Subscribe there, then come back and open this page again.", '<button type="button" class="btn primary" data-wg="retry">Check again</button><button type="button" class="btn" data-wg="out">Sign out</button>');
   } catch (e) {
     let c = null; try { c = JSON.parse(localStorage.getItem(WEB_PLAN_KEY) || "null"); } catch (er) {}
     if (c && TIERS[c.tier] && Date.now() - c.at < 7 * 864e5) { setTier(c.tier); webGateOff(); return; }   // offline: the last plan keeps working for a week
-    webGate("Couldn't check your plan", "Check your connection and try again.", '<button type="button" class="btn primary" data-wg="retry">Try again</button>');
+    webGate("Couldn't check your plan", "Check your connection and try again." + (e && e.code ? " (" + e.code + ")" : ""), '<button type="button" class="btn primary" data-wg="retry">Try again</button>');
   }
 }
 window.onCloudUser = webCheck;
