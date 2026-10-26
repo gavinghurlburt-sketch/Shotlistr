@@ -45,7 +45,7 @@ async function webCheck(u) {
   }
 }
 window.onCloudUser = webCheck;
-if (SUBS_LIVE) setTimeout(() => { document.querySelectorAll("[data-tier-pref]").forEach(b => { const seg = b.closest(".theme-seg"); if (seg) { if (seg.previousElementSibling) seg.previousElementSibling.remove(); seg.remove(); } }); const sk = document.getElementById("acctSkip"); if (sk) sk.remove(); webGate("Loading…", ""); }, 0);
+if (SUBS_LIVE) setTimeout(() => { document.querySelectorAll("[data-tier-pref]").forEach(b => { const seg = b.closest(".theme-seg"); if (seg) { if (seg.previousElementSibling) seg.previousElementSibling.remove(); seg.remove(); } }); const sk = document.getElementById("acctSkip"); if (sk) sk.remove(); if (window.__webChecked) webCheck(window.__cloudUserNow); else webGate("Loading…", ""); }, 0);
 // if the sign-in code never reports back, ask for the session ourselves so the page can't sit on "Loading…"
 if (SUBS_LIVE) setTimeout(async () => {
   if (window.__webChecked) return;
