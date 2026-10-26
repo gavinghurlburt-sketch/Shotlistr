@@ -4849,7 +4849,7 @@ $("artistsList").addEventListener("click", async e => {
   if (o) {
     const ph = o.closest(".project-card").querySelector(".ac-photo"), r0 = ph && ph.getBoundingClientRect(), bg = ph && ph.style.backgroundImage;
     await openProject(o.dataset.artistOpen, { fromCard: true });
-    revealArtistSheet({ r0, bg });
+    revealArtistSheet({ r0, bg, card: o.closest(".project-card").getBoundingClientRect() });
     return;
   }
   const d = e.target.closest("[data-delete-artist]");
@@ -5039,14 +5039,21 @@ function exitArtistSheet() {
   if (!artSheet.open) return;
   ["projectBanner", "draftCView", "songScrim", "songPage"].forEach(id => { const c = artSheet.ph[id], el = $(id); if (c && c.parentNode) { c.parentNode.insertBefore(el, c); c.remove(); } });
   artSheet.open = false; artSheet.ph = {};
-  const sh = $("artistSheet"); sh.classList.add("hidden"); sh.style.transform = ""; sh.style.visibility = "";
+  const sh = $("artistSheet"); [sh, $("draftCView")].forEach(el => el.getAnimations && el.getAnimations().forEach(x => x.cancel())); sh.classList.add("hidden"); sh.style.transform = ""; sh.style.visibility = "";
   $("artistScrim").classList.add("hidden"); document.body.classList.remove("art-sheet"); $("projectBanner").style.visibility = "";
 }
 /* the sheet slides up; if it came from a card, that card's photo flies to the top of the sheet and un-blurs */
 function revealArtistSheet(from) {
   const sh = $("artistSheet"); if (!sh || sh.classList.contains("hidden")) return;
   const ban = $("projectBanner"), r1 = ban.getBoundingClientRect(), o = { duration: 440, easing: "cubic-bezier(.2,.9,.25,1)" };
-  if (sh.animate) sh.animate([{ transform: "translateY(100%)" }, { transform: "translateY(0)" }], o);
+  const S = sh.getBoundingClientRect(), C = from && from.card;
+  if (sh.animate) {
+    if (C && C.width) {                                            // grows out of the card
+      const cut = (c, rad) => `inset(${c.top}px ${c.right}px ${c.bottom}px ${c.left}px round ${rad})`;
+      sh.animate([{ clipPath: cut({ top: C.top - S.top, right: S.right - C.right, bottom: S.bottom - C.bottom, left: C.left - S.left }, "24px 24px 24px 24px") }, { clipPath: cut({ top: 0, right: 0, bottom: 0, left: 0 }, "28px 28px 0px 0px") }], o);
+      $("draftCView").animate([{ opacity: 0 }, { opacity: 0, offset: .35 }, { opacity: 1 }], o);
+    } else sh.animate([{ transform: "translateY(100%)" }, { transform: "translateY(0)" }], o);
+  }
   const scr = $("artistScrim"); if (scr.animate) scr.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
   sh.style.visibility = "";
   if (!from || !from.bg || ban.classList.contains("hidden") || !ban.animate || !r1.width || !from.r0) return;
@@ -5065,9 +5072,17 @@ function revealArtistSheet(from) {
 /* closing: the photo shrinks back into its card while the sheet slides away */
 function artistCloseStart() {
   const bn = $("projectBanner"), bg = $("bannerImg").style.backgroundImage;
-  if (!project || project.type !== "artist" || songOpen || !bg || bn.classList.contains("hidden")) return;
+  if (!project || project.type !== "artist" || songOpen || !bg || bn.classList.contains("hidden")) return false;
+  const cardEl = document.querySelector(`#artistsList [data-artist-open="${project.id}"]`), card = cardEl && cardEl.closest(".project-card");
   const b = { id: project.id, r0: bn.getBoundingClientRect(), bg };
   bn.style.visibility = "hidden"; artistBackDone = true; flyBack(b);
+  const sh = $("artistSheet"), C = card && card.getBoundingClientRect();
+  if (!C || !C.width || !sh.animate) return false;
+  sh.style.transition = "none"; sh.style.transform = "";                  // shrinks back into the card
+  const S = sh.getBoundingClientRect(), o = { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" };
+  sh.animate([{ clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)" }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)` }], o);
+  $("draftCView").animate([{ opacity: 1 }, { opacity: 0, offset: .5 }, { opacity: 0 }], o);
+  return true;
 }
 async function goToProjects() {
   setTimeout(() => { if (typeof nowPlayingSync === "function") nowPlayingSync(); }, 120);
@@ -7227,7 +7242,11 @@ function makeSheet(root, box, onClose, scrim, opts) {
   opts = opts || {};
   let lastY = 0, offset = 0, t0 = 0, active = false;
   const reset = () => { box.style.transition = ""; box.style.transform = ""; };
-  function close() { if (opts.onStart) opts.onStart(); box.style.transition = "transform .26s cubic-bezier(.4,0,1,1)"; box.style.transform = "translateY(100%)"; setTimeout(() => { reset(); onClose(); }, 250); }
+  function close() {
+    const custom = opts.onStart ? opts.onStart() === true : false;
+    if (!custom) { box.style.transition = "transform .26s cubic-bezier(.4,0,1,1)"; box.style.transform = "translateY(100%)"; }
+    setTimeout(() => { reset(); onClose(); }, custom ? 400 : 250);
+  }
   (scrim || root).addEventListener("click", e => { if (e.target === (scrim || root)) close(); });
   if (scrim) scrim.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
   const skip = t => !!(t && t.closest && (t.closest("canvas,input,textarea,select,[data-nodrag]") || (opts.ignore && t.closest(opts.ignore))));
