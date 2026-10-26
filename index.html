@@ -1388,6 +1388,12 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 .art-card:active .ac-glass { -webkit-backdrop-filter: blur(1px) saturate(1.2); backdrop-filter: blur(1px) saturate(1.2); opacity: .55; }
 .art-card .pc-text { width: 100%; }
 .art-card.has-photo .project-card-name { color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+#artistScrim { position: fixed; inset: 0; z-index: 155; background: rgba(0,0,0,.35); touch-action: none; }
+#artistSheet { position: fixed; left: 0; right: 0; bottom: 0; top: calc(env(safe-area-inset-top) + 20px); z-index: 160; max-width: 760px; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border-radius: 28px 28px 0 0; padding: 10px 16px max(28px, env(safe-area-inset-bottom)); background-color: var(--bg); box-shadow: 0 -10px 40px rgba(0,0,0,.4), inset 0 1px 0 var(--bar-edge); }
+#artistSheet.hidden, #artistScrim.hidden { display: none; }
+#artistSheet #projectBanner { margin-top: 6px; }
+body.art-sheet .appbar-top > * { visibility: hidden; }
+.waveform { touch-action: none; }
 </style>
 </head>
 <body>
@@ -1411,6 +1417,8 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
   </nav>
 </header>
 
+<div id="artistScrim" class="hidden"></div>
+<div id="artistSheet" class="hidden"><div class="grab" aria-hidden="true"></div></div>
 <main>
 <div id="projectBanner" class="banner hidden">
   <div class="banner-img" id="bannerImg"></div>
@@ -4832,32 +4840,12 @@ $("projectsList").addEventListener("click", async e => {
   }
 });
 $("projectsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.openId) openProject(e.target.dataset.openId); });
-/* the artist card's photo flies to the artist page banner and un-blurs on the way */
-function flyCover(r0, bg) {
-  const ban = $("projectBanner");
-  if (!bg || !ban || ban.classList.contains("hidden") || !ban.animate) return;
-  requestAnimationFrame(() => {
-    const r1 = ban.getBoundingClientRect();
-    if (!r1.width || !r1.height) return;
-    const cl = document.createElement("div");
-    cl.style.cssText = "position:fixed;left:0;top:0;z-index:9999;pointer-events:none;overflow:hidden;background:var(--bg);";
-    cl.innerHTML = '<div class="fly-img" style="background-image:' + bg.replace(/"/g, "&quot;") + '"></div><div class="fly-shade"></div><div class="fly-glass"></div>';
-    document.body.appendChild(cl);
-    ban.style.visibility = "hidden";
-    const box = (r, rad) => ({ transform: `translate(${r.left}px,${r.top}px)`, width: r.width + "px", height: r.height + "px", borderRadius: rad });
-    const done = () => { ban.style.visibility = ""; cl.remove(); };
-    const a = cl.animate([box(r0, "24px"), box(r1, "26px")], { duration: 460, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" });
-    cl.firstChild.animate([{ opacity: .8 }, { opacity: 1 }], { duration: 460, easing: "ease-out", fill: "forwards" });
-    cl.lastChild.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 460, easing: "ease-out", fill: "forwards" });
-    a.onfinish = done; setTimeout(done, 900);
-  });
-}
 $("artistsList").addEventListener("click", async e => {
   const o = e.target.closest("[data-artist-open]");
   if (o) {
     const ph = o.closest(".project-card").querySelector(".ac-photo"), r0 = ph && ph.getBoundingClientRect(), bg = ph && ph.style.backgroundImage;
-    await openProject(o.dataset.artistOpen);
-    if (r0) flyCover(r0, bg);
+    await openProject(o.dataset.artistOpen, { fromCard: true });
+    revealArtistSheet({ r0, bg });
     return;
   }
   const d = e.target.closest("[data-delete-artist]");
@@ -5003,7 +4991,7 @@ async function loadArtistRec() {
   });
   if (changed) scheduleSave();
 }
-async function openProject(id) {
+async function openProject(id, opts) {
   const rec = await getProjectRecord(id);
   if (!rec) { alert("Couldn't find that project."); return; }
   project = normalizeRecord(rec);
@@ -5017,7 +5005,7 @@ async function openProject(id) {
   await loadArtistRec();
   $("docTitleInput").value = project.docTitle;
   document.title = `${project.docTitle} · creatrr`;
-  $("projectsView").classList.add("hidden");
+  if (project.type === "artist" && !BAND_CODE) enterArtistSheet(); else { exitArtistSheet(); $("projectsView").classList.add("hidden"); }
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.remove("hidden"));
   $("wsTabs").classList.toggle("hidden", project.type === "artist");
   requestAnimationFrame(() => placeInd(false)); setTimeout(() => placeInd(false), 300);
@@ -5027,15 +5015,63 @@ async function openProject(id) {
   setSaveStatus(DEMO_MODE ? "Demo — not saved" : "Saved");
   switchWs(project.workspace, true);
   await loadActiveTrack();
+  if (project && project.type === "artist" && !BAND_CODE && !(opts && opts.fromCard)) revealArtistSheet(null);
+}
+/* the artist page is a pull-down sheet over the Artists list */
+var artSheet = { open: false, ph: {} }, artistBackDone = false;
+function enterArtistSheet() {
+  const sh = $("artistSheet"), pv = $("projectsView"), wasHidden = pv.classList.contains("hidden");
+  if (!artSheet.open) {
+    ["projectBanner", "draftView"].forEach(id => { const el = $(id), c = document.createComment(id); el.parentNode.insertBefore(c, el); artSheet.ph[id] = c; sh.appendChild(el); });
+    artSheet.open = true;
+  }
+  document.body.classList.add("art-sheet");
+  pv.classList.remove("hidden");
+  if (wasHidden) { setHomeMode("artists", true); renderProjectsList(); }
+  sh.style.visibility = "hidden"; sh.classList.remove("hidden"); $("artistScrim").classList.remove("hidden"); sh.scrollTop = 0;
+}
+function exitArtistSheet() {
+  if (!artSheet.open) return;
+  ["projectBanner", "draftView"].forEach(id => { const c = artSheet.ph[id], el = $(id); if (c && c.parentNode) { c.parentNode.insertBefore(el, c); c.remove(); } });
+  artSheet.open = false; artSheet.ph = {};
+  const sh = $("artistSheet"); sh.classList.add("hidden"); sh.style.transform = ""; sh.style.visibility = "";
+  $("artistScrim").classList.add("hidden"); document.body.classList.remove("art-sheet"); $("projectBanner").style.visibility = "";
+}
+/* the sheet slides up; if it came from a card, that card's photo flies to the top of the sheet and un-blurs */
+function revealArtistSheet(from) {
+  const sh = $("artistSheet"); if (!sh || sh.classList.contains("hidden")) return;
+  const ban = $("projectBanner"), r1 = ban.getBoundingClientRect(), o = { duration: 440, easing: "cubic-bezier(.2,.9,.25,1)" };
+  if (sh.animate) sh.animate([{ transform: "translateY(100%)" }, { transform: "translateY(0)" }], o);
+  const scr = $("artistScrim"); if (scr.animate) scr.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+  sh.style.visibility = "";
+  if (!from || !from.bg || ban.classList.contains("hidden") || !ban.animate || !r1.width || !from.r0) return;
+  const cl = document.createElement("div");
+  cl.style.cssText = "position:fixed;left:0;top:0;z-index:9999;pointer-events:none;overflow:hidden;background:var(--bg);";
+  cl.innerHTML = '<div class="fly-img" style="background-image:' + from.bg.replace(/"/g, "&quot;") + '"></div><div class="fly-shade"></div><div class="fly-glass"></div>';
+  document.body.appendChild(cl);
+  ban.style.visibility = "hidden";
+  const box = (r, rad) => ({ transform: `translate(${r.left}px,${r.top}px)`, width: r.width + "px", height: r.height + "px", borderRadius: rad });
+  const done = () => { ban.style.visibility = ""; cl.remove(); };
+  const a = cl.animate([box(from.r0, "24px"), box(r1, "26px")], Object.assign({ fill: "forwards" }, o));
+  cl.children[0].animate([{ opacity: .8 }, { opacity: 1 }], o);
+  cl.children[2].animate([{ opacity: 1 }, { opacity: 0 }], o);
+  a.onfinish = done; setTimeout(done, 1000);
+}
+/* closing: the photo shrinks back into its card while the sheet slides away */
+function artistCloseStart() {
+  const bn = $("projectBanner"), bg = $("bannerImg").style.backgroundImage;
+  if (!project || project.type !== "artist" || songOpen || !bg || bn.classList.contains("hidden")) return;
+  const b = { id: project.id, r0: bn.getBoundingClientRect(), bg };
+  bn.style.visibility = "hidden"; artistBackDone = true; flyBack(b);
 }
 async function goToProjects() {
   setTimeout(() => { if (typeof nowPlayingSync === "function") nowPlayingSync(); }, 120);
   const wasArtist = !!project && project.type === "artist";
   const bn = $("projectBanner"), bnImg = $("bannerImg").style.backgroundImage;
-  const back = wasArtist && !songOpen && bnImg && !bn.classList.contains("hidden") ? { id: project.id, r0: bn.getBoundingClientRect(), bg: bnImg } : null;
+  const back = wasArtist && !songOpen && !artistBackDone && bnImg && !bn.classList.contains("hidden") ? { id: project.id, r0: bn.getBoundingClientRect(), bg: bnImg } : null;
   await persistNow();
   resetPlayer();
-  project = null; artistRec = null; renderBanner();
+  project = null; artistRec = null; renderBanner(); exitArtistSheet();
   document.title = "creatrr";
   document.querySelectorAll(".ws-view").forEach(v => v.classList.add("hidden"));
   ["backToProjectsBtn", "docTitleInput", "wsTabs"].forEach(x => $(x).classList.add("hidden"));
@@ -5044,6 +5080,7 @@ async function goToProjects() {
   if (wasArtist) setHomeMode("artists", true);
   await renderProjectsList();
   if (back) flyBack(back);
+  artistBackDone = false;
 }
 /* swiping back: the artist page photo shrinks into its card and the frost comes back */
 function flyBack(b) {
@@ -7177,17 +7214,18 @@ document.addEventListener("change", e => { if (e.target.id === "inboxArtist") in
     if (dx < 90 || Math.abs(dy) > 50 || Math.abs(dx) < Math.abs(dy) * 2.2 || Date.now() - t0 > 700) return;
     const tabs = [...document.querySelectorAll(".ws-tab")].filter(x => !x.classList.contains("hidden")), first = tabs[0] && tabs[0].dataset.ws;
     const atFirst = project.type === "artist" || !first || currentWs === first;
-    if (atFirst) goToProjects();
+    if (atFirst) { if (project.type === "artist" && artSheet.open && !songOpen) artistSheetCtl.close(); else goToProjects(); }
   }, { passive: true });
 })();
 /* slide-up sheets: swipe down (or tap outside) to close, light rubber-band at the ends, page behind stays put */
-function makeSheet(root, box, onClose, scrim) {
+function makeSheet(root, box, onClose, scrim, opts) {
+  opts = opts || {};
   let lastY = 0, offset = 0, t0 = 0, active = false;
   const reset = () => { box.style.transition = ""; box.style.transform = ""; };
-  function close() { box.style.transition = "transform .26s cubic-bezier(.4,0,1,1)"; box.style.transform = "translateY(100%)"; setTimeout(() => { reset(); onClose(); }, 250); }
+  function close() { if (opts.onStart) opts.onStart(); box.style.transition = "transform .26s cubic-bezier(.4,0,1,1)"; box.style.transform = "translateY(100%)"; setTimeout(() => { reset(); onClose(); }, 250); }
   (scrim || root).addEventListener("click", e => { if (e.target === (scrim || root)) close(); });
   if (scrim) scrim.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
-  const skip = t => !!(t && t.closest && t.closest("canvas,input,textarea,select,[data-nodrag]"));
+  const skip = t => !!(t && t.closest && (t.closest("canvas,input,textarea,select,[data-nodrag]") || (opts.ignore && t.closest(opts.ignore))));
   root.addEventListener("touchstart", e => { if (e.touches.length !== 1 || skip(e.target)) { active = false; return; } active = true; lastY = e.touches[0].clientY; offset = 0; t0 = Date.now(); box.style.transition = "none"; }, { passive: true });
   root.addEventListener("touchmove", e => {
     if (!active) return;
@@ -7210,6 +7248,7 @@ var tplSheet = makeSheet($("tplModal"), $("tplModal").querySelector(".modal-inne
 var notesSheet = makeSheet($("notesModal"), $("notesInner"), () => $("notesModal").classList.add("hidden"));
 var tempoSheet = makeSheet($("tempoModal"), $("tempoModal").querySelector(".modal-inner"), () => tapClose());
 var songSheet = makeSheet($("songPage"), $("songPage"), () => closeSongPage(), $("songScrim"));
+var artistSheetCtl = makeSheet($("artistSheet"), $("artistSheet"), () => { $("artistSheet").style.visibility = "hidden"; $("artistScrim").classList.add("hidden"); goToProjects(); }, $("artistScrim"), { ignore: "#songPage, #songScrim, .modal", onStart: () => artistCloseStart() });
 /* notification preferences + shoot reminders (server sends them, so they arrive even when the app is closed) */
 var notifPrefs = (function () { let o = {}; try { o = JSON.parse(localStorage.getItem("creatrr_notif_prefs") || "{}"); } catch (e) {} return { finished: o.finished !== false, shootday: o.shootday !== false, calltime: o.calltime !== false }; })();
 function paintNotifPrefs() { document.querySelectorAll("[data-notif]").forEach(el => { el.checked = !!notifPrefs[el.dataset.notif]; }); }
