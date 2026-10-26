@@ -4057,7 +4057,7 @@ function tapReadout() {
 function paintTapUI() {
   const b = $("tapBtn"); if (!b) return;
   $("beatDots").classList.toggle("counted", !!tap.downbeat);
-  const playing = isPlaying(), tp = curTempo();
+  const playing = isPlaying() || !!tap.seeking, tp = curTempo();
   b.textContent = playing ? "TAP" : "▶"; b.setAttribute("aria-label", playing ? "Tap the beat" : "Play");
   const pb = $("tapPlay"); if (pb) { pb.disabled = !currentTrackUrl; pb.textContent = playing ? "❚❚" : "▶"; pb.setAttribute("aria-label", playing ? "Pause" : "Play"); }
   b.classList.toggle("tapping", playing); b.disabled = !currentTrackUrl;
@@ -4159,7 +4159,7 @@ $("tapPlay").addEventListener("click", () => {
     if (!currentTrackUrl) return;
     e.preventDefault(); on = true; try { wv.setPointerCapture(e.pointerId); } catch (x) {}
     wasPlaying = isPlaying();
-    if (wasPlaying) { playToken++; stopCue(false); }
+    if (wasPlaying) { tap.seeking = true; playToken++; stopCue(false); paintTapUI(); }
     const t = posAt(e); playStartPos = t; pausePos = t; drawTempoWave(); updateTimecodes();
   });
   wv.addEventListener("pointermove", e => { if (!on) return; const t = posAt(e); playStartPos = t; pausePos = t; drawTempoWave(); });
@@ -4167,10 +4167,10 @@ $("tapPlay").addEventListener("click", () => {
     if (!on) return; on = false;
     const t = posAt(e); tap.start = t; tap.taps = []; tap.base = tap.downbeat ? tap.base : null;
     if (!wasPlaying) { playStartPos = t; pausePos = t; updateTimecodes(); paintTapUI(); drawTempoWave(); return; }   // stopped: just choose the spot, the first tap starts the song from here
-    startGame(t); setTimeout(() => { gameClickReset(); paintTapUI(); drawTempoWave(); }, 250);
+    startGame(t); tap.seeking = false; setTimeout(() => { gameClickReset(); paintTapUI(); drawTempoWave(); }, 250);
   };
   wv.addEventListener("pointerup", up);
-  wv.addEventListener("pointercancel", () => { on = false; });
+  wv.addEventListener("pointercancel", () => { on = false; if (tap.seeking) { tap.seeking = false; paintTapUI(); } });
 })();
 $("tapDown").addEventListener("pointerdown", e => {
   const tp = curTempo();
@@ -7251,9 +7251,10 @@ function makeSheet(root, box, onClose, scrim, opts) {
   (scrim || root).addEventListener("click", e => { if (e.target === (scrim || root)) close(); });
   if (scrim) scrim.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
   const skip = t => !!(t && t.closest && (t.closest("canvas,input,textarea,select,[data-nodrag]") || (opts.ignore && t.closest(opts.ignore))));
-  root.addEventListener("touchstart", e => { if (e.touches.length !== 1 || skip(e.target)) { active = false; return; } active = true; lastY = e.touches[0].clientY; offset = 0; t0 = Date.now(); box.style.transition = "none"; }, { passive: true });
+  let held = false, heldY = 0;       // a touch that began on a waveform or field: it never drags the sheet, but a pull-down must not drag the page behind either
+  root.addEventListener("touchstart", e => { held = false; if (e.touches.length === 1 && skip(e.target) && !(opts.ignore && e.target.closest && e.target.closest(opts.ignore))) { held = true; heldY = e.touches[0].clientY; } if (e.touches.length !== 1 || skip(e.target)) { active = false; return; } active = true; lastY = e.touches[0].clientY; offset = 0; t0 = Date.now(); box.style.transition = "none"; }, { passive: true });
   root.addEventListener("touchmove", e => {
-    if (!active) return;
+    if (!active) { if (held) { const y = e.touches[0].clientY, d = y - heldY; heldY = y; if (d > 0 && box.scrollTop <= 0) e.preventDefault(); } return; }
     const y = e.touches[0].clientY, d = y - lastY; lastY = y;
     if (!box.contains(e.target)) { e.preventDefault(); return; }
     const atTop = box.scrollTop <= 0, atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 1;
