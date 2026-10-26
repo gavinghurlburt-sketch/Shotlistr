@@ -49,3 +49,43 @@ Re-check this table after adding RevenueCat; if you ever add analytics or crash 
 6. Test with a Sandbox Apple ID; check purchase, cancel, restore, and a plan upgrade.
 
 While `"live"` is false the app behaves exactly as today (plan switcher in testing mode, no paywall).
+
+---
+## Store listing copy (paste into App Store Connect)
+
+**Name:** creatrr
+**Subtitle (30 max):** Shot lists for music shoots
+**Promotional text:** Plan every shoot in one place: songs, shots, notes and call sheets.
+**Keywords (100 max):** shot list,music video,videography,call sheet,storyboard,director,filmmaker,artist,shoot planner
+**Category:** Photo & Video (secondary: Productivity)
+**Support URL:** https://gavinghurlburt-sketch.github.io/Shotlistr/docs/
+**Privacy URL:** https://gavinghurlburt-sketch.github.io/Shotlistr/docs/privacy.html
+**Age rating:** 4+ (answer "None" to every question)
+**Export compliance:** uses only standard HTTPS encryption, so answer exempt / "No" to proprietary encryption
+
+### Description
+creatrr is the planner for music videographers and directors. Keep every artist, song and shot in one place, and walk onto set knowing exactly what you need.
+
+- Organize artists and projects, with unlimited songs on every plan
+- Build shot lists per song, with reference photos and notes
+- Upload tracks and plan to the music
+- Sign in to keep everything in your account on every device
+- Pro adds video production tools: call sheets and an on-set tracker
+
+SUBSCRIPTIONS
+creatrr is free to download. A plan is needed to use it:
+- creatrr Artist: $1.99 per month, 1 artist, 7-day free trial for new subscribers
+- creatrr Plus: $9.99 per month, up to 10 artists
+- creatrr Pro: $29.99 per month, up to 50 artists plus video production tools
+
+Payment is charged to your Apple ID at confirmation of purchase (or at the end of the free trial). Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel any time in Settings > Apple ID > Subscriptions. Prices are in USD and may vary by region.
+
+Terms of Use: https://gavinghurlburt-sketch.github.io/Shotlistr/docs/terms.html
+Privacy Policy: https://gavinghurlburt-sketch.github.io/Shotlistr/docs/privacy.html
+
+### Review notes
+creatrr is a shot-list planner. Subscriptions are managed through Apple in-app purchase (RevenueCat for entitlements).
+To test: open the app, tap the account button, sign in with the demo account below, then choose a plan on the paywall (sandbox purchases work).
+Demo account: EMAIL / PASSWORD   <-- create in the app first, then fill in
+Restore Purchases is on the paywall. Account deletion: account button > Delete account.
+Contact: gavinghurlburt@gmail.com
