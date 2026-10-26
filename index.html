@@ -5097,10 +5097,20 @@ function artistCloseStart() {
   bn.style.visibility = "hidden"; artistBackDone = true; flyBack(b);
   const sh = $("artistSheet"), C = card && card.getBoundingClientRect();
   if (!C || !C.width || !sh.animate) return false;
+  const off = Math.max(0, sh.getBoundingClientRect().top - parseFloat(getComputedStyle(sh).top || 0));   // where the finger left it
   sh.style.transition = "none"; sh.style.transform = "";                  // shrinks back into the card
-  const S = sh.getBoundingClientRect(), o = { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" };
-  sh.animate([{ clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)" }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)` }], o);
-  $("draftCView").animate([{ opacity: 1 }, { opacity: 0, offset: .5 }, { opacity: 0 }], o); $("artistTitle").animate([{ opacity: 1 }, { opacity: 0 }], o);
+  const S = sh.getBoundingClientRect(), o = { duration: 400, easing: "cubic-bezier(.3,.7,.2,1)", fill: "forwards" };
+  const tt = $("artistTitle"), tr = tt.getBoundingClientRect(), nmEl = card.querySelector(".project-card-name"), nr = nmEl && nmEl.getBoundingClientRect();
+  sh.animate([{ clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)", transform: `translateY(${off}px)`, opacity: 1 }, { clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)", transform: "translateY(0px)", opacity: 1, offset: .01 }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)`, transform: "translateY(0px)", opacity: 1, offset: .8 }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)`, transform: "translateY(0px)", opacity: 0 }], o);
+  $("draftCView").animate([{ opacity: 1 }, { opacity: 0, offset: .4 }, { opacity: 0 }], o);
+  if (nr && nr.width && tr.width && tt.value) {                               // the name rises back into the card, mirroring how it dropped out
+    tt.style.opacity = "0";
+    const fn = document.createElement("div"); fn.textContent = tt.value;
+    fn.style.cssText = "position:fixed;left:0;top:0;z-index:10000;pointer-events:none;white-space:nowrap;font-size:32px;color:#fff;font-weight:800;letter-spacing:-0.03em;line-height:1.1;font-family:inherit;text-shadow:0 2px 12px rgba(0,0,0,.5);";
+    document.body.appendChild(fn);
+    const a = fn.animate([{ transform: `translate(${tr.left + tr.width / 2 - fn.offsetWidth / 2}px,${tr.top + (tr.height - fn.offsetHeight) / 2}px)` }, { transform: `translate(${nr.left + nr.width / 2 - fn.offsetWidth / 2}px,${nr.top}px)` }], o);
+    setTimeout(() => fn.remove(), 430);
+  } else tt.animate([{ opacity: 1 }, { opacity: 0 }], o);
   return true;
 }
 async function goToProjects() {
@@ -7145,7 +7155,7 @@ async function refreshAll() {
   document.body.appendChild(bar);
   const txt = bar.querySelector("span");
   let y0 = null, pull = 0, busy = false;
-  const open = () => document.querySelector(".modal:not(.hidden), #songPage:not(.hidden)");
+  const open = () => document.querySelector(".modal:not(.hidden), #songPage:not(.hidden), #artistSheet:not(.hidden)");
   const set = (px, label, spin) => { bar.style.transform = `translate(-50%, ${px - 56}px)`; bar.style.opacity = px > 6 ? 1 : 0; bar.classList.toggle("spin", !!spin); txt.textContent = label; };
   document.addEventListener("touchstart", e => { y0 = (!busy && e.touches.length === 1 && window.scrollY <= 0 && !open()) ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
   document.addEventListener("touchmove", e => {
@@ -7267,7 +7277,7 @@ function makeSheet(root, box, onClose, scrim, opts) {
   function close() {
     const custom = opts.onStart ? opts.onStart() === true : false;
     if (!custom) { box.style.transition = "transform .26s cubic-bezier(.4,0,1,1)"; box.style.transform = "translateY(100%)"; }
-    setTimeout(() => { reset(); onClose(); }, custom ? 400 : 250);
+    setTimeout(() => { reset(); onClose(); }, custom ? 410 : 250);
   }
   (scrim || root).addEventListener("click", e => { if (e.target === (scrim || root)) close(); });
   if (scrim) scrim.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
