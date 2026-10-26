@@ -1401,7 +1401,7 @@ body.art-sheet .appbar-top > * { visibility: hidden; }
 .pc-wrap:has(.dragging) .pc-del { transition: none; }
 .pc-wrap:not(.part-wrap):not(.sr-wrap) .pc-del { border-radius: 24px; }   /* same curve as the card wrapper so the right corners line up */
 .pc-wrap.part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; border-radius: 16px; }
-#artistSheet input.artist-title { background: none !important; border: 0 !important; padding: 0 !important; box-shadow: none !important; color: var(--text) !important; font-size: 34px !important; font-weight: 800 !important; line-height: 1.1 !important; letter-spacing: -0.03em !important; height: auto !important; }
+#artistSheet input.artist-title { background: none !important; border: 0 !important; padding: 0 !important; box-shadow: none !important; color: var(--text) !important; font-size: 32px !important; text-align: center !important; font-weight: 800 !important; line-height: 1.1 !important; letter-spacing: -0.03em !important; height: auto !important; }
 .artist-title { display: block; width: 100%; box-sizing: border-box; margin: 14px 0 4px; padding: 0; border: 0; background: none; box-shadow: none; outline: none; color: #fff; font-size: 34px; font-weight: 800; line-height: 1.1; font-family: inherit; letter-spacing: -0.03em; text-shadow: 0 2px 12px rgba(0,0,0,.35); min-height: 0; border-radius: 0; }
 .art-card .ac-photo, .art-card .ac-glass { right: auto; width: var(--fw, 100%); }
 .art-card::after { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255,255,255,.24); pointer-events: none; }
@@ -5080,7 +5080,7 @@ function revealArtistSheet(from) {
     fn.style.cssText = "position:fixed;left:0;top:0;z-index:10000;pointer-events:none;white-space:nowrap;font-size:32px;color:#fff;font-weight:800;letter-spacing:-0.03em;line-height:1.1;transform-origin:0 0;text-shadow:0 2px 12px rgba(0,0,0,.5);font-family:inherit;";
     document.body.appendChild(fn);
     const cx = nm.left + nm.width / 2;
-    fn.animate([{ transform: `translate(${cx - fn.offsetWidth / 2}px,${nm.top}px)`, fontSize: "32px" }, { transform: `translate(${tr.left + parseFloat(getComputedStyle(tt).paddingLeft || 0)}px,${tr.top + 2}px)`, fontSize: "34px" }], Object.assign({ fill: "forwards" }, o));
+    fn.animate([{ transform: `translate(${cx - fn.offsetWidth / 2}px,${nm.top}px)`, fontSize: "32px" }, { transform: `translate(${tr.left + tr.width / 2 - fn.offsetWidth / 2}px,${tr.top + (tr.height - fn.offsetHeight) / 2}px)`, fontSize: "32px" }], Object.assign({ fill: "forwards" }, o));
   }
   const done = () => { ban.style.visibility = ""; cl.remove(); if (fn) { tt.style.opacity = ""; fn.remove(); } };
   const a = cl.animate([box(from.r0, "24px"), box(r1, "26px")], Object.assign({ fill: "forwards" }, o));
