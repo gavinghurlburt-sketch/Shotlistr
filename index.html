@@ -5094,15 +5094,16 @@ function artistCloseStart() {
   if (!project || project.type !== "artist" || songOpen || !bg || bn.classList.contains("hidden")) return false;
   const cardEl = document.querySelector(`#artistsList [data-artist-open="${project.id}"]`), card = cardEl && cardEl.closest(".project-card");
   const b = { id: project.id, r0: bn.getBoundingClientRect(), bg };
-  bn.style.visibility = "hidden"; artistBackDone = true; flyBack(b);
+  bn.style.visibility = "hidden"; artistBackDone = true; flyBack(b, true);
   const sh = $("artistSheet"), C = card && card.getBoundingClientRect();
   if (!C || !C.width || !sh.animate) return false;
   const off = Math.max(0, sh.getBoundingClientRect().top - parseFloat(getComputedStyle(sh).top || 0));   // where the finger left it
   sh.style.transition = "none"; sh.style.transform = "";                  // shrinks back into the card
   const S = sh.getBoundingClientRect(), o = { duration: 400, easing: "cubic-bezier(.3,.7,.2,1)", fill: "forwards" };
   const tt = $("artistTitle"), tr = tt.getBoundingClientRect(), nmEl = card.querySelector(".project-card-name"), nr = nmEl && nmEl.getBoundingClientRect();
-  sh.animate([{ clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)", transform: `translateY(${off}px)`, opacity: 1 }, { clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)", transform: "translateY(0px)", opacity: 1, offset: .01 }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)`, transform: "translateY(0px)", opacity: 1, offset: .8 }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)`, transform: "translateY(0px)", opacity: 0 }], o);
+  sh.animate([{ clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)", transform: `translateY(${off}px)`, opacity: 1 }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)`, transform: "translateY(0px)", opacity: 1, offset: .75 }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)`, transform: "translateY(0px)", opacity: 0 }], o);
   $("draftCView").animate([{ opacity: 1 }, { opacity: 0, offset: .4 }, { opacity: 0 }], o);
+  $("artistScrim").animate([{ opacity: 1 }, { opacity: 0 }], o);
   if (nr && nr.width && tr.width && tt.value) {                               // the name rises back into the card, mirroring how it dropped out
     tt.style.opacity = "0";
     const fn = document.createElement("div"); fn.textContent = tt.value;
@@ -5132,11 +5133,11 @@ async function goToProjects() {
   artistBackDone = false;
 }
 /* swiping back: the artist page photo shrinks into its card and the frost comes back */
-function flyBack(b) {
+function flyBack(b, sync) {
   const card = document.querySelector(`#artistsList [data-artist-open="${b.id}"]`), ph = card && card.closest(".project-card").querySelector(".ac-photo");
   if (!ph || !ph.animate) return;
   const parts = [ph, ph.nextElementSibling].filter(Boolean);
-  requestAnimationFrame(() => {
+  (sync ? (f => f()) : requestAnimationFrame)(() => {
     const r1 = ph.getBoundingClientRect();
     if (!r1.width || !r1.height) return;
     const cl = document.createElement("div");
