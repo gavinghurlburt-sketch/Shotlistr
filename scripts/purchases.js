@@ -146,8 +146,8 @@ function paintPlanRow() {
 async function subsInit() {
   if (!SUBS_LIVE) return;
   document.querySelectorAll("[data-tier-pref]").forEach(b => { const seg = b.closest(".theme-seg"); if (seg) { if (seg.previousElementSibling) seg.previousElementSibling.remove(); seg.remove(); } });   // the testing plan switcher goes away
-  const sa = $("acctSyncLine");
-  if (sa && !$("acctPlanRow")) { sa.insertAdjacentHTML("afterend", '<div id="acctPlanRow"></div>'); }
+  const rs = $("acctReset");     // plan row sits below every account view (signed in or out), hidden on the code/reset steps
+  if (rs && !$("acctPlanRow")) { rs.insertAdjacentHTML("afterend", '<div id="acctPlanRow" style="margin-top:16px"></div><style>#acctCode:not(.hidden) ~ #acctPlanRow, #acctReset:not(.hidden) ~ #acctPlanRow { display: none; }</style>'); }
   ensurePaywall();
   const cached = cachedPlan(); if (cached) setTier(cached);
   try {
