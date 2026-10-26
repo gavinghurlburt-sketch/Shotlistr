@@ -26,6 +26,7 @@ function webGate(h, p, btns) {
 }
 function webGateOff() { const el = document.getElementById("webGate"); if (el) el.classList.add("hidden"); }
 async function webCheck(u) {
+  window.__webChecked = true;
   window.__cloudUserNow = u || null;
   if (!SUBS_LIVE) return;
   if (!u) { webGate("Sign in to open creatrr", "Use the same account as the iPhone app.", '<button type="button" class="btn primary" data-wg="in">Sign in</button>'); return; }
@@ -45,3 +46,10 @@ async function webCheck(u) {
 }
 window.onCloudUser = webCheck;
 if (SUBS_LIVE) setTimeout(() => { document.querySelectorAll("[data-tier-pref]").forEach(b => { const seg = b.closest(".theme-seg"); if (seg) { if (seg.previousElementSibling) seg.previousElementSibling.remove(); seg.remove(); } }); const sk = document.getElementById("acctSkip"); if (sk) sk.remove(); webGate("Loading…", ""); }, 0);
+// if the sign-in code never reports back, ask for the session ourselves so the page can't sit on "Loading…"
+if (SUBS_LIVE) setTimeout(async () => {
+  if (window.__webChecked) return;
+  let u = null;
+  try { const { data } = await sb.auth.getSession(); u = data.session ? data.session.user : null; } catch (e) {}
+  if (!window.__webChecked) webCheck(u);
+}, 1200);
