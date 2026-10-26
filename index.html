@@ -5031,6 +5031,8 @@ async function openProject(id) {
 async function goToProjects() {
   setTimeout(() => { if (typeof nowPlayingSync === "function") nowPlayingSync(); }, 120);
   const wasArtist = !!project && project.type === "artist";
+  const bn = $("projectBanner"), bnImg = $("bannerImg").style.backgroundImage;
+  const back = wasArtist && !songOpen && bnImg && !bn.classList.contains("hidden") ? { id: project.id, r0: bn.getBoundingClientRect(), bg: bnImg } : null;
   await persistNow();
   resetPlayer();
   project = null; artistRec = null; renderBanner();
@@ -5040,7 +5042,31 @@ async function goToProjects() {
   setSaveStatus("");
   $("projectsView").classList.remove("hidden");
   if (wasArtist) setHomeMode("artists", true);
-  renderProjectsList();
+  await renderProjectsList();
+  if (back) flyBack(back);
+}
+/* swiping back: the artist page photo shrinks into its card and the frost comes back */
+function flyBack(b) {
+  const card = document.querySelector(`#artistsList [data-artist-open="${b.id}"]`), ph = card && card.closest(".project-card").querySelector(".ac-photo");
+  if (!ph || !ph.animate) return;
+  const parts = [ph, ph.nextElementSibling].filter(Boolean);
+  requestAnimationFrame(() => {
+    const r1 = ph.getBoundingClientRect();
+    if (!r1.width || !r1.height) return;
+    const cl = document.createElement("div");
+    cl.style.cssText = "position:fixed;left:0;top:0;z-index:9999;pointer-events:none;overflow:hidden;background:var(--bg);";
+    cl.innerHTML = '<div class="fly-img" style="background-image:' + b.bg.replace(/"/g, "&quot;") + '"></div><div class="fly-shade"></div><div class="fly-glass"></div>';
+    document.body.appendChild(cl);
+    parts.forEach(p => { p.style.visibility = "hidden"; });
+    const box = (r, rad) => ({ transform: `translate(${r.left}px,${r.top}px)`, width: r.width + "px", height: r.height + "px", borderRadius: rad });
+    const done = () => { parts.forEach(p => { p.style.visibility = ""; }); cl.remove(); };
+    const o = { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" };
+    const a = cl.animate([box(b.r0, "26px"), box(r1, "24px")], o);
+    cl.children[0].animate([{ opacity: 1 }, { opacity: .8 }], o);
+    cl.children[1].animate([{ opacity: 1 }, { opacity: 0 }], o);
+    cl.children[2].animate([{ opacity: 0 }, { opacity: 1 }], o);
+    a.onfinish = done; setTimeout(done, 900);
+  });
 }
 $("backToProjectsBtn").addEventListener("click", () => { if (project && project.type === "artist" && songOpen) closeSongPage(); else goToProjects(); });
 $("docTitleInput").addEventListener("input", e => {
