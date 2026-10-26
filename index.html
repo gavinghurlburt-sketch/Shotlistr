@@ -1147,7 +1147,6 @@ details.more > :not(summary) { margin-top: 8px; }
 .pr-in { width: 100%; flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
 .pc-wrap .part-row.dragging, .pc-wrap .part-row.dragging .pr-in { transition: none; }
 .pc-wrap .part-row.dragging { transition: none; }
-.part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; width: 84px; padding: 0; border-radius: 16px; }
 .pc-wrap.rv .pc-del { opacity: 1; }
 /* home: Projects / Artists */
 .projects-title.home-tabs { display: flex; align-items: baseline; gap: 20px; justify-content: space-between; }
@@ -1364,7 +1363,6 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #draftPlayBtn.tap-big.on { font-size: 22px; letter-spacing: 3px; background-color: color-mix(in srgb, #f5c518 26%, transparent); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #f5c518 60%, transparent), 0 8px 24px rgba(0,0,0,.18); }
 #draftPlayBtn.tap-big:disabled { opacity: .45; }
 .project-card { background-color: var(--bar); -webkit-backdrop-filter: blur(12px) saturate(1.6); backdrop-filter: blur(12px) saturate(1.6); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px var(--ind-edge), inset 1.5px 0 1px -1px var(--bar-edge), inset -1.5px 0 1px -1px var(--bar-edge); }   /* project and artist cards: neutral frosted glass */
-.pc-wrap:not(.part-wrap):not(.sr-wrap) .pc-del { width: 84px; padding: 0; border-radius: 24px; }
 .pc-wrap .project-card { transition: width .22s cubic-bezier(.2,.8,.2,1); overflow: hidden; }
 .pc-wrap .project-card.dragging, .pc-wrap .project-card.dragging .project-card-main { transition: none; }
 .pc-wrap .project-card .project-card-main { flex: none; width: 100%; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
@@ -1397,8 +1395,11 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 body.art-sheet .appbar-top > * { visibility: hidden; }
 #artistSheet.sheet-frost { background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 8%, transparent), color-mix(in srgb, var(--surface) 62%, transparent) 55%); }   /* mostly blur at the top, hazier lower down */
 #artistSheet .pc-wrap .sr-card { background-color: transparent; }
-#artistSheet .sr-wrap .pc-del { width: 96px; padding: 0; }
 .waveform { touch-action: none; }
+/* swipe-to-delete: a frosted red button that sits on top and grows from a thin line as you swipe */
+.pc-wrap .pc-del, .pc-wrap .pc-del:hover { z-index: 2; top: 0; bottom: 0; right: 0; width: max(3px, calc(var(--rev, 0) * 1px - 10px)); min-width: 0; padding: 0; overflow: hidden; white-space: nowrap; border-radius: 20px; background: color-mix(in srgb, #ff453a 36%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #ff453a 70%, transparent); color: rgba(255,255,255,calc((var(--rev, 0) - 56) / 36)); transition: width .22s cubic-bezier(.2,.8,.2,1); }
+.pc-wrap:has(.dragging) .pc-del { transition: none; }
+.pc-wrap.part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; border-radius: 16px; }
 </style>
 </head>
 <body>
@@ -4780,7 +4781,7 @@ document.addEventListener("click", e => {
 /* swipe a project card left to reveal a red Delete, like Mail */
 var swipeMoved = false;
 const DEL_W = 96;
-function swSet(c, px) { if (c.classList.contains("project-card")) { const n = c.firstElementChild, cs = getComputedStyle(c); c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else if (c.classList.contains("part-row")) { const n = c.firstElementChild; c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - 22) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
+function swSet(c, px) { c.parentElement.style.setProperty("--rev", String(-px)); if (c.classList.contains("project-card")) { const n = c.firstElementChild, cs = getComputedStyle(c); c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else if (c.classList.contains("part-row")) { const n = c.firstElementChild; c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - 22) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
 function oc(c) { return c.classList.contains("part-row") ? "sw-open" : "open"; }
 function closeSwipedCards(except) {
   document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open, .pc-wrap .part-row.sw-open").forEach(c => { if (c !== except) { c.classList.remove("open", "sw-open"); swSet(c, 0); setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
