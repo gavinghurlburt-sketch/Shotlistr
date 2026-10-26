@@ -5310,7 +5310,7 @@ function projectDay(create) {
 function renderBanner() {
   const b = $("projectBanner"), t = project && project.type;
   const view = !project ? "" : t === "artist" ? "artist" : t === "content" ? (currentWs === "plan" ? "content" : "") : ((currentWs === "draft" || currentWs === "plan") ? "prod" : "");
-  b.classList.toggle("hidden", !view || (view === "artist" && songOpen));
+  b.classList.toggle("hidden", !view || (view === "artist" && songOpen && !(typeof artSheet !== "undefined" && artSheet.open)));
   if (!view) return;
   const img = project.cover || (view === "content" && artistRec && artistRec.cover) || "";
   b.classList.toggle("has-img", !!img);
