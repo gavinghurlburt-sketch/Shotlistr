@@ -1397,10 +1397,14 @@ body.art-sheet .appbar-top > * { visibility: hidden; }
 #artistSheet .pc-wrap .sr-card { background-color: transparent; }
 .waveform { touch-action: none; }
 /* swipe-to-delete: a frosted red button that sits on top and grows from a thin line as you swipe */
-.pc-wrap .pc-del, .pc-wrap .pc-del:hover { z-index: 2; top: 0; bottom: 0; right: 0; width: max(3px, calc(var(--rev, 0) * 1px - 10px)); min-width: 0; padding: 0; overflow: hidden; white-space: nowrap; border-radius: 20px; background: color-mix(in srgb, #ff453a 36%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #ff453a 70%, transparent); color: rgba(255,255,255,calc((var(--rev, 0) - 56) / 36)); transition: width .22s cubic-bezier(.2,.8,.2,1); }
+.pc-wrap .pc-del, .pc-wrap .pc-del:hover { z-index: 2; top: 0; bottom: 0; right: 0; width: max(0px, calc(var(--rev, 0) * 1px - 10px)); min-width: 0; padding: 0; overflow: hidden; white-space: nowrap; border-radius: 20px; background: color-mix(in srgb, #ff453a 36%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6); box-shadow: inset 0 1px 0 var(--bar-edge), inset 0 0 0 1px color-mix(in srgb, #ff453a 70%, transparent); color: rgba(255,255,255,calc((var(--rev, 0) - 56) / 36)); transition: width .22s cubic-bezier(.2,.8,.2,1); }
 .pc-wrap:has(.dragging) .pc-del { transition: none; }
 .pc-wrap:not(.part-wrap):not(.sr-wrap) .pc-del { border-radius: 24px; }   /* same curve as the card wrapper so the right corners line up */
 .pc-wrap.part-wrap .pc-del { top: 3px; bottom: 9px; right: 3px; border-radius: 16px; }
+#artistSheet input.artist-title { background: none !important; border: 0 !important; padding: 0 !important; box-shadow: none !important; color: var(--text) !important; font-size: 34px !important; font-weight: 800 !important; line-height: 1.1 !important; letter-spacing: -0.03em !important; height: auto !important; }
+.artist-title { display: block; width: 100%; box-sizing: border-box; margin: 14px 0 4px; padding: 0; border: 0; background: none; box-shadow: none; outline: none; color: #fff; font-size: 34px; font-weight: 800; line-height: 1.1; font-family: inherit; letter-spacing: -0.03em; text-shadow: 0 2px 12px rgba(0,0,0,.35); min-height: 0; border-radius: 0; }
+.art-card .ac-photo, .art-card .ac-glass { right: auto; width: var(--fw, 100%); }
+.art-card::after { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255,255,255,.24); pointer-events: none; }
 </style>
 </head>
 <body>
@@ -1425,7 +1429,7 @@ body.art-sheet .appbar-top > * { visibility: hidden; }
 </header>
 
 <div id="artistScrim" class="hidden"></div>
-<div id="artistSheet" class="hidden sheet-frost"><div class="grab" aria-hidden="true"></div></div>
+<div id="artistSheet" class="hidden sheet-frost"><div class="grab" aria-hidden="true"></div><input type="text" id="artistTitle" class="artist-title" aria-label="Artist name" placeholder="Artist name" autocapitalize="words"></div>
 <main>
 <div id="projectBanner" class="banner hidden">
   <div class="banner-img" id="bannerImg"></div>
@@ -4782,7 +4786,7 @@ document.addEventListener("click", e => {
 /* swipe a project card left to reveal a red Delete, like Mail */
 var swipeMoved = false;
 const DEL_W = 96;
-function swSet(c, px) { c.parentElement.style.setProperty("--rev", String(-px)); if (c.classList.contains("project-card")) { const n = c.firstElementChild, cs = getComputedStyle(c); c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else if (c.classList.contains("part-row")) { const n = c.firstElementChild; c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - 22) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
+function swSet(c, px) { if (c.classList.contains("art-card")) c.style.setProperty("--fw", c.parentElement.clientWidth + "px"); c.parentElement.style.setProperty("--rev", String(-px)); if (c.classList.contains("project-card")) { const n = c.firstElementChild, cs = getComputedStyle(c); c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else if (c.classList.contains("part-row")) { const n = c.firstElementChild; c.style.width = px ? `calc(100% - ${-px}px)` : ""; n.style.width = px ? (c.parentElement.clientWidth - 22) + "px" : ""; n.style.transform = px ? `translate3d(${px}px,0,0)` : ""; } else c.style.transform = px ? `translate3d(${px}px,0,0)` : ""; }
 function oc(c) { return c.classList.contains("part-row") ? "sw-open" : "open"; }
 function closeSwipedCards(except) {
   document.querySelectorAll(".pc-wrap .project-card.open, .pc-wrap .sr-card.open, .pc-wrap .part-row.sw-open").forEach(c => { if (c !== except) { c.classList.remove("open", "sw-open"); swSet(c, 0); setTimeout(() => c.parentElement && c.parentElement.classList.remove("rv"), 260); } });
@@ -4852,7 +4856,8 @@ $("artistsList").addEventListener("click", async e => {
   if (o) {
     const ph = o.closest(".project-card").querySelector(".ac-photo"), r0 = ph && ph.getBoundingClientRect(), bg = ph && ph.style.backgroundImage;
     await openProject(o.dataset.artistOpen, { fromCard: true });
-    revealArtistSheet({ r0, bg, card: o.closest(".project-card").getBoundingClientRect() });
+    const nmEl = o.querySelector(".project-card-name");
+    revealArtistSheet({ r0, bg, card: o.closest(".project-card").getBoundingClientRect(), name: nmEl && nmEl.getBoundingClientRect(), nameText: nmEl && nmEl.textContent });
     return;
   }
   const d = e.target.closest("[data-delete-artist]");
@@ -5029,11 +5034,12 @@ var artSheet = { open: false, ph: {} }, artistBackDone = false;
 function enterArtistSheet() {
   const sh = $("artistSheet"), pv = $("projectsView"), wasHidden = pv.classList.contains("hidden");
   if (!artSheet.open) {
-    ["projectBanner", "draftCView"].forEach(id => { const el = $(id), c = document.createComment(id); el.parentNode.insertBefore(c, el); artSheet.ph[id] = c; sh.appendChild(el); });
+    ["projectBanner", "draftCView"].forEach(id => { const el = $(id), c = document.createComment(id); el.parentNode.insertBefore(c, el); artSheet.ph[id] = c; if (id === "projectBanner") sh.insertBefore(el, $("artistTitle")); else sh.appendChild(el); });
     ["songScrim", "songPage"].forEach(id => { const el = $(id), c = document.createComment(id); el.parentNode.insertBefore(c, el); artSheet.ph[id] = c; document.body.appendChild(el); });   // fixed layers can't live inside a frosted sheet
     artSheet.open = true;
   }
   document.body.classList.add("art-sheet");
+  $("artistTitle").value = project.docTitle || ""; $("artistTitle").style.opacity = "";
   pv.classList.remove("hidden");
   if (wasHidden) { setHomeMode("artists", true); renderProjectsList(); }
   sh.style.visibility = "hidden"; sh.classList.remove("hidden"); $("artistScrim").classList.remove("hidden"); sh.scrollTop = 0;
@@ -5042,7 +5048,7 @@ function exitArtistSheet() {
   if (!artSheet.open) return;
   ["projectBanner", "draftCView", "songScrim", "songPage"].forEach(id => { const c = artSheet.ph[id], el = $(id); if (c && c.parentNode) { c.parentNode.insertBefore(el, c); c.remove(); } });
   artSheet.open = false; artSheet.ph = {};
-  const sh = $("artistSheet"); [sh, $("draftCView")].forEach(el => el.getAnimations && el.getAnimations().forEach(x => x.cancel())); sh.classList.add("hidden"); sh.style.transform = ""; sh.style.visibility = "";
+  const sh = $("artistSheet"); [sh, $("draftCView"), $("artistTitle")].forEach(el => el.getAnimations && el.getAnimations().forEach(x => x.cancel())); sh.classList.add("hidden"); sh.style.transform = ""; sh.style.visibility = "";
   $("artistScrim").classList.add("hidden"); document.body.classList.remove("art-sheet"); $("projectBanner").style.visibility = "";
 }
 /* the sheet slides up; if it came from a card, that card's photo flies to the top of the sheet and un-blurs */
@@ -5066,7 +5072,17 @@ function revealArtistSheet(from) {
   document.body.appendChild(cl);
   ban.style.visibility = "hidden";
   const box = (r, rad) => ({ transform: `translate(${r.left}px,${r.top}px)`, width: r.width + "px", height: r.height + "px", borderRadius: rad });
-  const done = () => { ban.style.visibility = ""; cl.remove(); };
+  const tt = $("artistTitle"), tr = tt.getBoundingClientRect(), nm = from.name && from.nameText ? from.name : null;
+  let fn = null;
+  if (nm && tr.width) {                                            // the name drops from the card to sit under the photo as plain white text
+    tt.style.opacity = "0";
+    fn = document.createElement("div"); fn.textContent = from.nameText;
+    fn.style.cssText = "position:fixed;left:0;top:0;z-index:10000;pointer-events:none;white-space:nowrap;font-size:32px;color:#fff;font-weight:800;letter-spacing:-0.03em;line-height:1.1;transform-origin:0 0;text-shadow:0 2px 12px rgba(0,0,0,.5);font-family:inherit;";
+    document.body.appendChild(fn);
+    const cx = nm.left + nm.width / 2;
+    fn.animate([{ transform: `translate(${cx - fn.offsetWidth / 2}px,${nm.top}px)`, fontSize: "32px" }, { transform: `translate(${tr.left + parseFloat(getComputedStyle(tt).paddingLeft || 0)}px,${tr.top + 2}px)`, fontSize: "34px" }], Object.assign({ fill: "forwards" }, o));
+  }
+  const done = () => { ban.style.visibility = ""; cl.remove(); if (fn) { tt.style.opacity = ""; fn.remove(); } };
   const a = cl.animate([box(from.r0, "24px"), box(r1, "26px")], Object.assign({ fill: "forwards" }, o));
   cl.children[0].animate([{ opacity: .8 }, { opacity: 1 }], o);
   cl.children[2].animate([{ opacity: 1 }, { opacity: 0 }], o);
@@ -5084,7 +5100,7 @@ function artistCloseStart() {
   sh.style.transition = "none"; sh.style.transform = "";                  // shrinks back into the card
   const S = sh.getBoundingClientRect(), o = { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" };
   sh.animate([{ clipPath: "inset(0px 0px 0px 0px round 28px 28px 0px 0px)" }, { clipPath: `inset(${C.top - S.top}px ${S.right - C.right}px ${S.bottom - C.bottom}px ${C.left - S.left}px round 24px 24px 24px 24px)` }], o);
-  $("draftCView").animate([{ opacity: 1 }, { opacity: 0, offset: .5 }, { opacity: 0 }], o);
+  $("draftCView").animate([{ opacity: 1 }, { opacity: 0, offset: .5 }, { opacity: 0 }], o); $("artistTitle").animate([{ opacity: 1 }, { opacity: 0 }], o);
   return true;
 }
 async function goToProjects() {
@@ -5129,6 +5145,9 @@ function flyBack(b) {
   });
 }
 $("backToProjectsBtn").addEventListener("click", () => { if (project && project.type === "artist" && songOpen) closeSongPage(); else goToProjects(); });
+$("artistTitle").addEventListener("input", e => { $("docTitleInput").value = e.target.value; $("docTitleInput").dispatchEvent(new Event("input")); });
+$("artistTitle").addEventListener("change", () => $("docTitleInput").dispatchEvent(new Event("change")));
+$("artistTitle").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
 $("docTitleInput").addEventListener("input", e => {
   project.docTitle = e.target.value;
   document.title = `${e.target.value || "Untitled project"} · creatrr`;
