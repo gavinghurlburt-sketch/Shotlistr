@@ -7116,7 +7116,6 @@ async function inboxDrainNativeRun() {
   let n = 0; const placed = [];
   let r = null; const SB = C.Capacitor.registerPlugin("ShareBridge");
   try { r = await SB.drain(); } catch (e) { return 0; }
-  if (r && r.log) showNotice("Share check: " + r.log + " · found " + (r.found || 0));
   if (r && r.groupOk === false && !inboxDrainNative.warned) { inboxDrainNative.warned = true; showNotice("Sharing into creatrr isn't linked on this phone yet (App Groups)."); }
   for (const f of (r && r.files) || []) {
     const name = f.name; if (!AUDIO_RE.test(name)) continue;
