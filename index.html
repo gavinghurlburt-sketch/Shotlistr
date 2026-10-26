@@ -1383,6 +1383,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 .art-card .pc-text { transition: transform .18s ease-out; }
 .ac-glass { transition: backdrop-filter .18s ease-out, -webkit-backdrop-filter .18s ease-out, opacity .18s ease-out; }
 .art-card:active .pc-text { transform: translateY(8px); }
+.art-card:active .project-card-main { z-index: 1; }   /* the name slips behind the glass while pressed */
 .ac-photo { transition: opacity .18s ease-out; }
 .art-card:active .ac-photo { opacity: 1; }
 .art-card:active .ac-glass { -webkit-backdrop-filter: blur(1px) saturate(1.2); backdrop-filter: blur(1px) saturate(1.2); opacity: .55; }
@@ -5022,7 +5023,7 @@ var artSheet = { open: false, ph: {} }, artistBackDone = false;
 function enterArtistSheet() {
   const sh = $("artistSheet"), pv = $("projectsView"), wasHidden = pv.classList.contains("hidden");
   if (!artSheet.open) {
-    ["projectBanner", "draftView"].forEach(id => { const el = $(id), c = document.createComment(id); el.parentNode.insertBefore(c, el); artSheet.ph[id] = c; sh.appendChild(el); });
+    ["projectBanner", "draftCView"].forEach(id => { const el = $(id), c = document.createComment(id); el.parentNode.insertBefore(c, el); artSheet.ph[id] = c; sh.appendChild(el); });
     artSheet.open = true;
   }
   document.body.classList.add("art-sheet");
@@ -5032,7 +5033,7 @@ function enterArtistSheet() {
 }
 function exitArtistSheet() {
   if (!artSheet.open) return;
-  ["projectBanner", "draftView"].forEach(id => { const c = artSheet.ph[id], el = $(id); if (c && c.parentNode) { c.parentNode.insertBefore(el, c); c.remove(); } });
+  ["projectBanner", "draftCView"].forEach(id => { const c = artSheet.ph[id], el = $(id); if (c && c.parentNode) { c.parentNode.insertBefore(el, c); c.remove(); } });
   artSheet.open = false; artSheet.ph = {};
   const sh = $("artistSheet"); sh.classList.add("hidden"); sh.style.transform = ""; sh.style.visibility = "";
   $("artistScrim").classList.add("hidden"); document.body.classList.remove("art-sheet"); $("projectBanner").style.visibility = "";
