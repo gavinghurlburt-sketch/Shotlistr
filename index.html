@@ -1395,6 +1395,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #artistSheet.hidden, #artistScrim.hidden { display: none; }
 #artistSheet #projectBanner { margin-top: 6px; }
 body.art-sheet .appbar-top > * { visibility: hidden; }
+#artistSheet.sheet-frost { background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 8%, transparent), color-mix(in srgb, var(--surface) 62%, transparent) 55%); }   /* mostly blur at the top, hazier lower down */
 #artistSheet .pc-wrap .sr-card { background-color: transparent; }
 #artistSheet .sr-wrap .pc-del { width: 96px; padding: 0; }
 .waveform { touch-action: none; }
@@ -5447,7 +5448,7 @@ function renderDraftContent() {
   renderSongRows();
   if (!songOpen) return;
   if (document.activeElement !== $("songNameInput")) $("songNameInput").value = sg.name;
-  const slot = document.querySelector("#draftCView .track-slot");
+  const slot = document.querySelector("#songPage .track-slot");
   if ($("trackPanel").parentElement !== slot) slot.appendChild($("trackPanel"));
   syncTempoInputs();
   renderPartsList();
