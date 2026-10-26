@@ -1369,9 +1369,15 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 .pc-wrap .project-card.dragging, .pc-wrap .project-card.dragging .project-card-main { transition: none; }
 .pc-wrap .project-card .project-card-main { flex: none; width: 100%; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
 .cover { position: relative; overflow: hidden; }
-.cover-date { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; background: rgba(0,0,0,.34); text-shadow: 0 1px 6px rgba(0,0,0,.45); }
+.cover-date { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.6), 0 0 2px rgba(0,0,0,.35); }
 .cover-date small { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .cover-date b { font-size: 24px; font-weight: 800; line-height: 1; }
+.art-card { position: relative; min-height: 112px; }
+.art-card .project-card-main { position: relative; z-index: 2; }
+.art-card .project-card-name { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+.ac-photo { position: absolute; inset: 0; z-index: 0; background: center / cover no-repeat; border-radius: inherit; }
+.ac-glass, .fly-glass { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background-color: color-mix(in srgb, var(--bar) 55%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5); }
+.art-card.has-photo .project-card-name, .art-card.has-photo .muted { color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.45); }
 </style>
 </head>
 <body>
@@ -4623,10 +4629,9 @@ function renderArtists(recs, projects) {
     const sub = [`${a.songs.length} song${a.songs.length === 1 ? "" : "s"}`, `${ps.length} shoot${ps.length === 1 ? "" : "s"}`, next ? "Next " + dayLabel(next, false) : ""].filter(Boolean).join(" · ");
     return `<div class="pc-wrap">
       ${isArtistTier() ? "" : `<button type="button" class="pc-del" data-delete-artist="${a.id}">Remove</button>`}
-      <div class="project-card" style="${coverStyle(a.id)}"><div class="project-card-main" data-artist-open="${a.id}" role="button" tabindex="0">
-        <div class="cover ${withCover ? "img" : "init"}" style="${coverStyle(a.id)}${withCover ? `;background-image:url(${withCover.cover})` : ""}">${withCover ? "" : esc((a.docTitle || "?").trim().charAt(0).toUpperCase())}</div>
+      <div class="project-card art-card${withCover ? " has-photo" : ""}" style="${coverStyle(a.id)}"><div class="project-card-main" data-artist-open="${a.id}" role="button" tabindex="0">
         <div class="pc-text"><div class="project-card-name">${esc(a.docTitle)}</div><div class="muted small">${esc(sub)}</div>${isArtistTier() && a.songs.length ? `<div class="muted small" style="margin-top:6px">${esc(a.songs.slice(0, 4).map(x => x.name).join(" · "))}${a.songs.length > 4 ? " …" : ""}</div>` : ""}</div>
-      </div></div></div>`;
+      </div>${withCover ? `<div class="ac-photo" style="background-image:url(${withCover.cover})"></div><div class="ac-glass"></div>` : ""}</div></div>`;
   }).join("");
 }
 var homeMode = "projects", artistTotal = 0;
@@ -4817,9 +4822,33 @@ $("projectsList").addEventListener("click", async e => {
   }
 });
 $("projectsList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset.openId) openProject(e.target.dataset.openId); });
+/* the artist card's photo flies to the artist page banner and un-blurs on the way */
+function flyCover(r0, bg) {
+  const ban = $("projectBanner");
+  if (!bg || !ban || ban.classList.contains("hidden") || !ban.animate) return;
+  requestAnimationFrame(() => {
+    const r1 = ban.getBoundingClientRect();
+    if (!r1.width || !r1.height) return;
+    const cl = document.createElement("div");
+    cl.style.cssText = "position:fixed;left:0;top:0;z-index:9999;pointer-events:none;overflow:hidden;background:center / cover " + bg + ";";
+    cl.innerHTML = '<div class="fly-glass"></div>';
+    document.body.appendChild(cl);
+    ban.style.visibility = "hidden";
+    const box = (r, rad) => ({ transform: `translate(${r.left}px,${r.top}px)`, width: r.width + "px", height: r.height + "px", borderRadius: rad });
+    const done = () => { ban.style.visibility = ""; cl.remove(); };
+    const a = cl.animate([box(r0, "24px"), box(r1, "26px")], { duration: 460, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" });
+    cl.firstChild.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 460, easing: "ease-out", fill: "forwards" });
+    a.onfinish = done; setTimeout(done, 900);
+  });
+}
 $("artistsList").addEventListener("click", async e => {
   const o = e.target.closest("[data-artist-open]");
-  if (o) { await openProject(o.dataset.artistOpen); return; }
+  if (o) {
+    const ph = o.closest(".project-card").querySelector(".ac-photo"), r0 = ph && ph.getBoundingClientRect(), bg = ph && ph.style.backgroundImage;
+    await openProject(o.dataset.artistOpen);
+    if (r0) flyCover(r0, bg);
+    return;
+  }
   const d = e.target.closest("[data-delete-artist]");
   if (d) {
     const id = d.dataset.deleteArtist, all = await listProjects(), art = all.find(r => r.id === id); if (!art) return;
