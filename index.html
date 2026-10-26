@@ -1383,6 +1383,8 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 .art-card .pc-text { transition: transform .18s ease-out; }
 .ac-glass { transition: backdrop-filter .18s ease-out, -webkit-backdrop-filter .18s ease-out, opacity .18s ease-out; }
 .art-card:active .pc-text { transform: translateY(8px); }
+.ac-photo { transition: opacity .18s ease-out; }
+.art-card:active .ac-photo { opacity: 1; }
 .art-card:active .ac-glass { -webkit-backdrop-filter: blur(1px) saturate(1.2); backdrop-filter: blur(1px) saturate(1.2); opacity: .55; }
 .art-card .pc-text { width: 100%; }
 .art-card.has-photo .project-card-name, .art-card.has-photo .muted { color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.45); }
