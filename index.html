@@ -2966,6 +2966,27 @@ function wsolaStretch(buf, rate, a, b) {
     step();
   });
 }
+/* Signalsmith Stretch (WASM AudioWorklet): studio-grade time stretch, used for every slower / faster playback that runs in the page.
+   The decoded track is loaded into the worklet once per track and context; if the library can't load, the older WSOLA stretch below takes over. */
+var ssMod = null, ssNode = null, ssCtx = null, ssTrack = null, ssFailed = false;
+async function ssFor(c) {
+  if (ssFailed || !audioBuffer) return null;
+  try {
+    if (!ssMod) ssMod = (await import(new URL("assets/signalsmith-stretch.mjs", document.baseURI).href)).default;
+    if (!ssNode || ssCtx !== c) {
+      if (ssNode) { try { ssNode.disconnect(); } catch (e) {} }
+      ssNode = await ssMod(c, { outputChannelCount: [2] });
+      ssCtx = c; ssTrack = null;
+    }
+    if (ssTrack !== audioBuffer) {
+      await ssNode.dropBuffers();
+      const chs = []; for (let i = 0; i < audioBuffer.numberOfChannels; i++) chs.push(audioBuffer.getChannelData(i).slice());
+      await ssNode.addBuffers(chs.length === 1 ? [chs[0], chs[0].slice()] : chs.slice(0, 2));
+      ssTrack = audioBuffer;
+    }
+    return ssNode;
+  } catch (e) { console.error("signalsmith unavailable", e); ssFailed = true; ssNode = null; return null; }
+}
 var stretchWin = null;
 async function stretchedFor(rate, from) {
   const w = stretchWin, dur = audioBuffer.duration;
@@ -3087,7 +3108,7 @@ async function playFrom(target, withCountIn, rate) {
   playStartPos = target;
   pausePos = target;
   if (natCapable() && natPrep) { try { await natPrep; } catch (e) {} if (token !== playToken) return; }
-  if (natReady && (audioBuffer || natDur > 0)) { if (await playNative(target, withCountIn, rt, token)) return; if (token !== playToken) return; }
+  if (natReady && (audioBuffer ? rt === 1 : natDur > 0)) { if (await playNative(target, withCountIn, rt, token)) return; if (token !== playToken) return; }   // other speeds: the page plays it through Signalsmith Stretch
   if (!audioBuffer) {                      // fallback: plain element, no count-in precision
     webAudioSession();
     try { if (player.getAttribute("src") !== currentTrackUrl) { player.src = currentTrackUrl; player.load(); } } catch (e) {}
@@ -3099,8 +3120,10 @@ async function playFrom(target, withCountIn, rate) {
   const c = await readyEngine();
   if (token !== playToken) return;         // another press superseded this one
   if (!c) { showNotice("Audio is blocked right now — another app or tab may have it. Press play again."); return; }
-  let buf = audioBuffer, bufStart = 0, srcRate = 1;
-  if (rt !== 1) {
+  let buf = audioBuffer, bufStart = 0, srcRate = 1, ss = null;
+  if (rt !== 1) ss = await ssFor(c);
+  if (token !== playToken) return;
+  if (rt !== 1 && !ss) {
     const w = await stretchedFor(rt, target);
     if (token !== playToken) return;
     if (w) { buf = w.buf; bufStart = w.a; } else srcRate = rt;   // stretch failed: fall back to plain (pitch-shifting) rate
@@ -3116,11 +3139,20 @@ async function playFrom(target, withCountIn, rate) {
   }
   const songAt = t0 + beats * beat;
   const offset = Math.min(target, Math.max(0, audioBuffer.duration - 0.05));
-  const src = c.createBufferSource();
-  src.buffer = buf;
-  src.playbackRate.value = srcRate;
-  src.connect(songOut(c));
-  src.start(songAt, buf === audioBuffer ? offset : Math.max(0, (offset - bufStart) / rt));
+  let src;
+  if (ss) {
+    try { ss.disconnect(); } catch (e) {}
+    ss.connect(songOut(c));
+    ss.schedule({ output: songAt, active: true, input: offset, rate: rt });
+    src = { stop() { try { ss.schedule({ active: false }); } catch (e) {} }, onended: null };
+    timers.push(setTimeout(() => { if (src.onended) src.onended(); }, Math.max(0, (songAt - c.currentTime) + (audioBuffer.duration - offset) / rt) * 1000 + 250));
+  } else {
+    src = c.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = srcRate;
+    src.connect(songOut(c));
+    src.start(songAt, buf === audioBuffer ? offset : Math.max(0, (offset - bufStart) / rt));
+  }
   cue = { src, ctxStart: songAt, offset, clicks, timers, rate: rt };
   startClickPump();
   src.onended = () => { if (cue && cue.src === src) { cue = null; pausePos = playStartPos; updateTransportUI(); drawWaveform(); } };
