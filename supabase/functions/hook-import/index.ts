@@ -174,8 +174,8 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body: JSON.stringify({
-          model: MODEL, max_tokens: 1400, system: SYSTEM, tools: [TOOL], tool_choice: { type: "tool", name: "save_hook" },
-          messages: [{ role: "user", content: [...blocks, { type: "text", text: `${blocks.length} frame${blocks.length === 1 ? "" : "s"}, earliest first. What is the hook technique?` }] }],
+          model: MODEL, max_tokens: 1400, system: SYSTEM, tools: [TOOL], tool_choice: { type: "auto" },
+          messages: [{ role: "user", content: [...blocks, { type: "text", text: `${blocks.length} frame${blocks.length === 1 ? "" : "s"}, earliest first. What is the hook technique? Respond only by calling the save_hook tool.` }] }],
         }),
         signal: AbortSignal.timeout(55_000),
       });
