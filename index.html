@@ -552,7 +552,11 @@ table.sched tr.done-row td { background-color: var(--done); }
 .hs-hook { font-weight: 700; }
 .hs-hook:not(.set) { color: var(--accent, #ffd60a); font-weight: 600; }
 .hs-thumb { width: 64px; flex: none; }
-.hs-play, .sp-row .hs-play { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+.hook-sec, .sp-row { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: pan-y; transition: background-color .15s ease; }
+.hook-sec.holding, .sp-row.holding { background-color: color-mix(in srgb, var(--sec, #888) 18%, transparent); }
+.sp-row { box-shadow: inset 3px 0 0 var(--sec, transparent); padding-left: 12px; }
+.hold-bar { position: absolute; left: 12px; right: 12px; bottom: 3px; height: 5px; border-radius: 3px; overflow: hidden; pointer-events: none; background-color: color-mix(in srgb, var(--sec) 24%, transparent); }
+.hold-bar i { display: block; height: 100%; border-radius: 3px; background-color: var(--sec); transform-origin: left center; }
 .hold-hint { margin: 0 2px 8px; }
 .hook-song { border-radius: 20px; background-color: var(--surface-2); overflow: hidden; }
 .hs-fold, .sp-fold { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px; border: 0; border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: inherit; font: inherit; text-align: left; }
@@ -5836,9 +5840,9 @@ function renderHookPanel() {
   $("tplCard").classList.toggle("off", project.useTemplate === false);
   const secRow = sec => {
     const hr = sectionHookRow(sec), h = hr && HOOKS.find(x => x.id === hr.hookId);
-    return `<div class="hook-sec" data-section-id="${sec.id}" style="--sec:${sec.color}"><button type="button" class="hs-play" data-hook-play aria-label="Hold to listen to ${esc(sec.name)}"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■" : "▶"}</button><button type="button" class="hs-main" data-hook-pick><span class="hs-name">${esc(partLabel(sec))}</span><span class="hs-hook${h ? " set" : ""}">${h ? esc(h.name) : "Choose a hook"}</span></button>${h ? `<span class="hs-thumb">${hookDiagram(h.id)}</span>` : ""}</div>`;
+    return `<div class="hook-sec" data-section-id="${sec.id}" style="--sec:${sec.color}"><button type="button" class="hs-main" data-hook-pick><span class="hs-name">${esc(partLabel(sec))}</span><span class="hs-hook${h ? " set" : ""}">${h ? esc(h.name) : "Choose a hook"}</span></button>${h ? `<span class="hs-thumb">${hookDiagram(h.id)}</span>` : ""}</div>`;
   };
-  el.innerHTML = songs.length ? `<p class="muted small hold-hint">Tap a song to see its sections. Hold ▶ to hear a section.</p>` + songs.map(sg => {
+  el.innerHTML = songs.length ? `<p class="muted small hold-hint">Tap a song to see its sections. Press and hold a section to hear it.</p>` + songs.map(sg => {
     const secs = songParts(sg.id), n = secs.filter(sectionHookRow).length, open = hookOpenSongs.has(sg.id);
     return `<div class="hook-song${open ? " open" : ""}" data-hook-song="${sg.id}"><button type="button" class="hs-fold" data-hook-fold aria-expanded="${open}"><span class="hs-song">${esc(sg.name)}</span><small>${n} of ${secs.length} hook${secs.length === 1 ? "" : "s"}</small><span class="chev" aria-hidden="true"></span></button>${open ? `<div class="hs-secs">${secs.map(secRow).join("")}</div>` : ""}</div>`;
   }).join("") : `<p class="muted small" style="margin:0">Pick the sections you'll film in the Setlist above, then choose a hook for each one.</p>`;
@@ -5913,20 +5917,46 @@ $("hookPanel").addEventListener("click", e => {
   const fold = e.target.closest("[data-hook-fold]");
   if (fold) { const id = fold.closest("[data-hook-song]").dataset.hookSong; if (hookOpenSongs.has(id)) hookOpenSongs.delete(id); else hookOpenSongs.add(id); renderHookPanel(); return; }
   const row = e.target.closest(".hook-sec"); if (!row) return;
-  if (e.target.closest("[data-hook-play]")) return;   /* ▶ is hold-to-play: see pointerdown below */
   if (e.target.closest("[data-hook-pick]")) openHooks(row.dataset.sectionId);
 });
-/* hold ▶ to listen; the music stops the moment you let go */
-function holdToListen(e, key, songId, time) {
-  listenAt(key, songId, time);
-  const end = () => { window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end); if (hookPlaying === key) stopHookListen(); };
-  window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+/* press and hold a section row to hear it: the music stops when you let go, and a bar in the section's color shows how much is left */
+function holdBind(box, rowSel, resolve) {
+  let timer = null, sx = 0, sy = 0, fired = false;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  box.addEventListener("pointerdown", e => {
+    const row = e.target.closest(rowSel); if (!row) return;
+    sx = e.clientX; sy = e.clientY; fired = false; clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null; const d = resolve(row); if (!d) return;
+      fired = true; holdBegin(row, d);
+      const end = () => { window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end); if (hookPlaying === d.key) stopHookListen(); setTimeout(() => { fired = false; }, 400); };
+      window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+    }, 280);
+  });
+  box.addEventListener("pointermove", e => { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel(); });
+  box.addEventListener("pointerup", cancel); box.addEventListener("pointercancel", cancel);
+  box.addEventListener("click", e => { if (fired) { e.stopPropagation(); e.preventDefault(); } }, true);   // a hold is not also a tap
+  box.addEventListener("contextmenu", e => { if (e.target.closest(rowSel)) e.preventDefault(); });
 }
-$("hookPanel").addEventListener("pointerdown", e => {
-  const b = e.target.closest("[data-hook-play]"); if (!b || b.disabled) return;
-  const sec = getSection(b.closest(".hook-sec").dataset.sectionId); if (sec) holdToListen(e, sec.id, sec.songId, sec.time);
+function holdBegin(row, d) {
+  listenAt(d.key, d.songId, d.time);
+  const bar = document.createElement("span"); bar.className = "hold-bar"; bar.style.setProperty("--sec", d.color || "var(--accent, #ffd60a)"); bar.innerHTML = "<i></i>";
+  row.appendChild(bar); row.classList.add("holding");
+  const t0 = parseTC(d.time) || 0;
+  const tick = () => {
+    if (hookPlaying !== d.key) { bar.remove(); row.classList.remove("holding"); return; }
+    const end = d.end(), left = Math.max(0, Math.min(1, (end - transportTime()) / Math.max(0.5, end - t0)));
+    bar.firstChild.style.transform = "scaleX(" + left + ")";
+    requestAnimationFrame(tick);
+  };
+  tick();
+}
+/* where a section ends: the start of the next one, or the end of the song */
+function sectionEndFn(times, t0) { return () => { const n = times.filter(t => t != null && t > t0 + 0.5).sort((a, b) => a - b)[0]; return n != null ? n : (trackDuration() || t0 + 20); }; }
+holdBind($("hookPanel"), ".hook-sec", row => {
+  const sec = getSection(row.dataset.sectionId); if (!sec || !sec.songId) return null;
+  return { key: sec.id, songId: sec.songId, time: sec.time, color: sec.color, end: sectionEndFn(songParts(sec.songId).map(x => parseTC(x.time)), parseTC(sec.time) || 0) };
 });
-$("hookPanel").addEventListener("contextmenu", e => { if (e.target.closest("[data-hook-play]")) e.preventDefault(); });
 $("useTplChk").addEventListener("change", e => {
   if (e.target.checked) { project.useTemplate = true; addMissingShots(); }
   else {
@@ -6166,7 +6196,7 @@ function renderSetPick() {
     box.innerHTML = `<div class="panel"><p style="margin-top:0">${esc(artistRec.docTitle)} has no songs yet. Add them on the artist page, then come back.</p><button type="button" class="btn primary" data-open-artist="1">Open ${esc(artistRec.docTitle)}</button></div>`;
     return;
   }
-  box.innerHTML = `<p class="muted small hold-hint">Tap a song's name to open it. Hold ▶ to hear a section. Tick the boxes for what you'll shoot.</p>` + artistRec.songs.map(sg => {
+  box.innerHTML = `<p class="muted small hold-hint">Tap a song's name to open it. Press and hold a section to hear it. Tick the boxes for what you'll shoot.</p>` + artistRec.songs.map(sg => {
     const secs = sortByTime(artistRec.sections.filter(x => x.songId === sg.id));
     const n = secs.filter(x => srcEntries(x.id).length).length;
     const st = secs.length && n === secs.length ? "on" : n ? "some" : "";
@@ -6174,16 +6204,15 @@ function renderSetPick() {
     return `<div class="sp-card"><div class="sp-head"><button type="button" class="sp-song" data-sp-song="${sg.id}" aria-label="Select every section of ${esc(sg.name)}"><span class="pp-box ${st}">${st === "on" ? "✓" : st === "some" ? "–" : ""}</span></button><button type="button" class="sp-fold" data-sp-fold="${sg.id}" aria-expanded="${open}"><span class="sp-title">${esc(sg.name)}</span><small>${secs.length ? `${n} of ${secs.length}` : ""}</small><span class="chev" aria-hidden="true"></span></button></div>`
       + (!open ? "" : secs.length ? secs.map(as => {
           const on = srcEntries(as.id).length > 0;
-          return `<div class="sp-row" data-section-id="${as.id}" style="--sec:${as.color}"><button type="button" class="hs-play" data-hook-play aria-label="Hold to listen to ${esc(as.name)}"${as.time ? "" : " disabled"}>${hookPlaying === as.id ? "■" : "▶"}</button><button type="button" class="sp-check" data-sp-toggle="${as.id}"><span class="pp-box ${on ? "on" : ""}">${on ? "✓" : ""}</span><span>${esc(as.name)}</span>${as.time ? `<small>${esc(as.time)}</small>` : ""}</button></div>`;
+          return `<div class="sp-row" data-section-id="${as.id}" style="--sec:${as.color}"><button type="button" class="sp-check" data-sp-toggle="${as.id}"><span class="pp-box ${on ? "on" : ""}">${on ? "✓" : ""}</span><span>${esc(as.name)}</span>${as.time ? `<small>${esc(as.time)}</small>` : ""}</button></div>`;
         }).join("") : `<p class="muted small" style="margin:2px 4px 12px">No sections marked yet. Mark them on ${esc(artistRec.docTitle)}'s page.</p>`)
       + `</div>`;
   }).join("");
 }
-$("setPick").addEventListener("pointerdown", e => {
-  const b = e.target.closest("[data-hook-play]"); if (!b || b.disabled || !artistRec) return;
-  const as = artistRec.sections.find(x => x.id === b.closest(".sp-row").dataset.sectionId); if (as) holdToListen(e, as.id, as.songId, as.time);
+holdBind($("setPick"), ".sp-row", row => {
+  const as = artistRec && artistRec.sections.find(x => x.id === row.dataset.sectionId); if (!as) return null;
+  return { key: as.id, songId: as.songId, time: as.time, color: as.color, end: sectionEndFn(artistRec.sections.filter(x => x.songId === as.songId).map(x => parseTC(x.time)), parseTC(as.time) || 0) };
 });
-$("setPick").addEventListener("contextmenu", e => { if (e.target.closest("[data-hook-play]")) e.preventDefault(); });
 function renderSetOrder() {
   const el = $("setOrder"), rows = shootRows();
   el.innerHTML = rows.length ? `<div class="order-card"><h3>Shoot order<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h3><p class="muted small ord-hint">Drag ⠿ to change the order you shoot in.</p><div class="order-list">${rows.map((r, i) => `<div class="order-row" data-pid="${r.p.id}"><span class="n">${i + 1}</span><span>${esc(r.p.name)}</span><span class="sp">${esc(r.sg.name)}</span>${(r.p.speed || 1) !== 1 ? `<span class="spd">${speedLabel(r.p.speed)}</span>` : ""}<span class="ord-grip" aria-label="Drag to reorder">⠿</span></div>`).join("")}</div></div>` : "";
@@ -6201,7 +6230,6 @@ $("setPick").addEventListener("click", async e => {
   if (pa) { if (pa.dataset.pickArtist === "__new") { openArtistModal("plan"); return; } const r = await getProjectRecord(pa.dataset.pickArtist); if (r) await linkArtist(normalizeRecord(r)); return; }
   if (e.target.closest("[data-open-artist]")) { if (project.artistId) { await persistNow(); await openProject(project.artistId); } return; }
   if (!artistRec) return;
-  if (e.target.closest("[data-hook-play]")) return;   /* ▶ is hold-to-play: see pointerdown below */
   const fo = e.target.closest("[data-sp-fold]");
   if (fo) { const id = fo.dataset.spFold; if (spOpenSongs.has(id)) spOpenSongs.delete(id); else spOpenSongs.add(id); renderSetPick(); return; }
   const sp = e.target.closest("[data-sp-speed]"), tg = e.target.closest("[data-sp-toggle]"), sg = e.target.closest("[data-sp-song]");
