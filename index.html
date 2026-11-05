@@ -573,6 +573,18 @@ table.sched tr.done-row td { background-color: var(--done); }
 .sp-row .hs-play { width: 38px; height: 38px; }
 .hook-sticky { position: sticky; top: -1px; z-index: 3; margin: 0 -24px 6px; padding: 2px 24px 4px; background-color: color-mix(in srgb, var(--surface) 88%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 .hook-sticky h3 { margin: 4px 0; }
+.hook-import-row { margin: 8px 0 0; }
+.hd-dim, .hd-dim * { fill: var(--muted, #888); }
+.hd-ring.acc { stroke: var(--accent, #ffd60a); }
+.hi-btns { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 6px; }
+.hi-usage { margin: 4px 0 0; }
+.hi-err { margin: 10px 0 0; color: #ff6b5e; font-weight: 600; }
+.hi-working { display: flex; align-items: center; gap: 10px; margin: 12px 0; font-weight: 600; }
+.hi-dots { display: inline-flex; gap: 4px; } .hi-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #ffd60a); animation: hiDot 1s ease-in-out infinite; } .hi-dots i:nth-child(2) { animation-delay: .15s; } .hi-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes hiDot { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .hi-dots i { animation: none; opacity: .8; } }
+.hi-frames { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; } .hi-frames img { height: 96px; width: auto; border-radius: 10px; flex: none; }
+.hi-card input.field { font-weight: 800; font-size: 17px; }
 .hook-player { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
 .hook-card.chosen { outline: 2px solid var(--accent, #ffd60a); }
 .hook-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -1473,19 +1485,14 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 .art-card { position: relative; min-height: 112px; }
 .art-card .project-card-main { position: relative; z-index: 2; }
 .art-card .project-card-name { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
-.ac-photo { position: absolute; inset: 0; z-index: 0; background: center / cover no-repeat; border-radius: inherit; opacity: .8; }
+.ac-photo { position: absolute; inset: 0; z-index: 0; background: center / cover no-repeat; border-radius: inherit; }
 .fly-img { position: absolute; inset: 0; background: center / cover no-repeat; }
 .fly-shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.35), transparent 55%); }
-.ac-glass, .fly-glass { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: linear-gradient(180deg, transparent 35%, rgba(0,0,0,.4)); -webkit-backdrop-filter: blur(4px) saturate(1.2); backdrop-filter: blur(4px) saturate(1.2); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.75), inset 0 -1px 0 rgba(255,255,255,.25), inset 0 0 0 1px rgba(255,255,255,.34), inset 0 0 18px rgba(255,255,255,.12); }
+.ac-glass, .fly-glass { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: linear-gradient(to top, rgba(0,0,0,.78) 0%, rgba(0,0,0,.45) 42%, rgba(0,0,0,.12) 75%, transparent 100%); }   /* no blur: the photo stays sharp, shaded from the bottom up so the name reads */
 .art-card .project-card-main { text-align: center; }
-.art-card .pc-text { transition: transform .18s ease-out; }
-.ac-glass { transition: backdrop-filter .18s ease-out, -webkit-backdrop-filter .18s ease-out, opacity .18s ease-out; }
-.art-card:active .pc-text { transform: translateY(8px); }
+.ac-glass { transition: opacity .18s ease-out; }
 .ac-photo, .ac-glass { pointer-events: none; }
-.art-card:active .project-card-main { z-index: 1; }   /* the name slips behind the glass while pressed */
-.ac-photo { transition: opacity .18s ease-out; }
-.art-card:active .ac-photo { opacity: 1; }
-.art-card:active .ac-glass { -webkit-backdrop-filter: blur(1px) saturate(1.2); backdrop-filter: blur(1px) saturate(1.2); opacity: .55; }
+.art-card:active .ac-glass { opacity: .6; }
 .art-card .pc-text { width: 100%; }
 .art-card.has-photo .project-card-name { color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
 #artistScrim { position: fixed; inset: 0; z-index: 155; background: rgba(0,0,0,.35); touch-action: none; }
@@ -1816,8 +1823,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <button type="button" id="tplCard" class="tpl-card" aria-label="Shot template"></button>
       <label class="hook-toggle"><input type="checkbox" id="useTplChk" checked><span>Add this shot template to every section<small>Turn off to shoot only hook shots.</small></span></label>
       <h2 class="sec-title" style="margin-top:22px">Opening hooks</h2>
-      <p class="muted small" style="margin:0 0 10px">Pick a hook for any section you want one. Tap ▶ to hear the section first. Only that section gets the hook shot.</p>
+      <p class="muted small" style="margin:0 0 10px">Pick a hook for any section you want one. Press and hold a section to hear it first. Only that section gets the hook shot.</p>
       <div id="hookPanel" class="hook-secs"></div>
+      <div class="hook-import-row"><button type="button" class="btn small" data-hook-import>+ Import a hook from a video</button></div>
       <div class="panel">
         <div class="panel-head">
           <h2>Reference shots</h2>
@@ -1887,6 +1895,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 <!-- ===== modals ===== -->
 <input type="file" id="partRefInput" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.gif,.webp" multiple hidden>
 <div id="hookModal" class="modal sheet hidden"><div class="modal-inner sheet-frost" id="hookInner"></div></div>
+<div id="hookImportModal" class="modal sheet hidden"><div class="modal-inner sheet-frost" id="hookImportInner"></div></div>
+<input type="file" id="hookVideoInput" accept="video/*" hidden>
+<input type="file" id="hookShotsInput" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" multiple hidden>
 <div id="refPickModal" class="modal sheet hidden"><div class="modal-inner sheet-frost" id="refPickInner"></div></div>
 <div id="notesModal" class="modal sheet hidden"><div class="modal-inner sheet-frost" id="notesInner"></div></div>
 <div id="shareModal" class="modal hidden"><div class="modal-inner" id="shareInner"></div></div>
@@ -5801,7 +5812,7 @@ const HOOKS = [
   { id: "h-reverse", cat: "motion", name: "Reverse reveal", gist: "Play a simple action backward so it feels strange.", movement: "Reversed in edit", how: ["Film a simple action: a pour, a toss, a jump.", "Reverse it in the editor.", "Switch to forward at the moment you start talking."], tip: "Skip anything with visible text; it will read backwards." }
 ];
 /* little animated drawings of each idea (original schematics; motion pauses for people who prefer reduced motion) */
-function hookDiagram(id) {
+function hookDiagram(id, spec) {
   const ph = `<rect class="hd-ph" x="52" y="6" width="56" height="88" rx="9"/>`;
   const man = (x, y, c) => `<g class="hd-man ${c || ""}"><circle cx="${x}" cy="${y}" r="5"/><rect x="${x - 8}" y="${y + 7}" width="16" height="19" rx="7"/></g>`;
   const bar = (x, y, w, c) => `<rect class="hd-bar ${c || ""}" x="${x}" y="${y}" width="${w}" height="4" rx="2"/>`;
@@ -5823,11 +5834,41 @@ function hookDiagram(id) {
     "h-silence": `${ph}<path class="hd-line" d="M58 52h20"/><path class="hd-acc a-pulse" d="M78 52l3-34 4 68 4-34h13"/>`,
     "h-reverse": `${ph}<g class="a-spinrev"><path class="hd-ring" d="M96 52a16 16 0 1 0-6 12.5"/><path class="hd-acc" d="M96 44v10h-10"/></g>`
   };
-  return `<svg class="hd" viewBox="0 0 160 100" role="img" aria-label="${esc((HOOKS.find(h => h.id === id) || {}).name || "Hook")} diagram" preserveAspectRatio="xMidYMid meet">${d[id] || ph}</svg>`;
+  const drawn = !d[id] && (spec || (userHooks.find(h => h.id === id) || {}).diagram);
+  return `<svg class="hd" viewBox="0 0 160 100" role="img" aria-label="${esc((allHooks().find(h => h.id === id) || {}).name || "Hook")} diagram" preserveAspectRatio="xMidYMid meet">${drawn ? ph + specInner(drawn, man, bar) : (d[id] || ph)}</svg>`;
+}
+/* hooks people import: the AI only picks from these pieces and motions; everything is clamped and escaped here too */
+var userHooks = (function () { try { const a = JSON.parse(localStorage.getItem("creatrr_user_hooks") || "[]"); return Array.isArray(a) ? a.filter(h => h && /^u-[a-z0-9]+$/.test(h.id) && h.name && Array.isArray(h.how)).map(h => Object.assign({}, h, { mine: true })) : []; } catch (e) { return []; } })();
+function saveUserHooks() { try { localStorage.setItem("creatrr_user_hooks", JSON.stringify(userHooks)); } catch (e) {} }
+const allHooks = () => HOOKS.concat(userHooks);
+const HD_ANIMS = ["enter", "rise", "bob", "wipe", "pulse", "react", "flash", "pull", "strike", "pop", "fadein", "fadeout", "spinrev"];
+function specInner(spec, man, bar) {
+  const nn = (v, lo, hi, d) => (typeof v === "number" && isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
+  return (Array.isArray(spec) ? spec : []).slice(0, 8).map(it => {
+    if (!it || typeof it !== "object") return "";
+    const k = String(it.kind), tone = it.tone === "accent" ? "accent" : it.tone === "dim" ? "dim" : "normal";
+    let an = HD_ANIMS.includes(it.anim) ? it.anim : ""; if (k === "flash" && !an) an = "flash";
+    const x = nn(it.x, 58, 102, 80), y = nn(it.y, 14, 86, 50);
+    const tcls = tone === "accent" ? "hd-acc" : tone === "dim" ? "hd-dim" : "";
+    let g = "";
+    if (k === "person") g = man(x, y, tcls);
+    else if (k === "bar") { const w = nn(it.w, 8, 44, 30); g = bar(x - w / 2, y, w, tone === "accent" ? "acc" : tone === "dim" ? "dim" : ""); }
+    else if (k === "ring") g = `<circle class="hd-ring${tone === "accent" ? " acc" : ""}" cx="${x}" cy="${y}" r="${nn(it.r, 4, 32, 14)}"/>`;
+    else if (k === "object") { const w = nn(it.w, 8, 44, 24), h = nn(it.h, 6, 44, 18); g = `<rect class="hd-obj ${tcls}" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="3"/>`; }
+    else if (k === "dot") g = `<circle class="${tone === "accent" ? "hd-acc" : "hd-obj"}" cx="${x}" cy="${y}" r="${nn(it.r, 4, 32, 14)}"/>`;
+    else if (k === "text") { const t = String(it.text || "!").slice(0, 3); g = `<text class="hd-big" style="font-size:${t.length > 2 ? 24 : t.length > 1 ? 32 : 44}px" x="${x}" y="${y + 14}" text-anchor="middle">${esc(t)}</text>`; }
+    else if (k === "wave") g = `<g class="hd-wave">${[8, 12, 9, 14, 11, 40, 16, 13, 10, 12].map((h, i) => `<rect class="${i === 5 ? "hd-acc" : ""}" x="${58 + i * 4.6}" y="${52 - h / 2}" width="3" height="${h}" rx="1.5"/>`).join("")}</g>`;
+    else if (k === "line") g = `<line class="hd-line" x1="${x}" y1="8" x2="${x}" y2="92"/>`;
+    else if (k === "cover") g = `<rect class="hd-cover" x="53" y="7" width="54" height="86" rx="8"/>`;
+    else if (k === "flash") g = `<rect class="hd-flash" x="56" y="12" width="48" height="76" rx="6"/>`;
+    return g && an ? `<g class="a-${an}">${g}</g>` : g;
+  }).join("");
 }
 var hookCat = "all", hookSecId = null, hookRate = 1, hookPlaying = null, hookWatch = null, hookPreviewSong = null, hookPrevActive = null;
 var hookOpenSongs = new Set(), spOpenSongs = new Set();   // which songs are unfolded on the Plan page (this visit only)
 const sectionHookRow = sec => sec.rows.find(r => r.hookId);
+const hookOf = hr => allHooks().find(x => x.id === hr.hookId) || { id: hr.hookId, name: String(hr.subject || "").replace(/^Hook:\s*/, "") || "Hook", nodiagram: true };   // a deleted imported hook still shows its name
+const hookCats = () => userHooks.length ? HOOK_CATS.concat([{ id: "mine", name: "Mine" }]) : HOOK_CATS;
 function hookSections() {
   const out = [];
   for (const sg of project.songs) for (const sec of songParts(sg.id)) out.push({ sg, sec });
@@ -5839,8 +5880,8 @@ function renderHookPanel() {
   $("useTplChk").checked = project.useTemplate !== false;
   $("tplCard").classList.toggle("off", project.useTemplate === false);
   const secRow = sec => {
-    const hr = sectionHookRow(sec), h = hr && HOOKS.find(x => x.id === hr.hookId);
-    return `<div class="hook-sec" data-section-id="${sec.id}" style="--sec:${sec.color}"><button type="button" class="hs-main" data-hook-pick><span class="hs-name">${esc(partLabel(sec))}</span><span class="hs-hook${h ? " set" : ""}">${h ? esc(h.name) : "Choose a hook"}</span></button>${h ? `<span class="hs-thumb">${hookDiagram(h.id)}</span>` : ""}</div>`;
+    const hr = sectionHookRow(sec), h = hr && hookOf(hr);
+    return `<div class="hook-sec" data-section-id="${sec.id}" style="--sec:${sec.color}"><button type="button" class="hs-main" data-hook-pick><span class="hs-name">${esc(partLabel(sec))}</span><span class="hs-hook${h ? " set" : ""}">${h ? esc(h.name) : "Choose a hook"}</span></button>${h && !h.nodiagram ? `<span class="hs-thumb">${hookDiagram(h.id)}</span>` : ""}</div>`;
   };
   el.innerHTML = songs.length ? `<p class="muted small hold-hint">Tap a song to see its sections. Press and hold a section to hear it.</p>` + songs.map(sg => {
     const secs = songParts(sg.id), n = secs.filter(sectionHookRow).length, open = hookOpenSongs.has(sg.id);
@@ -5896,16 +5937,109 @@ function openHooks(secId) {
 }
 function paintHooks(keepScroll) {
   const sec = getSection(hookSecId); if (!sec) return;
-  const sg = project.songs.find(x => x.id === sec.songId), cur = sectionHookRow(sec), list = HOOKS.filter(h => hookCat === "all" || h.cat === hookCat);
+  const sg = project.songs.find(x => x.id === sec.songId), cur = sectionHookRow(sec), list = allHooks().filter(h => hookCat === "all" || h.cat === hookCat || (hookCat === "mine" && h.mine));
   const sc = keepScroll ? $("hookInner").scrollTop : 0;
   $("hookInner").innerHTML = `<div class="grab" aria-hidden="true"></div><div class="hook-sticky"><h3>Hook for ${esc((sg ? sg.name + " · " : "") + partLabel(sec))}</h3>
     <div class="hook-player"><button type="button" class="btn small primary" id="hookListen"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■ Stop" : "▶ Listen"}</button><span class="speed-step" role="group" aria-label="Speed"><button type="button" class="btn" data-hook-rate="-1" aria-label="Slower"${hookRate <= 0.5 ? " disabled" : ""}>−</button><span class="speed-val">${speedLabel(hookRate)}</span><button type="button" class="btn" data-hook-rate="1" aria-label="Faster"${hookRate >= 2 ? " disabled" : ""}>+</button></span><span class="muted small">Plays until you tap Stop.</span></div>
-    <div class="hook-cats" role="group" aria-label="Category">${HOOK_CATS.map(c => `<button type="button" class="btn small hook-cat${c.id === hookCat ? " on" : ""}" data-hook-cat="${c.id}">${c.name}</button>`).join("")}<button type="button" class="btn small" data-hook-shuffle>Surprise me</button></div></div>
-    <div class="hook-list">${list.map(h => `<div class="hook-card${cur && cur.hookId === h.id ? " chosen" : ""}" data-hook="${h.id}">${hookDiagram(h.id)}<b>${esc(h.name)}</b><span class="hook-gist">${esc(h.gist)}</span><ol>${h.how.map(x => `<li>${esc(x)}</li>`).join("")}</ol><span class="muted small">Tip: ${esc(h.tip)}</span><div class="hook-actions">${cur && cur.hookId === h.id ? `<button type="button" class="btn small" data-hook-remove>Remove from this section</button>` : `<button type="button" class="btn small primary" data-hook-use="${h.id}">Use for this section</button>`}<button type="button" class="btn small" data-hook-all="${h.id}">Use for every section</button></div></div>`).join("")}</div>
+    <div class="hook-cats" role="group" aria-label="Category">${hookCats().map(c => `<button type="button" class="btn small hook-cat${c.id === hookCat ? " on" : ""}" data-hook-cat="${c.id}">${c.name}</button>`).join("")}<button type="button" class="btn small" data-hook-shuffle>Surprise me</button><button type="button" class="btn small" data-hook-import>+ Import</button></div></div>
+    <div class="hook-list">${list.map(h => `<div class="hook-card${cur && cur.hookId === h.id ? " chosen" : ""}" data-hook="${h.id}">${hookDiagram(h.id)}<b>${esc(h.name)}</b><span class="hook-gist">${esc(h.gist)}</span><ol>${h.how.map(x => `<li>${esc(x)}</li>`).join("")}</ol><span class="muted small">Tip: ${esc(h.tip)}</span>${h.mine ? `<span class="muted small">Imported by you${h.link ? ` · <a href="${esc(h.link)}" target="_blank" rel="noopener noreferrer">where it's from</a>` : ""}</span>` : ""}<div class="hook-actions">${cur && cur.hookId === h.id ? `<button type="button" class="btn small" data-hook-remove>Remove from this section</button>` : `<button type="button" class="btn small primary" data-hook-use="${h.id}">Use for this section</button>`}<button type="button" class="btn small" data-hook-all="${h.id}">Use for every section</button>${h.mine ? `<button type="button" class="btn small" data-hook-del="${h.id}">Delete</button>` : ""}</div></div>`).join("")}</div>
     <div class="suggest-row" style="margin-top:12px"><button type="button" class="btn" data-hook-close>Done</button></div>`;
   if (sc) $("hookInner").scrollTop = sc;
 }
 function closeHooks() { stopHookListen(); $("hookModal").classList.add("hidden"); renderHookPanel(); }
+/* ---- import a hook from a screen recording or screenshots (Plus / Pro / Artist, signed in) ---- */
+var HOOK_FN = "https://anuybnbilfjthbhsxhdk.supabase.co/functions/v1/hook-import";
+var hookImp = { stage: "pick", usage: null, frames: [], hook: null, link: "", err: "" };
+async function hookCall(body, token) {
+  const r = await fetch(HOOK_FN, { method: "POST", headers: { "Content-Type": "application/json", apikey: BAND_KEY, Authorization: "Bearer " + token }, body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) { const e = new Error(j.error === "not_configured" ? "Hook import isn't switched on yet." : (j.error || "Request failed")); e.status = r.status; e.usage = j.usage; throw e; }
+  return j;
+}
+function hookUsageLine(u) {
+  if (!u) return "";
+  const m = Math.max(0, u.month_limit - u.month_used);
+  let t = u.day_limit != null ? `${Math.max(0, u.day_limit - u.day_used)} of ${u.day_limit} left today \u00b7 ${m} of ${u.month_limit} left this month` : `${m} of ${u.month_limit} left this month`;
+  if (u.blocked && u.next_at) t += `. The next one opens ${new Date(u.next_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}.`;
+  return `<p class="muted small hi-usage">${t}</p>`;
+}
+function paintHookImport() {
+  const el = $("hookImportInner"), I = hookImp, st = I.stage;
+  const head = '<div class="grab" aria-hidden="true"></div><h3>Import a hook</h3>';
+  if (st === "working") {
+    el.innerHTML = head + `<p class="hi-working"><span class="hi-dots" aria-hidden="true"><i></i><i></i><i></i></span> Studying the opening\u2026 this takes a few seconds.</p>${I.frames.length ? `<div class="hi-frames">${I.frames.map(f => `<img src="${f}" alt="">`).join("")}</div>` : ""}`;
+  } else if (st === "preview" && I.hook) {
+    const h = I.hook, meta = [h.size, h.angle, h.movement].filter(Boolean);
+    el.innerHTML = head + `<div class="hook-card hi-card">${hookDiagram("preview", h.diagram)}<input type="text" id="hiName" class="field" maxlength="40" value="${esc(h.name)}" aria-label="Hook name"><span class="hook-gist">${esc(h.gist)}</span><ol>${h.how.map(x => `<li>${esc(x)}</li>`).join("")}</ol>${h.tip ? `<span class="muted small">Tip: ${esc(h.tip)}</span>` : ""}${meta.length ? `<span class="muted small">${esc(meta.join(" \u00b7 "))}</span>` : ""}</div>${hookUsageLine(I.usage)}<div class="hook-actions" style="margin-top:12px"><button type="button" class="btn primary" data-hi-save>Save to my hooks</button><button type="button" class="btn" data-hi-again>Try another</button><button type="button" class="btn" data-hi-close>Discard</button></div>`;
+  } else {
+    const blocked = I.usage && I.usage.blocked;
+    el.innerHTML = head + `<p class="muted small" style="margin:0 0 8px">Pick a screen recording, or 2 to 6 screenshots, of the first few seconds of a video you like. creatrr works out the technique and turns it into your own hook card with a diagram, in its own words.</p>${hookUsageLine(I.usage)}
+      <div class="hi-btns"><button type="button" class="btn primary" data-hi-video${blocked ? " disabled" : ""}>Choose a screen recording</button><button type="button" class="btn" data-hi-shots${blocked ? " disabled" : ""}>Choose screenshots</button></div>
+      <label class="band-lab" for="hiLink">Where's it from? (optional)</label><input type="text" id="hiLink" class="field" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="Paste the link to remember it" value="${esc(I.link)}">
+      ${I.err ? `<p class="hi-err" role="alert">${esc(I.err)}</p>` : ""}<div class="suggest-row" style="margin-top:12px"><button type="button" class="btn" data-hi-close>Cancel</button></div>`;
+  }
+}
+async function openHookImport() {
+  hookImp = { stage: "pick", usage: null, frames: [], hook: null, link: "", err: "" };
+  paintHookImport(); $("hookImportModal").classList.remove("hidden");
+  const tok = await bandToken();
+  if (!tok) { hookImp.err = "Sign in to import hooks."; paintHookImport(); return; }
+  try { hookImp.usage = (await hookCall({ action: "usage" }, tok)).usage; } catch (e) { if (e.status === 403 || e.status === 503) hookImp.err = e.message; }
+  if (hookImp.stage === "pick") paintHookImport();
+}
+async function framesFromVideo(file) {
+  const url = URL.createObjectURL(file), v = document.createElement("video");
+  v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = url;
+  const once = (ev, ms) => new Promise((res, rej) => { const t = setTimeout(() => rej(new Error("timeout")), ms); v.addEventListener(ev, () => { clearTimeout(t); res(); }, { once: true }); v.addEventListener("error", () => { clearTimeout(t); rej(new Error("video")); }, { once: true }); });
+  try {
+    await once("loadeddata", 20000);
+    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 4, span = Math.min(6, dur), n = Math.min(6, Math.max(2, Math.round(span * 1.5) + 1)), out = [];
+    const sc = Math.min(1, 640 / Math.max(v.videoWidth || 640, v.videoHeight || 640)), cw = Math.max(2, Math.round((v.videoWidth || 640) * sc)), ch = Math.max(2, Math.round((v.videoHeight || 360) * sc));
+    const c = document.createElement("canvas"); c.width = cw; c.height = ch; const cx = c.getContext("2d");
+    for (let i = 0; i < n; i++) {
+      const t = Math.min(Math.max(0, dur - 0.05), 0.2 + ((span - 0.2) * i) / Math.max(1, n - 1));
+      v.currentTime = t; await once("seeked", 6000);
+      await new Promise(r => requestAnimationFrame(() => r()));
+      cx.drawImage(v, 0, 0, cw, ch); out.push(c.toDataURL("image/jpeg", 0.72));
+    }
+    return out;
+  } finally { URL.revokeObjectURL(url); v.removeAttribute("src"); try { v.load(); } catch (e) {} }
+}
+async function runHookImport(files, isVideo) {
+  const tok = await bandToken();
+  if (!tok) { hookImp.stage = "pick"; hookImp.err = "Sign in to import hooks."; paintHookImport(); return; }
+  hookImp.stage = "working"; hookImp.err = ""; hookImp.frames = []; paintHookImport();
+  try {
+    const frames = isVideo ? await framesFromVideo(files[0]) : await Promise.all(files.map(f => fileToDataURL(f, 900)));
+    hookImp.frames = frames; paintHookImport();
+    const j = await hookCall({ action: "import", frames }, tok);
+    hookImp.hook = j.hook; hookImp.usage = j.usage; hookImp.stage = "preview";
+  } catch (e) {
+    hookImp.stage = "pick"; hookImp.err = e.status ? e.message : "Couldn't read that file. Try another recording, or use screenshots.";
+    if (e.usage) hookImp.usage = e.usage;
+  }
+  paintHookImport();
+}
+function saveImportedHook() {
+  const h = hookImp.hook; if (!h) return;
+  const nm = $("hiName") ? $("hiName").value.trim().slice(0, 40) : "", link = /^https?:\/\//i.test(hookImp.link.trim()) ? hookImp.link.trim().slice(0, 300) : "";
+  const rec = Object.assign({}, h, { id: "u-" + uid().replace(/[^a-z0-9]/gi, "").toLowerCase(), name: nm || h.name, mine: true, link });
+  userHooks.unshift(rec); saveUserHooks();
+  hookImportSheet.close(); hookCat = "mine";
+  showNotice(`Saved "${rec.name}" to your hooks.`);
+  if (!$("hookModal").classList.contains("hidden")) paintHooks();
+}
+document.addEventListener("click", e => { if (e.target.closest("[data-hook-import]")) openHookImport(); });
+$("hookImportModal").addEventListener("click", e => {
+  if (e.target.closest("[data-hi-video]")) { $("hookVideoInput").click(); return; }
+  if (e.target.closest("[data-hi-shots]")) { $("hookShotsInput").click(); return; }
+  if (e.target.closest("[data-hi-save]")) { saveImportedHook(); return; }
+  if (e.target.closest("[data-hi-again]")) { hookImp.stage = "pick"; hookImp.hook = null; paintHookImport(); return; }
+  if (e.target.closest("[data-hi-close]")) hookImportSheet.close();
+});
+$("hookImportModal").addEventListener("input", e => { if (e.target.id === "hiLink") hookImp.link = e.target.value; });
+$("hookVideoInput").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) runHookImport([f], true); });
+$("hookShotsInput").addEventListener("change", e => { const fs = Array.from(e.target.files || []).slice(0, 6); e.target.value = ""; if (fs.length) runHookImport(fs, false); });
 function setHook(sec, h) {
   const old = sectionHookRow(sec);
   if (old && (old.checked || old.takes.length) && !confirm("The current hook shot already has takes logged. Replace it anyway?")) return false;
@@ -5974,15 +6108,17 @@ $("hookModal").addEventListener("click", e => {
   if (e.target.closest("#hookListen")) { listenSection(hookSecId); return; }
   const rt = e.target.closest("[data-hook-rate]");
   if (rt) { hookRate = Math.max(0.5, Math.min(2, rt.dataset.hookRate === "1" ? (hookRate < 1 ? 1 : 2) : (hookRate > 1 ? 1 : 0.5))); const was = hookPlaying; paintHooks(true); if (was) { stopHookListen(); listenSection(hookSecId); } return; }
-  if (e.target.closest("[data-hook-shuffle]")) { const h = HOOKS[Math.floor(Math.random() * HOOKS.length)]; hookCat = "all"; paintHooks(); const el = $("hookInner").querySelector(`[data-hook="${h.id}"]`); if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.add("flash"); } return; }
+  if (e.target.closest("[data-hook-shuffle]")) { const ah = allHooks(), h = ah[Math.floor(Math.random() * ah.length)]; hookCat = "all"; paintHooks(); const el = $("hookInner").querySelector(`[data-hook="${h.id}"]`); if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.add("flash"); } return; }
   const use = e.target.closest("[data-hook-use]"), all = e.target.closest("[data-hook-all]"), rm = e.target.closest("[data-hook-remove]");
-  if (sec && use) { const h = HOOKS.find(x => x.id === use.dataset.hookUse); if (h && setHook(sec, h)) { changed(); paintHooks(true); } return; }
+  if (sec && use) { const h = allHooks().find(x => x.id === use.dataset.hookUse); if (h && setHook(sec, h)) { changed(); paintHooks(true); } return; }
   if (sec && rm) { if (setHook(sec, null)) { changed(); paintHooks(true); } return; }
   if (all) {
-    const h = HOOKS.find(x => x.id === all.dataset.hookAll); if (!h) return;
+    const h = allHooks().find(x => x.id === all.dataset.hookAll); if (!h) return;
     if (!confirm(`Use "${h.name}" as the hook for every section? Sections that already have a hook shot will switch to it.`)) return;
     hookSections().forEach(({ sec: s }) => setHook(s, h)); changed(); paintHooks(true); return;
   }
+  const del = e.target.closest("[data-hook-del]");
+  if (del) { const h = userHooks.find(x => x.id === del.dataset.hookDel); if (h && confirm(`Delete "${h.name}" from your hooks? Sections already using it keep their hook shot.`)) { userHooks = userHooks.filter(x => x !== h); saveUserHooks(); if (!userHooks.length && hookCat === "mine") hookCat = "all"; paintHooks(true); } return; }
   if (e.target.closest("[data-hook-close]")) hookSheet.close();   /* tapping outside or swiping down closes it too (makeSheet) */
 });
 var partRefTarget = null, refPickSec = null, refPickSel = [];
@@ -7741,6 +7877,7 @@ function makeSheet(root, box, onClose, scrim, opts) {
 var tplSheet = makeSheet($("tplModal"), $("tplModal").querySelector(".modal-inner"), () => closeTplModal());
 var notesSheet = makeSheet($("notesModal"), $("notesInner"), () => $("notesModal").classList.add("hidden"));
 var hookSheet = makeSheet($("hookModal"), $("hookInner"), () => closeHooks());
+var hookImportSheet = makeSheet($("hookImportModal"), $("hookImportInner"), () => $("hookImportModal").classList.add("hidden"));
 var tempoSheet = makeSheet($("tempoModal"), $("tempoModal").querySelector(".modal-inner"), () => tapClose());
 var songSheet = makeSheet($("songPage"), $("songPage"), () => closeSongPage(), $("songScrim"));
 var artistSheetCtl = makeSheet($("artistSheet"), $("artistSheet"), () => { $("artistSheet").style.visibility = "hidden"; $("artistScrim").classList.add("hidden"); goToProjects(); }, $("artistScrim"), { ignore: "#songPage, #songScrim, .modal", onStart: () => artistCloseStart() });
