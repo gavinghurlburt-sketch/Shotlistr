@@ -537,6 +537,71 @@ table.sched tr.done-row td { background-color: var(--done); }
 .part-refs .pref { padding: 0; border: 0; border-radius: 10px; overflow: hidden; height: 56px; min-width: 40px; background-color: var(--surface-2); cursor: pointer; }
 .part-refs .pref img { height: 100%; width: auto; display: block; }
 .part-refs .pref.add { padding: 0 12px; font: inherit; font-size: 13px; color: var(--muted); background-color: color-mix(in srgb, var(--sec, #888) 14%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.hook-toggle { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; padding: 12px 14px; border-radius: 16px; background-color: var(--surface-2); cursor: pointer; }
+.hook-toggle input { width: 22px; height: 22px; flex: none; accent-color: var(--accent, #ffd60a); }
+.hook-toggle span { display: flex; flex-direction: column; font-weight: 600; }
+.hook-toggle small { font-weight: 400; color: var(--muted); }
+.tpl-card.off { opacity: .45; }
+.hook-secs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.hook-sec { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background-color: var(--surface-2); box-shadow: inset 3px 0 0 var(--sec, transparent); }
+.hs-play { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; font: inherit; color: inherit; background-color: color-mix(in srgb, var(--sec, #888) 30%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.hs-play:disabled { opacity: .35; }
+.hs-play.on { background-color: color-mix(in srgb, var(--accent, #ffd60a) 40%, transparent); }
+.hs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.hs-name { font-size: 13px; color: var(--muted); }
+.hs-hook { font-weight: 700; }
+.hs-hook:not(.set) { color: var(--accent, #ffd60a); font-weight: 600; }
+.hs-thumb { width: 64px; flex: none; }
+.hook-player { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.hook-card.chosen { outline: 2px solid var(--accent, #ffd60a); }
+.hook-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.hd { width: 100%; height: auto; max-height: 150px; border-radius: 12px; background-color: color-mix(in srgb, var(--text, #fff) 6%, transparent); display: block; }
+.hd * { transform-box: fill-box; transform-origin: center; }
+.hd-ph { fill: none; stroke: var(--muted, #888); stroke-width: 1.5; }
+.hd-man, .hd-man * { fill: var(--text, #ddd); }
+.hd-obj { fill: color-mix(in srgb, var(--text, #ddd) 35%, transparent); }
+.hd-acc, .hd-acc * { fill: var(--accent, #ffd60a); stroke: var(--accent, #ffd60a); stroke-width: 0; }
+path.hd-acc { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.hd-ring { fill: none; stroke: var(--muted, #888); stroke-width: 2; }
+.hd-line { stroke: var(--muted, #888); stroke-width: 2; fill: none; stroke-dasharray: 3 3; }
+.hd-bar { fill: var(--text, #ddd); }
+.hd-bar.acc { fill: var(--accent, #ffd60a); }
+.hd-bar.dim { fill: var(--muted, #888); }
+.hd-strike { stroke: var(--accent, #ffd60a); stroke-width: 2; }
+.hd-big { font: 800 44px system-ui, sans-serif; fill: var(--accent, #ffd60a); }
+.hd-quote { font: 800 36px Georgia, serif; fill: var(--accent, #ffd60a); }
+.hd-cover { fill: var(--surface-2, #333); stroke: var(--muted, #888); stroke-width: 1; }
+.hd-black { fill: #000; }
+.hd-pic { fill: color-mix(in srgb, var(--accent, #ffd60a) 35%, #123); }
+.hd-flash { fill: #fff; opacity: 0; }
+.hd-wave rect { fill: var(--muted, #888); }
+@keyframes hd-enter { 0%, 15% { transform: translateX(-34px); opacity: 0; } 55%, 100% { transform: translateX(0); opacity: 1; } }
+@keyframes hd-rise { 0%, 15% { transform: translateY(30px); opacity: 0; } 55%, 100% { transform: translateY(0); opacity: 1; } }
+@keyframes hd-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes hd-wipe { 0%, 30% { transform: translateX(0); opacity: 1; } 60%, 100% { transform: translateX(-60px); opacity: 0; } }
+@keyframes hd-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@keyframes hd-react { 0%, 40% { transform: scale(1); } 60%, 100% { transform: scale(1.1); } }
+@keyframes hd-flash { 0%, 55%, 100% { opacity: 0; } 60% { opacity: .9; } 75% { opacity: 0; } }
+@keyframes hd-pull { 0%, 20% { transform: scale(2.1); } 70%, 100% { transform: scale(1); } }
+@keyframes hd-strike { 0%, 20% { transform: scaleX(0); } 55%, 100% { transform: scaleX(1); } }
+@keyframes hd-pop { 0%, 20% { transform: scale(.3); opacity: 0; } 50%, 100% { transform: scale(1); opacity: 1; } }
+@keyframes hd-fadein { 0%, 45% { opacity: 0; } 70%, 100% { opacity: 1; } }
+@keyframes hd-fadeout { 0%, 40% { opacity: 1; } 65%, 100% { opacity: 0; } }
+@keyframes hd-spinrev { to { transform: rotate(-360deg); } }
+.a-enter { animation: hd-enter 3.2s ease-in-out infinite; }
+.a-rise { animation: hd-rise 3.2s ease-in-out infinite; }
+.a-bob { animation: hd-bob 1.6s ease-in-out infinite; }
+.a-wipe { animation: hd-wipe 3s ease-in-out infinite; }
+.a-pulse { animation: hd-pulse 1.8s ease-in-out infinite; }
+.a-react { animation: hd-react 3s ease-in-out infinite; }
+.a-flash { animation: hd-flash 2.4s ease-in-out infinite; }
+.a-pull { animation: hd-pull 3.2s ease-in-out infinite; }
+.a-strike { animation: hd-strike 3s ease-in-out infinite; transform-origin: left center; }
+.a-pop { animation: hd-pop 2.6s ease-in-out infinite; }
+.a-fadein { animation: hd-fadein 3s ease-in-out infinite; }
+.a-fadeout { animation: hd-fadeout 3s ease-in-out infinite; }
+.a-spinrev { animation: hd-spinrev 3.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .hd * { animation: none !important; } }
 .hook-cats { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
 .hook-cat.on { background-color: color-mix(in srgb, var(--accent, #ffd60a) 30%, transparent); }
 .hook-list { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -1728,7 +1793,10 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <h2 class="sec-title" style="margin-top:22px">Shot template<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h2>
       <p class="muted small sp-hint">Choose or create the set of shots every section gets.</p>
       <button type="button" id="tplCard" class="tpl-card" aria-label="Shot template"></button>
-      <button type="button" id="hookBtn" class="song-row add" style="margin:10px 0;width:100%">Hook ideas for the opening</button>
+      <label class="hook-toggle"><input type="checkbox" id="useTplChk" checked><span>Add this shot template to every section<small>Turn off to shoot only hook shots.</small></span></label>
+      <h2 class="sec-title" style="margin-top:22px">Opening hooks</h2>
+      <p class="muted small" style="margin:0 0 10px">Pick a hook for any section you want one. Tap ▶ to hear the section first. Only that section gets the hook shot.</p>
+      <div id="hookPanel" class="hook-secs"></div>
       <div class="panel">
         <div class="panel-head">
           <h2>Reference shots</h2>
@@ -2053,7 +2121,7 @@ function defaultRow() {
   return {
     id: uid(), checked: false, doneAt: null, takeType: "",
     setupNum: "", shotNum: "", subject: "", size: "", angle: "", movement: "", equipment: "", lens: "", sound: "",
-    setupTime: "", shootTime: "", notes: "", timestamp: "", images: [], takes: []
+    setupTime: "", shootTime: "", notes: "", timestamp: "", hookId: "", images: [], takes: []
   };
 }
 function defaultSection(name, i) { return { id: uid(), name: name || "Unsorted", color: PALETTE[(i || 0) % PALETTE.length], address: "", songId: null, time: "", refs: [], rows: [] }; }
@@ -2126,6 +2194,7 @@ function normalizeRecord(rec) {
   p.tempo = Object.assign(defaultTempo(), p.tempo || {});
   if (!p.tempo.barsV2) { p.tempo.bars = 1; p.tempo.barsV2 = 1; }   // count-in is one bar (4 beats) now
   p.songs = Array.isArray(p.songs) ? p.songs.map(normalizeSong) : [];
+  p.useTemplate = p.useTemplate !== false;
   p.shotTemplates = (p.type === "artist" ? [] : (Array.isArray(p.shotTemplates) ? p.shotTemplates : DEFAULT_TEMPLATES)).map(t => ({ id: t.id || uid(), name: t.name || "Shot", detail: t.detail || "" }));
   p.visionBoard = Array.isArray(p.visionBoard) ? p.visionBoard : [];
   p.producerNotes = p.producerNotes || "";
@@ -5335,6 +5404,7 @@ function sortByTime(list) {
   });
 }
 function songParts(songId) { return sortByTime(project.sections.filter(x => x.songId === songId)); }
+function tplRows() { return project.useTemplate === false ? [] : project.shotTemplates.map(templateRow); }
 function templateRow(t) { return Object.assign(defaultRow(), { subject: t.name, notes: t.detail, templateId: t.id }); }
 function addPart(sg, preset) {
   const sec = defaultSection(preset ? preset.name : "New part", project.sections.length);
@@ -5692,53 +5762,142 @@ document.addEventListener("change", e => {
 /* ---- hook ideas: general filming techniques, described in our own words (no one's clips, names or captions) ---- */
 const HOOK_CATS = [{ id: "all", name: "All" }, { id: "visual", name: "Visual" }, { id: "motion", name: "Motion" }, { id: "words", name: "Words" }, { id: "music", name: "Music" }];
 const HOOKS = [
-  { id: "h-warp", cat: "visual", name: "Lens warp", gist: "Bend the picture so it looks different from every other clip in the feed.", how: ["Shoot through a fisheye lens or add a warp effect in your editor.", "Keep your face centered where the warp is strongest.", "Put the title in the dark border around the picture."], tip: "Works best when the first second is a close-up." },
-  { id: "h-enter", cat: "motion", name: "Walk into the shot", gist: "Start on an empty frame, then arrive.", how: ["Lock the camera on an empty spot in the room.", "Step in (or sit down) as you start talking.", "Add a slow push-in or pull-out across the whole hook."], tip: "Start your first word the moment you land." },
-  { id: "h-overhead", cat: "motion", name: "Overhead entrance", gist: "A top-down view makes an ordinary space look new.", how: ["Mount or hold the phone straight above the spot.", "Wide lens helps. Step or roll into frame.", "Jump-cut right after you land to keep the pace up."], tip: "Clear the floor first; everything in frame will be seen." },
+  { id: "h-warp", cat: "visual", name: "Lens warp", gist: "Bend the picture so it looks different from every other clip in the feed.", size: "Close-up", how: ["Shoot through a fisheye lens or add a warp effect in your editor.", "Keep your face centered where the warp is strongest.", "Put the title in the dark border around the picture."], tip: "Works best when the first second is a close-up." },
+  { id: "h-enter", cat: "motion", name: "Walk into the shot", gist: "Start on an empty frame, then arrive.", movement: "Static, then slow push-in", how: ["Lock the camera on an empty spot in the room.", "Step in (or sit down) as you start talking.", "Add a slow push-in or pull-out across the whole hook."], tip: "Start your first word the moment you land." },
+  { id: "h-overhead", cat: "motion", name: "Overhead entrance", gist: "A top-down view makes an ordinary space look new.", angle: "Overhead", how: ["Mount or hold the phone straight above the spot.", "Wide lens helps. Step or roll into frame.", "Jump-cut right after you land to keep the pace up."], tip: "Clear the floor first; everything in frame will be seen." },
   { id: "h-prop", cat: "visual", name: "Scene-stealer prop", gist: "Give the eye something interesting to look at beside you.", how: ["Pick an object that's colorful, shiny or moving.", "Place it so it's clear and in focus behind or beside you.", "It can relate to your topic or have nothing to do with it."], tip: "Something that moves (spinning, swinging, glowing) wins." },
-  { id: "h-reveal", cat: "motion", name: "Cover-then-reveal", gist: "Start with the lens blocked, then pull away as you speak.", how: ["Begin with your hand or an object covering the camera.", "Pull away on your first word.", "Add a short whoosh sound and a one-frame flash for punch."], tip: "Keep the covered part under half a second." },
-  { id: "h-double", cat: "visual", name: "Split-frame double", gist: "Two of you in one shot, talking to each other.", how: ["Film the first take on one half of the frame, keep the camera locked.", "Without moving the camera, film the second take on the other half, reacting.", "Mask the center line in your editor so both halves join."], tip: "Mark where you stand so the halves don't overlap." },
-  { id: "h-pov", cat: "visual", name: "Chest-cam POV", gist: "Show the scene from your own eyes.", how: ["Hold the phone at chest height or wear a small camera.", "Film what you're about to talk about, hands visible.", "Cut to a normal shot after a couple of seconds."], tip: "Pick a scene with real activity in it." },
+  { id: "h-reveal", cat: "motion", name: "Cover-then-reveal", gist: "Start with the lens blocked, then pull away as you speak.", movement: "Hand pulls away", how: ["Begin with your hand or an object covering the camera.", "Pull away on your first word.", "Add a short whoosh sound and a one-frame flash for punch."], tip: "Keep the covered part under half a second." },
+  { id: "h-double", cat: "visual", name: "Split-frame double", gist: "Two of you in one shot, talking to each other.", movement: "Locked off", how: ["Film the first take on one half of the frame, keep the camera locked.", "Without moving the camera, film the second take on the other half, reacting.", "Mask the center line in your editor so both halves join."], tip: "Mark where you stand so the halves don't overlap." },
+  { id: "h-pov", cat: "visual", name: "Chest-cam POV", gist: "Show the scene from your own eyes.", angle: "POV", how: ["Hold the phone at chest height or wear a small camera.", "Film what you're about to talk about, hands visible.", "Cut to a normal shot after a couple of seconds."], tip: "Pick a scene with real activity in it." },
   { id: "h-midaction", cat: "motion", name: "Mid-action open", gist: "Skip the setup; start when something is already happening.", how: ["Cut the first beat of the action out in the edit.", "Open on the moment of impact: the strum, the pour, the hit.", "Add the title over the second shot."], tip: "If you can cut a second off the front, do." },
-  { id: "h-macro", cat: "visual", name: "Gear macro", gist: "Open super close on something tactile.", how: ["Film strings, keys, a dial or a texture from a few inches away.", "Rack focus or pull back to reveal the whole scene.", "Say the first line over the pull-back."], tip: "Good light on the detail is what sells it." },
+  { id: "h-macro", cat: "visual", name: "Gear macro", gist: "Open super close on something tactile.", size: "Macro", movement: "Pull back to reveal", how: ["Film strings, keys, a dial or a texture from a few inches away.", "Rack focus or pull back to reveal the whole scene.", "Say the first line over the pull-back."], tip: "Good light on the detail is what sells it." },
   { id: "h-wrong", cat: "words", name: "Wrong answer first", gist: "Say what everyone expects, then flip it.", how: ["Open with the common advice, said plainly.", "Cut or text-flip with a short beat.", "Give your real answer."], tip: "Keep the setup to one sentence." },
   { id: "h-number", cat: "words", name: "One big number", gist: "A single number on screen gives people a reason to stay.", how: ["Pick the most surprising number in your story.", "Show it huge, alone, in the first frame.", "Explain it in the next shot."], tip: "Round numbers read faster." },
   { id: "h-textonly", cat: "words", name: "Words on black", gist: "One line of text on a plain background, then the footage.", how: ["Write the line in 8 words or fewer.", "Hold it for about a second with a sound hit.", "Cut to your first shot."], tip: "Read it out loud: if it takes more than 2 seconds, trim it." },
   { id: "h-drop", cat: "music", name: "Cut on the drop", gist: "Land the first picture exactly on the biggest beat.", how: ["Pick the loudest hit in the first bars of the song.", "Cut to your strongest shot on that hit.", "Put the title on screen for the bar before it."], tip: "Use the creatrr click and tap-tempo to find the hit." },
   { id: "h-lyric", cat: "music", name: "Lyric as the title", gist: "Make the most quotable line your headline.", how: ["Choose a line that makes sense out of context.", "Put it on screen as the opening text.", "Film the singer or band delivering it."], tip: "Avoid lines that need the verse before them." },
   { id: "h-silence", cat: "music", name: "Silence, then hit", gist: "Start almost silent and let the song crash in.", how: ["Open on a quiet, still shot.", "Cut the audio to near-nothing for a beat.", "Bring the song in on your best visual."], tip: "Make the quiet part short: half a second or less." },
-  { id: "h-reverse", cat: "motion", name: "Reverse reveal", gist: "Play a simple action backward so it feels strange.", how: ["Film a simple action: a pour, a toss, a jump.", "Reverse it in the editor.", "Switch to forward at the moment you start talking."], tip: "Skip anything with visible text; it will read backwards." }
+  { id: "h-reverse", cat: "motion", name: "Reverse reveal", gist: "Play a simple action backward so it feels strange.", movement: "Reversed in edit", how: ["Film a simple action: a pour, a toss, a jump.", "Reverse it in the editor.", "Switch to forward at the moment you start talking."], tip: "Skip anything with visible text; it will read backwards." }
 ];
-var hookCat = "all", hookTarget = null;
-$("hookBtn").addEventListener("click", () => openHooks());
+/* little animated drawings of each idea (original schematics; motion pauses for people who prefer reduced motion) */
+function hookDiagram(id) {
+  const ph = `<rect class="hd-ph" x="52" y="6" width="56" height="88" rx="9"/>`;
+  const man = (x, y, c) => `<g class="hd-man ${c || ""}"><circle cx="${x}" cy="${y}" r="5"/><rect x="${x - 8}" y="${y + 7}" width="16" height="19" rx="7"/></g>`;
+  const bar = (x, y, w, c) => `<rect class="hd-bar ${c || ""}" x="${x}" y="${y}" width="${w}" height="4" rx="2"/>`;
+  const d = {
+    "h-warp": `${ph}<circle class="hd-ring" cx="80" cy="52" r="31"/><circle class="hd-ring a-pulse" cx="80" cy="52" r="22"/>${man(80, 44)}${bar(63, 14, 34, "acc")}`,
+    "h-enter": `${ph}<g class="a-enter">${man(80, 48)}</g>`,
+    "h-overhead": `${ph}<rect class="hd-obj" x="62" y="22" width="36" height="22" rx="3"/><g class="a-rise"><ellipse class="hd-man" cx="80" cy="64" rx="13" ry="7"/><circle class="hd-man" cx="80" cy="64" r="6"/></g>`,
+    "h-prop": `${ph}${man(90, 48)}<circle class="hd-acc a-bob" cx="68" cy="62" r="9"/>`,
+    "h-reveal": `${ph}${man(80, 46)}<rect class="hd-cover a-wipe" x="53" y="7" width="54" height="86" rx="8"/>`,
+    "h-double": `${ph}<line class="hd-line" x1="80" y1="8" x2="80" y2="92"/>${man(67, 46, "a-pulse")}${man(93, 46, "a-react")}`,
+    "h-pov": `${ph}<rect class="hd-obj" x="60" y="24" width="40" height="26" rx="3"/><path class="hd-obj" d="M56 56h48l4 6H52z"/><rect class="hd-man a-bob" x="62" y="72" width="12" height="9" rx="4"/><rect class="hd-man a-bob" x="86" y="72" width="12" height="9" rx="4"/>`,
+    "h-midaction": `${ph}${man(78, 48)}<path class="hd-acc a-flash" d="M96 40l8-4M97 50h10M96 60l8 4"/>`,
+    "h-macro": `${ph}<g class="a-pull"><circle class="hd-ring" cx="80" cy="50" r="20"/><path class="hd-line" d="M64 42h32M64 50h32M64 58h32"/></g>`,
+    "h-wrong": `${ph}${bar(60, 36, 40, "dim")}<line class="hd-strike a-strike" x1="58" y1="38" x2="102" y2="38"/>${bar(60, 56, 40, "acc a-fadein")}`,
+    "h-number": `${ph}<text class="hd-big a-pop" x="80" y="64" text-anchor="middle">7</text>`,
+    "h-textonly": `${ph}<rect class="hd-black" x="56" y="12" width="48" height="76" rx="6"/><rect class="hd-pic a-fadein" x="56" y="12" width="48" height="76" rx="6"/>${bar(62, 46, 36, "acc a-fadeout")}`,
+    "h-drop": `${ph}<g class="hd-wave">${[8, 12, 9, 14, 11, 40, 16, 13, 10, 12].map((h, i) => `<rect class="${i === 5 ? "hd-acc" : ""}" x="${58 + i * 4.6}" y="${52 - h / 2}" width="3" height="${h}" rx="1.5"/>`).join("")}</g><rect class="hd-flash a-flash" x="56" y="12" width="48" height="76" rx="6"/>`,
+    "h-lyric": `${ph}<text class="hd-quote" x="80" y="42" text-anchor="middle">“</text>${bar(64, 52, 32, "acc")}${bar(68, 60, 24, "acc")}${man(80, 74)}`,
+    "h-silence": `${ph}<path class="hd-line" d="M58 52h20"/><path class="hd-acc a-pulse" d="M78 52l3-34 4 68 4-34h13"/>`,
+    "h-reverse": `${ph}<g class="a-spinrev"><path class="hd-ring" d="M96 52a16 16 0 1 0-6 12.5"/><path class="hd-acc" d="M96 44v10h-10"/></g>`
+  };
+  return `<svg class="hd" viewBox="0 0 160 100" role="img" aria-label="${esc((HOOKS.find(h => h.id === id) || {}).name || "Hook")} diagram" preserveAspectRatio="xMidYMid meet">${d[id] || ph}</svg>`;
+}
+var hookCat = "all", hookSecId = null, hookRate = 1, hookPlaying = null, hookTimer = null;
+const sectionHookRow = sec => sec.rows.find(r => r.hookId);
+function hookSections() {
+  const out = [];
+  for (const sg of project.songs) for (const sec of songParts(sg.id)) out.push({ sg, sec });
+  return out;
+}
+function renderHookPanel() {
+  const el = $("hookPanel"); if (!el) return;
+  const list = hookSections();
+  $("useTplChk").checked = project.useTemplate !== false;
+  $("tplCard").classList.toggle("off", project.useTemplate === false);
+  el.innerHTML = list.length ? list.map(({ sg, sec }) => {
+    const hr = sectionHookRow(sec), h = hr && HOOKS.find(x => x.id === hr.hookId);
+    return `<div class="hook-sec" data-section-id="${sec.id}" style="--sec:${sec.color}"><button type="button" class="hs-play" data-hook-play aria-label="Listen to ${esc(sec.name)}"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■" : "▶"}</button><button type="button" class="hs-main" data-hook-pick><span class="hs-name">${esc(sg.name)} · ${esc(partLabel(sec))}</span><span class="hs-hook${h ? " set" : ""}">${h ? esc(h.name) : "Choose a hook"}</span></button>${h ? `<span class="hs-thumb">${hookDiagram(h.id)}</span>` : ""}</div>`;
+  }).join("") : `<p class="muted small" style="margin:0">Pick the sections you'll film in the Setlist above, then choose a hook for each one.</p>`;
+}
+async function listenSection(secId, rate) {
+  const sec = getSection(secId); if (!sec || !sec.songId) return;
+  if (hookPlaying === secId) { stopHookListen(); return; }
+  stopHookListen();
+  if (!sec.time) { showNotice("This section has no start time yet. Set it on the artist page."); return; }
+  if (activeSongId !== sec.songId) { activeSongId = sec.songId; shootPartId = null; shootOpenId = null; await loadActiveTrack(); }
+  hookPlaying = secId; paintHookButtons();
+  const r = rate || hookRate || 1, t0 = parseTC(sec.time) || 0;
+  const next = songParts(sec.songId).map(x => parseTC(x.time)).filter(t => t != null && t > t0 + 0.5).sort((a, b) => a - b)[0];
+  const len = Math.min(60, next != null ? next - t0 : 20);
+  playCue(sec.time, r);
+  clearTimeout(hookTimer);
+  hookTimer = setTimeout(() => { if (hookPlaying === secId) stopHookListen(); }, (len / r) * 1000 + 500);
+}
+function stopHookListen() {
+  clearTimeout(hookTimer); hookTimer = null;
+  if (hookPlaying) { hookPlaying = null; try { stopAndReturn(); } catch (e) {} }
+  paintHookButtons();
+}
+function paintHookButtons() {
+  document.querySelectorAll("[data-hook-play], #hookListen").forEach(b => { const id = b.id === "hookListen" ? hookSecId : (b.closest("[data-section-id]") || {}).dataset && b.closest("[data-section-id]").dataset.sectionId; const on = id && hookPlaying === id; b.textContent = b.id === "hookListen" ? (on ? "■ Stop" : "▶ Listen") : (on ? "■" : "▶"); b.classList.toggle("on", !!on); });
+}
 function openHooks(secId) {
-  const first = project.sections.filter(x => x.songId && !(x.speed && x.speed !== 1))[0] || project.sections[0];
-  hookTarget = (secId && getSection(secId) && secId) || (hookTarget && getSection(hookTarget) && hookTarget) || (first && first.id) || null;
-  paintHooks();
+  const sec = getSection(secId); if (!sec) return;
+  hookSecId = secId; paintHooks();
   $("hookModal").classList.remove("hidden");
 }
-function paintHooks() {
-  const list = HOOKS.filter(h => hookCat === "all" || h.cat === hookCat), sec = hookTarget && getSection(hookTarget);
-  $("hookInner").innerHTML = `<div class="grab" aria-hidden="true"></div><h3>Hook ideas</h3>
-    <p class="modal-hint">Ways to open a video so people stop scrolling. Add one as a shot to film:</p>
-    ${project.sections.length ? `<select class="field" id="hookTargetSel" aria-label="Add to section">${project.sections.map(x => { const sg = project.songs.find(y => y.id === x.songId); return `<option value="${x.id}"${x.id === hookTarget ? " selected" : ""}>${esc((sg ? sg.name + " · " : "") + (x.name || "Section"))}</option>`; }).join("")}</select>` : `<p class="muted small">Pick songs and sections in the Setlist first, then add a hook to one of them.</p>`}
+function paintHooks(keepScroll) {
+  const sec = getSection(hookSecId); if (!sec) return;
+  const sg = project.songs.find(x => x.id === sec.songId), cur = sectionHookRow(sec), list = HOOKS.filter(h => hookCat === "all" || h.cat === hookCat);
+  const sc = keepScroll ? ($("hookInner").querySelector(".hook-list") || {}).scrollTop : 0;
+  $("hookInner").innerHTML = `<div class="grab" aria-hidden="true"></div><h3>Hook for ${esc((sg ? sg.name + " · " : "") + partLabel(sec))}</h3>
+    <div class="hook-player"><button type="button" class="btn small primary" id="hookListen"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■ Stop" : "▶ Listen"}</button><span class="speed-step" role="group" aria-label="Speed"><button type="button" class="btn" data-hook-rate="-1" aria-label="Slower"${hookRate <= 0.5 ? " disabled" : ""}>−</button><span class="speed-val">${speedLabel(hookRate)}</span><button type="button" class="btn" data-hook-rate="1" aria-label="Faster"${hookRate >= 2 ? " disabled" : ""}>+</button></span><span class="muted small">Hear the section while you choose.</span></div>
     <div class="hook-cats" role="group" aria-label="Category">${HOOK_CATS.map(c => `<button type="button" class="btn small hook-cat${c.id === hookCat ? " on" : ""}" data-hook-cat="${c.id}">${c.name}</button>`).join("")}<button type="button" class="btn small" data-hook-shuffle>Surprise me</button></div>
-    <div class="hook-list">${list.map(h => `<div class="hook-card" data-hook="${h.id}"><b>${esc(h.name)}</b><span class="hook-gist">${esc(h.gist)}</span><ol>${h.how.map(x => `<li>${esc(x)}</li>`).join("")}</ol><span class="muted small">Tip: ${esc(h.tip)}</span><button type="button" class="btn small primary" data-hook-add="${h.id}"${sec ? "" : " disabled"}>Add as shot</button></div>`).join("")}</div>
-    <p class="modal-hint" style="margin-top:14px">Seen a hook you like? Share a screenshot of it to creatrr and it goes on the song's references. Then attach it to any section with From song.</p>
-    <div class="suggest-row"><button type="button" class="btn" data-hook-close>Done</button></div>`;
+    <div class="hook-list">${list.map(h => `<div class="hook-card${cur && cur.hookId === h.id ? " chosen" : ""}" data-hook="${h.id}">${hookDiagram(h.id)}<b>${esc(h.name)}</b><span class="hook-gist">${esc(h.gist)}</span><ol>${h.how.map(x => `<li>${esc(x)}</li>`).join("")}</ol><span class="muted small">Tip: ${esc(h.tip)}</span><div class="hook-actions">${cur && cur.hookId === h.id ? `<button type="button" class="btn small" data-hook-remove>Remove from this section</button>` : `<button type="button" class="btn small primary" data-hook-use="${h.id}">Use for this section</button>`}<button type="button" class="btn small" data-hook-all="${h.id}">Use for every section</button></div></div>`).join("")}</div>
+    <div class="suggest-row" style="margin-top:12px"><button type="button" class="btn" data-hook-close>Done</button></div>`;
+  if (sc) { const l = $("hookInner").querySelector(".hook-list"); if (l) l.scrollTop = sc; }
 }
-$("hookModal").addEventListener("change", e => { if (e.target.id === "hookTargetSel") { hookTarget = e.target.value; } });
+function setHook(sec, h) {
+  const old = sectionHookRow(sec);
+  if (old && (old.checked || old.takes.length) && !confirm("The current hook shot already has takes logged. Replace it anyway?")) return false;
+  sec.rows = sec.rows.filter(r => !r.hookId);
+  if (h) sec.rows.unshift(Object.assign(defaultRow(), { hookId: h.id, subject: "Hook: " + h.name, size: h.size || "", angle: h.angle || "", movement: h.movement || "", notes: h.gist + " " + h.how.join(" ") }));
+  return true;
+}
+$("hookPanel").addEventListener("click", e => {
+  const row = e.target.closest(".hook-sec"); if (!row) return;
+  if (e.target.closest("[data-hook-play]")) { listenSection(row.dataset.sectionId); return; }
+  if (e.target.closest("[data-hook-pick]")) openHooks(row.dataset.sectionId);
+});
+$("useTplChk").addEventListener("change", e => {
+  if (e.target.checked) { project.useTemplate = true; addMissingShots(); }
+  else {
+    project.useTemplate = false;
+    const ids = new Set(project.shotTemplates.map(t => t.id));
+    project.sections.forEach(sec => { sec.rows = sec.rows.filter(r => !(ids.has(r.templateId) && !r.takes.length && !r.checked && !(r.images || []).length)); });
+  }
+  changed();
+});
+$("hookModal").addEventListener("change", () => {});
 $("hookModal").addEventListener("click", e => {
+  const sec = getSection(hookSecId);
   const cat = e.target.closest("[data-hook-cat]");
   if (cat) { hookCat = cat.dataset.hookCat; paintHooks(); return; }
+  if (e.target.closest("#hookListen")) { listenSection(hookSecId); return; }
+  const rt = e.target.closest("[data-hook-rate]");
+  if (rt) { hookRate = Math.max(0.5, Math.min(2, rt.dataset.hookRate === "1" ? (hookRate < 1 ? 1 : 2) : (hookRate > 1 ? 1 : 0.5))); const was = hookPlaying; paintHooks(true); if (was) { stopHookListen(); listenSection(hookSecId); } return; }
   if (e.target.closest("[data-hook-shuffle]")) { const h = HOOKS[Math.floor(Math.random() * HOOKS.length)]; hookCat = "all"; paintHooks(); const el = $("hookInner").querySelector(`[data-hook="${h.id}"]`); if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.add("flash"); } return; }
-  const add = e.target.closest("[data-hook-add]");
-  if (add) {
-    const h = HOOKS.find(x => x.id === add.dataset.hookAdd), sec = hookTarget && getSection(hookTarget); if (!h || !sec) return;
-    sec.rows.push(Object.assign(defaultRow(), { subject: "Hook: " + h.name, notes: h.gist + " " + h.how.join(" ") }));
-    changed(); add.textContent = "Added ✓"; add.disabled = true; return;
+  const use = e.target.closest("[data-hook-use]"), all = e.target.closest("[data-hook-all]"), rm = e.target.closest("[data-hook-remove]");
+  if (sec && use) { const h = HOOKS.find(x => x.id === use.dataset.hookUse); if (h && setHook(sec, h)) { changed(); paintHooks(true); } return; }
+  if (sec && rm) { if (setHook(sec, null)) { changed(); paintHooks(true); } return; }
+  if (all) {
+    const h = HOOKS.find(x => x.id === all.dataset.hookAll); if (!h) return;
+    if (!confirm(`Use "${h.name}" as the hook for every section? Sections that already have a hook shot will switch to it.`)) return;
+    hookSections().forEach(({ sec: s }) => setHook(s, h)); changed(); paintHooks(true); return;
   }
-  if (e.target.closest("[data-hook-close]") || e.target === $("hookModal")) $("hookModal").classList.add("hidden");
+  if (e.target.closest("[data-hook-close]") || e.target === $("hookModal")) { stopHookListen(); $("hookModal").classList.add("hidden"); renderHookPanel(); }
 });
 var partRefTarget = null, refPickSec = null, refPickSel = [];
 $("partRefInput").addEventListener("change", async e => {
@@ -5879,6 +6038,7 @@ function tplCardHTML() {
 }
 function addMissingShots() {
   let added = 0;
+  if (project.useTemplate === false) return 0;
   project.sections.forEach(sec => project.shotTemplates.forEach(t => {
     if (!sec.rows.some(r => r.templateId === t.id)) { sec.rows.push(templateRow(t)); added++; }
   }));
@@ -5914,7 +6074,7 @@ function addEntry(as, speed) {
   }
   const sec = defaultSection(as.name, project.sections.length);
   Object.assign(sec, { color: as.color, songId: as.songId, srcId: as.id, time: as.time, speed });
-  sec.rows = project.shotTemplates.map(templateRow);
+  sec.rows = tplRows();
   project.sections.push(sec);
   if (!activeSongId) activeSongId = as.songId;
 }
@@ -5999,6 +6159,7 @@ function renderPlanContent() {
   if (cPlanSub !== "shoots") { renderContentBoard(); return; }
   renderSetPick(); renderSetOrder();
   $("tplCard").innerHTML = tplCardHTML();
+  renderHookPanel();
   if (document.activeElement !== $("songNotes")) $("songNotes").value = project.brief.notes;
   renderSongRefs(); renderSongLinks();
 }
@@ -7241,7 +7402,7 @@ async function bandImport() {
       ["bpm", "offset", "songStart"].forEach(k => { if (typeof t[k] === "number") tempo[k] = t[k]; });
       if (typeof t.snap === "boolean") tempo.snap = t.snap;
       const sg = normalizeSong({ name: g.name, tempo }); project.songs.push(sg);
-      (g.sections || []).forEach((x, i) => { const sec = defaultSection(x.name || "Section", project.sections.length + i); if (x.color) sec.color = x.color; sec.time = x.time || ""; sec.songId = sg.id; sec.rows = (project.shotTemplates || []).map(templateRow); project.sections.push(sec); });
+      (g.sections || []).forEach((x, i) => { const sec = defaultSection(x.name || "Section", project.sections.length + i); if (x.color) sec.color = x.color; sec.time = x.time || ""; sec.songId = sg.id; sec.rows = project.useTemplate === false ? [] : (project.shotTemplates || []).map(templateRow); project.sections.push(sec); });
       if (g.url) { try { const tb = await (await fetch(g.url)).blob(); await saveTrack(project.id + "::" + sg.id, tb, g.track_name || (g.name + "." + g.ext)); } catch (e) {} }
       project.bandImported[g.id] = sg.id; added++;
     }
