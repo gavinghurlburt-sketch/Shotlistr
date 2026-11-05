@@ -1,6 +1,6 @@
 // Producrr — app-shell cache. Your project data lives in IndexedDB, not here;
 // this only makes sure the app itself still opens with no signal.
-const CACHE_NAME = "producrr-shell-v6";
+const CACHE_NAME = "producrr-shell-v7";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -32,6 +32,17 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   if (!event.request.url.startsWith(self.location.origin)) return;
+
+  // the page itself: network first, so an update shows up on the next open (cache only when offline)
+  if (event.request.mode === "navigate" || /\/(index\.html)?$/.test(new URL(event.request.url).pathname)) {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (response && response.status === 200) { const clone = response.clone(); caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)); }
+        return response;
+      }).catch(() => caches.match(event.request).then((c) => c || caches.match("./index.html")))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
