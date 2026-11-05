@@ -5989,21 +5989,34 @@ async function openHookImport() {
 }
 async function framesFromVideo(file) {
   const url = URL.createObjectURL(file), v = document.createElement("video");
-  v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = url;
-  const once = (ev, ms) => new Promise((res, rej) => { const t = setTimeout(() => rej(new Error("timeout")), ms); v.addEventListener(ev, () => { clearTimeout(t); res(); }, { once: true }); v.addEventListener("error", () => { clearTimeout(t); rej(new Error("video")); }, { once: true }); });
+  v.muted = true; v.defaultMuted = true; v.playsInline = true; v.setAttribute("playsinline", ""); v.setAttribute("muted", ""); v.preload = "auto";
+  v.style.cssText = "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";   // iPhone decodes frames more reliably when the video is in the page
+  document.body.appendChild(v); v.src = url;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const wait = (ev, ms) => new Promise((res, rej) => { const t = setTimeout(() => { off(); rej(new Error("slow")); }, ms), ok = () => { off(); res(); }, bad = () => { off(); rej(new Error("format")); }; const off = () => { clearTimeout(t); v.removeEventListener(ev, ok); v.removeEventListener("error", bad); }; v.addEventListener(ev, ok, { once: true }); v.addEventListener("error", bad, { once: true }); });
   try {
-    await once("loadeddata", 20000);
-    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 4, span = Math.min(6, dur), n = Math.min(6, Math.max(2, Math.round(span * 1.5) + 1)), out = [];
-    const sc = Math.min(1, 640 / Math.max(v.videoWidth || 640, v.videoHeight || 640)), cw = Math.max(2, Math.round((v.videoWidth || 640) * sc)), ch = Math.max(2, Math.round((v.videoHeight || 360) * sc));
-    const c = document.createElement("canvas"); c.width = cw; c.height = ch; const cx = c.getContext("2d");
-    for (let i = 0; i < n; i++) {
+    if (v.readyState < 1) await wait("loadedmetadata", 20000);
+    try { await v.play(); } catch (e) {}      // iPhone won't hand over frames until the video has been played once
+    v.pause();
+    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 5, span = Math.min(6, dur), n = Math.min(6, Math.max(2, Math.round(span * 1.5) + 1));
+    const vw = v.videoWidth || 540, vh = v.videoHeight || 960, sc = Math.min(1, 640 / Math.max(vw, vh)), cw = Math.max(2, Math.round(vw * sc)), ch = Math.max(2, Math.round(vh * sc));
+    const c = document.createElement("canvas"); c.width = cw; c.height = ch; const cx = c.getContext("2d"), out = [];
+    const grab = () => { cx.drawImage(v, 0, 0, cw, ch); out.push(c.toDataURL("image/jpeg", 0.72)); };
+    for (let i = 0; i < n; i++) {                         // first choice: jump to evenly spaced moments in the opening
       const t = Math.min(Math.max(0, dur - 0.05), 0.2 + ((span - 0.2) * i) / Math.max(1, n - 1));
-      v.currentTime = t; await once("seeked", 6000);
-      await new Promise(r => requestAnimationFrame(() => r()));
-      cx.drawImage(v, 0, 0, cw, ch); out.push(c.toDataURL("image/jpeg", 0.72));
+      try { v.currentTime = t; await wait("seeked", 4000); } catch (e) { if (e.message === "format") throw e; continue; }
+      await sleep(60); grab();
     }
+    if (out.length < 2) {                                 // fallback: let it play and take a picture every so often
+      out.length = 0; v.currentTime = 0; await sleep(150);
+      try { await v.play(); } catch (e) {}
+      const t0 = Date.now();
+      while (out.length < 6 && Date.now() - t0 < 9000 && !v.ended) { await sleep(900); if (v.readyState >= 2) grab(); }
+      v.pause();
+    }
+    if (out.length < 1) throw new Error("slow");
     return out;
-  } finally { URL.revokeObjectURL(url); v.removeAttribute("src"); try { v.load(); } catch (e) {} }
+  } finally { v.pause(); v.remove(); URL.revokeObjectURL(url); }
 }
 async function runHookImport(files, isVideo) {
   const tok = await bandToken();
@@ -6015,7 +6028,7 @@ async function runHookImport(files, isVideo) {
     const j = await hookCall({ action: "import", frames }, tok);
     hookImp.hook = j.hook; hookImp.usage = j.usage; hookImp.stage = "preview";
   } catch (e) {
-    hookImp.stage = "pick"; hookImp.err = e.status ? e.message : "Couldn't read that file. Try another recording, or use screenshots.";
+    hookImp.stage = "pick"; hookImp.err = e.status ? e.message : (e.message === "format" ? "This phone can't open that recording's format here. Try screenshots instead." : "That recording took too long to open. Try a shorter one, or use screenshots.");
     if (e.usage) hookImp.usage = e.usage;
   }
   paintHookImport();

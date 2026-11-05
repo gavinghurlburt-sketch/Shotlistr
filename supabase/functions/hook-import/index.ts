@@ -10,7 +10,7 @@ const RANK: Record<string, number> = { artist: 1, plus: 2, pro: 3 };
 /* day = rolling 24 hours, month = rolling 30 days */
 const LIMITS: Record<string, { day: number | null; month: number }> = { artist: { day: null, month: 7 }, plus: { day: 2, month: 30 }, pro: { day: 2, month: 30 } };
 const MODEL = Deno.env.get("HOOK_MODEL") || "claude-sonnet-5-5";
-const DAY = 86400_000, MONTH = 30 * DAY;
+const DAY = 86400_000, MONTH = 30 * DAY, IN_FLIGHT = 3 * 60_000;
 const MAX_FRAMES = 6, MAX_FRAME_CHARS = 700_000, MAX_TOTAL_CHARS = 3_500_000;
 
 const SIZES = ["CU", "MCU", "ECU", "MS", "FS", "LS", "MLS", "ELS", "W", "CU (OTS)", "MCU (OTS)", "ECU (OTS)", "MS (OTS)"];
@@ -45,8 +45,9 @@ async function tierOf(uid: string): Promise<{ tier: string | null; err?: number 
 }
 async function usageOf(uid: string, tier: string) {
   const lim = LIMITS[tier], now = Date.now();
-  const { data } = await admin.from("hook_imports").select("created_at").eq("user_id", uid).gt("created_at", new Date(now - MONTH).toISOString()).order("created_at", { ascending: true });
-  const times = (data || []).map((r: any) => new Date(r.created_at).getTime());
+  const { data } = await admin.from("hook_imports").select("created_at,done").eq("user_id", uid).gt("created_at", new Date(now - MONTH).toISOString()).order("created_at", { ascending: true });
+  // only finished imports count; one still running counts for a few minutes (so quick double taps can't skip the limit), then drops off if it never finished
+  const times = (data || []).filter((r: any) => r.done || now - new Date(r.created_at).getTime() < IN_FLIGHT).map((r: any) => new Date(r.created_at).getTime());
   const dayTimes = times.filter((t) => t > now - DAY);
   const month_used = times.length, day_used = dayTimes.length;
   const dayFull = lim.day != null && day_used >= lim.day, monthFull = month_used >= lim.month;
@@ -161,10 +162,11 @@ Deno.serve(async (req) => {
       const daily = usage.day_limit != null && usage.day_used >= usage.day_limit && usage.month_used < usage.month_limit;
       return json({ error: daily ? `You've used today's ${usage.day_limit} imports.` : `You've used this month's ${usage.month_limit} imports.`, usage }, 429);
     }
-    // count it up front so parallel taps can't skip the limit; given back below if nothing useful comes out
+    // hold a place while the AI works; it only becomes a real use once a hook comes back (any failure deletes it)
     const { data: ins, error: insErr } = await admin.from("hook_imports").insert({ user_id: u.id }).select("id").single();
     if (insErr || !ins) return json({ error: "Couldn't start the import." }, 500);
     const refund = () => admin.from("hook_imports").delete().eq("id", ins.id);
+    try {
 
     let res: Response;
     try {
@@ -188,7 +190,9 @@ Deno.serve(async (req) => {
     }
     const hook = cleanHook(inp);
     if (!hook) { await refund(); return json({ error: "That one didn't come out clearly. Try again.", usable: false, usage: await usageOf(u.id, tier) }, 422); }
+    await admin.from("hook_imports").update({ done: true }).eq("id", ins.id);
     return json({ hook, usage: await usageOf(u.id, tier) });
+    } catch (e) { await refund(); throw e; }
   } catch (e) {
     console.error(e);
     return json({ error: "Something went wrong." }, 500);
