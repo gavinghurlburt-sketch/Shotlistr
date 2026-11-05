@@ -1,16 +1,23 @@
 import UIKit
 import UniformTypeIdentifiers
+import ImageIO
 
-/// Share sheet for audio files (Messages, Files, Voice Memos, Mail). Shows a small card:
-/// pick the band, check the song name, tap Add. The files go into the shared App Group folder
+/// Share sheet for audio files (Messages, Files, Voice Memos, Mail) and for pictures / screenshots (Photos, Safari, Instagram).
+/// Audio: pick the band, check the song name, tap Add. Pictures: pick the band and the song, tap Add. The files go into the shared App Group folder
 /// with a small .meta.json next to each; creatrr files them into the right band when it opens.
 class ShareViewController: UIViewController {
     private let groupId = "group.art.gavingeddes.producrr"
-    private struct Artist { let id: String; let name: String }
+    private struct Song { let id: String; let name: String }
+    private struct Artist { let id: String; let name: String; let songs: [Song] }
     private struct Pending { let url: URL; let original: String; let field: UITextField }
 
     private var artists: [Artist] = []
     private var chosen: Artist?
+    private var chosenSong: Song?
+    private var imageMode = false
+    private var images: [(url: URL, original: String)] = []
+    private let songButton = UIButton(type: .system)
+    private let songLabel = UILabel()
     private var pending: [Pending] = []
     private let bandButton = UIButton(type: .system)
     private let addButton = UIButton(type: .system)
@@ -33,11 +40,21 @@ class ShareViewController: UIViewController {
            let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
             artists = arr.compactMap { a in
                 guard let id = a["id"] as? String, let n = a["name"] as? String, !n.isEmpty else { return nil }
-                return Artist(id: id, name: n)
+                let songs: [Song] = ((a["songs"] as? [[String: Any]]) ?? []).compactMap { sg in
+                    guard let sid = sg["id"] as? String, let sn = sg["name"] as? String, !sn.isEmpty else { return nil }
+                    return Song(id: sid, name: sn)
+                }
+                return Artist(id: id, name: n, songs: songs)
             }
         }
         let last = d?.string(forKey: "lastArtist")
         chosen = artists.first(where: { $0.id == last }) ?? artists.first
+        pickSong()
+    }
+
+    private func pickSong() {
+        let lastSong = UserDefaults(suiteName: groupId)?.string(forKey: "lastSong")
+        chosenSong = chosen?.songs.first(where: { $0.id == lastSong }) ?? chosen?.songs.first
     }
 
     // MARK: UI
@@ -62,12 +79,23 @@ class ShareViewController: UIViewController {
         bandButton.showsMenuAsPrimaryAction = true
         refreshBandMenu()
 
+        songLabel.text = "SONG"; songLabel.font = .systemFont(ofSize: 12, weight: .semibold); songLabel.textColor = .secondaryLabel
+        songButton.contentHorizontalAlignment = .leading
+        songButton.titleLabel?.font = .systemFont(ofSize: 17)
+        songButton.backgroundColor = .secondarySystemBackground
+        songButton.layer.cornerRadius = 10
+        songButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        songButton.showsMenuAsPrimaryAction = true
+        songLabel.isHidden = true; songButton.isHidden = true
+        refreshSongMenu()
+
         status.font = .systemFont(ofSize: 14); status.textColor = .secondaryLabel; status.numberOfLines = 0
 
         stack.axis = .vertical; stack.spacing = 8
-        let body = UIStackView(arrangedSubviews: [bandLabel, bandButton, stack, status])
+        let body = UIStackView(arrangedSubviews: [bandLabel, bandButton, songLabel, songButton, stack, status])
         body.axis = .vertical; body.spacing = 8
         body.setCustomSpacing(18, after: bandButton)
+        body.setCustomSpacing(18, after: songButton)
         body.setCustomSpacing(14, after: stack)
 
         for v in [header, body] { v.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(v) }
@@ -86,11 +114,45 @@ class ShareViewController: UIViewController {
         bandButton.setTitle((chosen?.name ?? (artists.isEmpty ? "No bands yet (pick later in creatrr)" : "Choose a band")) + "   \u{25BE}", for: .normal)
         let actions = artists.map { a in
             UIAction(title: a.name, state: a.id == chosen?.id ? .on : .off) { [weak self] _ in
-                self?.chosen = a; self?.refreshBandMenu()
+                self?.chosen = a; self?.pickSong(); self?.refreshBandMenu(); self?.refreshSongMenu(); self?.updateAdd()
             }
         }
         bandButton.menu = UIMenu(children: actions)
         bandButton.isEnabled = !artists.isEmpty
+    }
+
+    private func refreshSongMenu() {
+        let songs = chosen?.songs ?? []
+        songButton.setTitle((chosenSong?.name ?? (songs.isEmpty ? "No songs yet" : "Choose a song")) + "   \u{25BE}", for: .normal)
+        songButton.menu = UIMenu(children: songs.map { sg in
+            UIAction(title: sg.name, state: sg.id == chosenSong?.id ? .on : .off) { [weak self] _ in
+                self?.chosenSong = sg; self?.refreshSongMenu(); self?.updateAdd()
+            }
+        })
+        songButton.isEnabled = !songs.isEmpty
+    }
+
+    private func updateAdd() {
+        if imageMode {
+            addButton.isEnabled = !images.isEmpty && chosen != nil && chosenSong != nil
+            if chosen != nil && chosenSong == nil { status.text = "\(chosen?.name ?? "That band") has no songs yet. Add a song in creatrr first, then share the picture again." }
+            else { status.text = "\(images.count) \(images.count == 1 ? "picture" : "pictures") ready. Pick the band and the song, then tap Add." }
+        }
+    }
+
+    /// Pictures can be huge; shrink to 1600 px and save as JPEG while keeping the extension's memory low.
+    private func downscaledJPEG(from url: URL, to dest: URL, maxDim: Int = 1600) -> Bool {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return false }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDim
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return false }
+        guard let out = CGImageDestinationCreateWithURL(dest as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { return false }
+        CGImageDestinationAddImage(out, cg, [kCGImageDestinationLossyCompressionQuality: 0.82] as CFDictionary)
+        return CGImageDestinationFinalize(out)
     }
 
     // MARK: receiving files
@@ -101,7 +163,20 @@ class ShareViewController: UIViewController {
         let providers = items.flatMap { $0.attachments ?? [] }
         let group = DispatchGroup(), lock = NSLock()
         var found: [(URL, String)] = []
-        for p in providers {
+        var pics: [(URL, String)] = []
+        let hasAudio = providers.contains { $0.hasItemConformingToTypeIdentifier(UTType.audio.identifier) }
+        for p in providers where !hasAudio && p.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            group.enter()
+            p.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, _ in
+                defer { group.leave() }
+                guard let url = url else { return }
+                let dest = self.staging.appendingPathComponent(String(UUID().uuidString.prefix(8)) + ".jpg")
+                if self.downscaledJPEG(from: url, to: dest) {
+                    lock.lock(); pics.append((dest, url.lastPathComponent)); lock.unlock()
+                }
+            }
+        }
+        for p in providers where hasAudio || !p.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
             let type: String
             if p.hasItemConformingToTypeIdentifier(UTType.audio.identifier) { type = UTType.audio.identifier }
             else if p.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) { type = UTType.fileURL.identifier }
@@ -120,7 +195,14 @@ class ShareViewController: UIViewController {
             }
         }
         group.notify(queue: .main) {
-            if found.isEmpty { self.status.text = "That doesn't look like an audio file. creatrr takes MP3, M4A, WAV and similar."; return }
+            if found.isEmpty && !pics.isEmpty {
+                self.imageMode = true
+                self.images = Array(pics.prefix(10)).map { (url: $0.0, original: $0.1) }
+                self.songLabel.isHidden = false; self.songButton.isHidden = false
+                self.refreshSongMenu(); self.updateAdd()
+                return
+            }
+            if found.isEmpty { self.status.text = "That doesn't look like an audio file or a picture. creatrr takes MP3, M4A, WAV and similar, plus photos and screenshots."; return }
             for (url, original) in found.prefix(10) {
                 let f = UITextField()
                 f.text = Self.songName(from: original)
@@ -152,6 +234,25 @@ class ShareViewController: UIViewController {
         let inbox = container.appendingPathComponent("Inbox", isDirectory: true)
         try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
         var saved = 0
+        if imageMode {
+            guard let a = chosen, let sg = chosenSong else { status.text = "Pick a band and a song first."; return }
+            for img in images {
+                let dest = inbox.appendingPathComponent("\(UUID().uuidString.prefix(6))-picture.jpg")
+                do {
+                    try FileManager.default.copyItem(at: img.url, to: dest)
+                    let meta: [String: Any] = ["kind": "image", "artistId": a.id, "artistName": a.name, "songId": sg.id, "songName": sg.name, "orig": img.original]
+                    if let data = try? JSONSerialization.data(withJSONObject: meta) { try? data.write(to: dest.appendingPathExtension("meta.json")) }
+                    saved += 1
+                } catch {}
+            }
+            let d = UserDefaults(suiteName: groupId)
+            d?.set(a.id, forKey: "lastArtist"); d?.set(sg.id, forKey: "lastSong")
+            try? FileManager.default.removeItem(at: staging)
+            addButton.isEnabled = false
+            status.text = saved > 0 ? "Added to \(sg.name). It will be in the song's references next time you open creatrr." : "Couldn't save that picture."
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil) }
+            return
+        }
         for p in pending {
             let safe = String(p.original.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_") ? $0 : "_" })   // spaces and symbols break the app's file reader
             let dest = inbox.appendingPathComponent("\(UUID().uuidString.prefix(6))-\(safe)")
