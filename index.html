@@ -552,6 +552,23 @@ table.sched tr.done-row td { background-color: var(--done); }
 .hs-hook { font-weight: 700; }
 .hs-hook:not(.set) { color: var(--accent, #ffd60a); font-weight: 600; }
 .hs-thumb { width: 64px; flex: none; }
+.hs-play, .sp-row .hs-play { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+.hold-hint { margin: 0 2px 8px; }
+.hook-song { border-radius: 20px; background-color: var(--surface-2); overflow: hidden; }
+.hs-fold, .sp-fold { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px; border: 0; border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: inherit; font: inherit; text-align: left; }
+.hs-fold:hover, .sp-fold:hover { background: none; }
+.hs-song { flex: 1; min-width: 0; font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+.hs-fold small, .sp-fold small { margin-left: auto; color: var(--muted); font-size: 12.5px; font-weight: 600; letter-spacing: 0; }
+.chev { width: 8px; height: 8px; flex: none; margin: 0 4px 3px 2px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .2s ease; }
+[aria-expanded="true"] > .chev { transform: rotate(45deg); margin-bottom: 5px; }
+.hs-secs { display: flex; flex-direction: column; gap: 8px; padding: 0 8px 10px; }
+.sp-head { display: flex; align-items: center; gap: 4px; }
+.sp-head .sp-song { width: auto; flex: none; padding: 4px 8px 10px 4px; }
+.sp-fold { flex: 1; min-width: 0; min-height: 0; padding: 4px 0 10px; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+.sp-title { flex: 1; min-width: 0; }
+.sp-row .hs-play { width: 38px; height: 38px; }
+.hook-sticky { position: sticky; top: -1px; z-index: 3; margin: 0 -24px 6px; padding: 2px 24px 4px; background-color: color-mix(in srgb, var(--surface) 88%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.hook-sticky h3 { margin: 4px 0; }
 .hook-player { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
 .hook-card.chosen { outline: 2px solid var(--accent, #ffd60a); }
 .hook-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -604,7 +621,7 @@ path.hd-acc { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linej
 @media (prefers-reduced-motion: reduce) { .hd * { animation: none !important; } }
 .hook-cats { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
 .hook-cat.on { background-color: color-mix(in srgb, var(--accent, #ffd60a) 30%, transparent); }
-.hook-list { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.hook-list { display: flex; flex-direction: column; gap: 10px; }
 .hook-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 16px; background-color: var(--surface-2); }
 .hook-card.flash { outline: 2px solid var(--accent, #ffd60a); }
 .hook-card ol { margin: 0; padding-left: 20px; font-size: 14px; }
@@ -5804,7 +5821,8 @@ function hookDiagram(id) {
   };
   return `<svg class="hd" viewBox="0 0 160 100" role="img" aria-label="${esc((HOOKS.find(h => h.id === id) || {}).name || "Hook")} diagram" preserveAspectRatio="xMidYMid meet">${d[id] || ph}</svg>`;
 }
-var hookCat = "all", hookSecId = null, hookRate = 1, hookPlaying = null, hookTimer = null;
+var hookCat = "all", hookSecId = null, hookRate = 1, hookPlaying = null, hookWatch = null, hookPreviewSong = null, hookPrevActive = null;
+var hookOpenSongs = new Set(), spOpenSongs = new Set();   // which songs are unfolded on the Plan page (this visit only)
 const sectionHookRow = sec => sec.rows.find(r => r.hookId);
 function hookSections() {
   const out = [];
@@ -5813,31 +5831,55 @@ function hookSections() {
 }
 function renderHookPanel() {
   const el = $("hookPanel"); if (!el) return;
-  const list = hookSections();
+  const songs = project.songs.filter(sg => songParts(sg.id).length);
   $("useTplChk").checked = project.useTemplate !== false;
   $("tplCard").classList.toggle("off", project.useTemplate === false);
-  el.innerHTML = list.length ? list.map(({ sg, sec }) => {
+  const secRow = sec => {
     const hr = sectionHookRow(sec), h = hr && HOOKS.find(x => x.id === hr.hookId);
-    return `<div class="hook-sec" data-section-id="${sec.id}" style="--sec:${sec.color}"><button type="button" class="hs-play" data-hook-play aria-label="Listen to ${esc(sec.name)}"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■" : "▶"}</button><button type="button" class="hs-main" data-hook-pick><span class="hs-name">${esc(sg.name)} · ${esc(partLabel(sec))}</span><span class="hs-hook${h ? " set" : ""}">${h ? esc(h.name) : "Choose a hook"}</span></button>${h ? `<span class="hs-thumb">${hookDiagram(h.id)}</span>` : ""}</div>`;
+    return `<div class="hook-sec" data-section-id="${sec.id}" style="--sec:${sec.color}"><button type="button" class="hs-play" data-hook-play aria-label="Hold to listen to ${esc(sec.name)}"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■" : "▶"}</button><button type="button" class="hs-main" data-hook-pick><span class="hs-name">${esc(partLabel(sec))}</span><span class="hs-hook${h ? " set" : ""}">${h ? esc(h.name) : "Choose a hook"}</span></button>${h ? `<span class="hs-thumb">${hookDiagram(h.id)}</span>` : ""}</div>`;
+  };
+  el.innerHTML = songs.length ? `<p class="muted small hold-hint">Tap a song to see its sections. Hold ▶ to hear a section.</p>` + songs.map(sg => {
+    const secs = songParts(sg.id), n = secs.filter(sectionHookRow).length, open = hookOpenSongs.has(sg.id);
+    return `<div class="hook-song${open ? " open" : ""}" data-hook-song="${sg.id}"><button type="button" class="hs-fold" data-hook-fold aria-expanded="${open}"><span class="hs-song">${esc(sg.name)}</span><small>${n} of ${secs.length} hook${secs.length === 1 ? "" : "s"}</small><span class="chev" aria-hidden="true"></span></button>${open ? `<div class="hs-secs">${secs.map(secRow).join("")}</div>` : ""}</div>`;
   }).join("") : `<p class="muted small" style="margin:0">Pick the sections you'll film in the Setlist above, then choose a hook for each one.</p>`;
 }
-async function listenSection(secId, rate) {
-  const sec = getSection(secId); if (!sec || !sec.songId) return;
-  if (hookPlaying === secId) { stopHookListen(); return; }
+/* play from a section's start and keep going until the person stops it (or the song ends). key = whatever the ▶ button belongs to */
+async function listenAt(key, songId, time, rate) {
+  if (hookPlaying === key) { stopHookListen(); return; }
   stopHookListen();
-  if (!sec.time) { showNotice("This section has no start time yet. Set it on the artist page."); return; }
-  if (activeSongId !== sec.songId) { activeSongId = sec.songId; shootPartId = null; shootOpenId = null; await loadActiveTrack(); }
-  hookPlaying = secId; paintHookButtons();
-  const r = rate || hookRate || 1, t0 = parseTC(sec.time) || 0;
-  const next = songParts(sec.songId).map(x => parseTC(x.time)).filter(t => t != null && t > t0 + 0.5).sort((a, b) => a - b)[0];
-  const len = Math.min(60, next != null ? next - t0 : 20);
-  playCue(sec.time, r);
-  clearTimeout(hookTimer);
-  hookTimer = setTimeout(() => { if (hookPlaying === secId) stopHookListen(); }, (len / r) * 1000 + 500);
+  if (!songId) return;
+  if (!time) { showNotice("This section has no start time yet. Set it on the artist page."); return; }
+  hookPlaying = key; paintHookButtons();
+  hookPrevActive = activeSongId;
+  if (!project.songs.some(x => x.id === songId)) {         // a song that isn't in this shoot yet: borrow it just for listening
+    const asg = artistRec && artistRec.songs.find(x => x.id === songId);
+    if (!asg) { stopHookListen(); return; }
+    project.songs.push(normalizeSong({ id: songId, name: asg.name, tempo: JSON.parse(JSON.stringify(asg.tempo)) }));
+    hookPreviewSong = songId;
+  }
+  if (activeSongId !== songId) { activeSongId = songId; shootPartId = null; shootOpenId = null; await loadActiveTrack(); }
+  if (hookPlaying !== key) return;                          // stopped while the track was loading
+  playCue(time, rate || hookRate || 1);
+  const t0 = Date.now(); let idle = 0;
+  clearInterval(hookWatch);
+  hookWatch = setInterval(() => {                           // the song reached its end by itself: put the buttons back
+    if (hookPlaying !== key) { clearInterval(hookWatch); return; }
+    if (Date.now() - t0 < 4000) return;
+    idle = isPlaying() ? 0 : idle + 1;
+    if (idle >= 2) stopHookListen();
+  }, 600);
 }
+function listenSection(secId, rate) { const sec = getSection(secId); return sec ? listenAt(secId, sec.songId, sec.time, rate) : undefined; }
 function stopHookListen() {
-  clearTimeout(hookTimer); hookTimer = null;
+  clearInterval(hookWatch); hookWatch = null;
   if (hookPlaying) { hookPlaying = null; try { stopAndReturn(); } catch (e) {} }
+  if (hookPreviewSong) {
+    const id = hookPreviewSong; hookPreviewSong = null;
+    if (!project.sections.some(x => x.songId === id)) {
+      project.songs = project.songs.filter(x => x.id !== id);
+      if (activeSongId === id) { activeSongId = project.songs.some(x => x.id === hookPrevActive) ? hookPrevActive : (project.songs[0] ? project.songs[0].id : null); loadActiveTrack(); }
+    }
+  }
   paintHookButtons();
 }
 function paintHookButtons() {
@@ -5851,14 +5893,15 @@ function openHooks(secId) {
 function paintHooks(keepScroll) {
   const sec = getSection(hookSecId); if (!sec) return;
   const sg = project.songs.find(x => x.id === sec.songId), cur = sectionHookRow(sec), list = HOOKS.filter(h => hookCat === "all" || h.cat === hookCat);
-  const sc = keepScroll ? ($("hookInner").querySelector(".hook-list") || {}).scrollTop : 0;
-  $("hookInner").innerHTML = `<div class="grab" aria-hidden="true"></div><h3>Hook for ${esc((sg ? sg.name + " · " : "") + partLabel(sec))}</h3>
-    <div class="hook-player"><button type="button" class="btn small primary" id="hookListen"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■ Stop" : "▶ Listen"}</button><span class="speed-step" role="group" aria-label="Speed"><button type="button" class="btn" data-hook-rate="-1" aria-label="Slower"${hookRate <= 0.5 ? " disabled" : ""}>−</button><span class="speed-val">${speedLabel(hookRate)}</span><button type="button" class="btn" data-hook-rate="1" aria-label="Faster"${hookRate >= 2 ? " disabled" : ""}>+</button></span><span class="muted small">Hear the section while you choose.</span></div>
-    <div class="hook-cats" role="group" aria-label="Category">${HOOK_CATS.map(c => `<button type="button" class="btn small hook-cat${c.id === hookCat ? " on" : ""}" data-hook-cat="${c.id}">${c.name}</button>`).join("")}<button type="button" class="btn small" data-hook-shuffle>Surprise me</button></div>
+  const sc = keepScroll ? $("hookInner").scrollTop : 0;
+  $("hookInner").innerHTML = `<div class="grab" aria-hidden="true"></div><div class="hook-sticky"><h3>Hook for ${esc((sg ? sg.name + " · " : "") + partLabel(sec))}</h3>
+    <div class="hook-player"><button type="button" class="btn small primary" id="hookListen"${sec.time ? "" : " disabled"}>${hookPlaying === sec.id ? "■ Stop" : "▶ Listen"}</button><span class="speed-step" role="group" aria-label="Speed"><button type="button" class="btn" data-hook-rate="-1" aria-label="Slower"${hookRate <= 0.5 ? " disabled" : ""}>−</button><span class="speed-val">${speedLabel(hookRate)}</span><button type="button" class="btn" data-hook-rate="1" aria-label="Faster"${hookRate >= 2 ? " disabled" : ""}>+</button></span><span class="muted small">Plays until you tap Stop.</span></div>
+    <div class="hook-cats" role="group" aria-label="Category">${HOOK_CATS.map(c => `<button type="button" class="btn small hook-cat${c.id === hookCat ? " on" : ""}" data-hook-cat="${c.id}">${c.name}</button>`).join("")}<button type="button" class="btn small" data-hook-shuffle>Surprise me</button></div></div>
     <div class="hook-list">${list.map(h => `<div class="hook-card${cur && cur.hookId === h.id ? " chosen" : ""}" data-hook="${h.id}">${hookDiagram(h.id)}<b>${esc(h.name)}</b><span class="hook-gist">${esc(h.gist)}</span><ol>${h.how.map(x => `<li>${esc(x)}</li>`).join("")}</ol><span class="muted small">Tip: ${esc(h.tip)}</span><div class="hook-actions">${cur && cur.hookId === h.id ? `<button type="button" class="btn small" data-hook-remove>Remove from this section</button>` : `<button type="button" class="btn small primary" data-hook-use="${h.id}">Use for this section</button>`}<button type="button" class="btn small" data-hook-all="${h.id}">Use for every section</button></div></div>`).join("")}</div>
     <div class="suggest-row" style="margin-top:12px"><button type="button" class="btn" data-hook-close>Done</button></div>`;
-  if (sc) { const l = $("hookInner").querySelector(".hook-list"); if (l) l.scrollTop = sc; }
+  if (sc) $("hookInner").scrollTop = sc;
 }
+function closeHooks() { stopHookListen(); $("hookModal").classList.add("hidden"); renderHookPanel(); }
 function setHook(sec, h) {
   const old = sectionHookRow(sec);
   if (old && (old.checked || old.takes.length) && !confirm("The current hook shot already has takes logged. Replace it anyway?")) return false;
@@ -5867,10 +5910,23 @@ function setHook(sec, h) {
   return true;
 }
 $("hookPanel").addEventListener("click", e => {
+  const fold = e.target.closest("[data-hook-fold]");
+  if (fold) { const id = fold.closest("[data-hook-song]").dataset.hookSong; if (hookOpenSongs.has(id)) hookOpenSongs.delete(id); else hookOpenSongs.add(id); renderHookPanel(); return; }
   const row = e.target.closest(".hook-sec"); if (!row) return;
-  if (e.target.closest("[data-hook-play]")) { listenSection(row.dataset.sectionId); return; }
+  if (e.target.closest("[data-hook-play]")) return;   /* ▶ is hold-to-play: see pointerdown below */
   if (e.target.closest("[data-hook-pick]")) openHooks(row.dataset.sectionId);
 });
+/* hold ▶ to listen; the music stops the moment you let go */
+function holdToListen(e, key, songId, time) {
+  listenAt(key, songId, time);
+  const end = () => { window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end); if (hookPlaying === key) stopHookListen(); };
+  window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+}
+$("hookPanel").addEventListener("pointerdown", e => {
+  const b = e.target.closest("[data-hook-play]"); if (!b || b.disabled) return;
+  const sec = getSection(b.closest(".hook-sec").dataset.sectionId); if (sec) holdToListen(e, sec.id, sec.songId, sec.time);
+});
+$("hookPanel").addEventListener("contextmenu", e => { if (e.target.closest("[data-hook-play]")) e.preventDefault(); });
 $("useTplChk").addEventListener("change", e => {
   if (e.target.checked) { project.useTemplate = true; addMissingShots(); }
   else {
@@ -5897,7 +5953,7 @@ $("hookModal").addEventListener("click", e => {
     if (!confirm(`Use "${h.name}" as the hook for every section? Sections that already have a hook shot will switch to it.`)) return;
     hookSections().forEach(({ sec: s }) => setHook(s, h)); changed(); paintHooks(true); return;
   }
-  if (e.target.closest("[data-hook-close]") || e.target === $("hookModal")) { stopHookListen(); $("hookModal").classList.add("hidden"); renderHookPanel(); }
+  if (e.target.closest("[data-hook-close]")) hookSheet.close();   /* tapping outside or swiping down closes it too (makeSheet) */
 });
 var partRefTarget = null, refPickSec = null, refPickSel = [];
 $("partRefInput").addEventListener("change", async e => {
@@ -6110,18 +6166,24 @@ function renderSetPick() {
     box.innerHTML = `<div class="panel"><p style="margin-top:0">${esc(artistRec.docTitle)} has no songs yet. Add them on the artist page, then come back.</p><button type="button" class="btn primary" data-open-artist="1">Open ${esc(artistRec.docTitle)}</button></div>`;
     return;
   }
-  box.innerHTML = artistRec.songs.map(sg => {
+  box.innerHTML = `<p class="muted small hold-hint">Tap a song's name to open it. Hold ▶ to hear a section. Tick the boxes for what you'll shoot.</p>` + artistRec.songs.map(sg => {
     const secs = sortByTime(artistRec.sections.filter(x => x.songId === sg.id));
     const n = secs.filter(x => srcEntries(x.id).length).length;
     const st = secs.length && n === secs.length ? "on" : n ? "some" : "";
-    return `<div class="sp-card"><button type="button" class="sp-song" data-sp-song="${sg.id}"><span class="pp-box ${st}">${st === "on" ? "✓" : st === "some" ? "–" : ""}</span><span>${esc(sg.name)}</span><small>${secs.length ? `${n} of ${secs.length}` : ""}</small></button>`
-      + (secs.length ? secs.map(as => {
+    const open = spOpenSongs.has(sg.id);
+    return `<div class="sp-card"><div class="sp-head"><button type="button" class="sp-song" data-sp-song="${sg.id}" aria-label="Select every section of ${esc(sg.name)}"><span class="pp-box ${st}">${st === "on" ? "✓" : st === "some" ? "–" : ""}</span></button><button type="button" class="sp-fold" data-sp-fold="${sg.id}" aria-expanded="${open}"><span class="sp-title">${esc(sg.name)}</span><small>${secs.length ? `${n} of ${secs.length}` : ""}</small><span class="chev" aria-hidden="true"></span></button></div>`
+      + (!open ? "" : secs.length ? secs.map(as => {
           const on = srcEntries(as.id).length > 0;
-          return `<div class="sp-row"><button type="button" class="sp-check" data-sp-toggle="${as.id}"><span class="pp-box ${on ? "on" : ""}">${on ? "✓" : ""}</span><span>${esc(as.name)}</span>${as.time ? `<small>${esc(as.time)}</small>` : ""}</button></div>`;
+          return `<div class="sp-row" data-section-id="${as.id}" style="--sec:${as.color}"><button type="button" class="hs-play" data-hook-play aria-label="Hold to listen to ${esc(as.name)}"${as.time ? "" : " disabled"}>${hookPlaying === as.id ? "■" : "▶"}</button><button type="button" class="sp-check" data-sp-toggle="${as.id}"><span class="pp-box ${on ? "on" : ""}">${on ? "✓" : ""}</span><span>${esc(as.name)}</span>${as.time ? `<small>${esc(as.time)}</small>` : ""}</button></div>`;
         }).join("") : `<p class="muted small" style="margin:2px 4px 12px">No sections marked yet. Mark them on ${esc(artistRec.docTitle)}'s page.</p>`)
       + `</div>`;
   }).join("");
 }
+$("setPick").addEventListener("pointerdown", e => {
+  const b = e.target.closest("[data-hook-play]"); if (!b || b.disabled || !artistRec) return;
+  const as = artistRec.sections.find(x => x.id === b.closest(".sp-row").dataset.sectionId); if (as) holdToListen(e, as.id, as.songId, as.time);
+});
+$("setPick").addEventListener("contextmenu", e => { if (e.target.closest("[data-hook-play]")) e.preventDefault(); });
 function renderSetOrder() {
   const el = $("setOrder"), rows = shootRows();
   el.innerHTML = rows.length ? `<div class="order-card"><h3>Shoot order<button type="button" class="help-q" data-help aria-label="What is this?">?</button></h3><p class="muted small ord-hint">Drag ⠿ to change the order you shoot in.</p><div class="order-list">${rows.map((r, i) => `<div class="order-row" data-pid="${r.p.id}"><span class="n">${i + 1}</span><span>${esc(r.p.name)}</span><span class="sp">${esc(r.sg.name)}</span>${(r.p.speed || 1) !== 1 ? `<span class="spd">${speedLabel(r.p.speed)}</span>` : ""}<span class="ord-grip" aria-label="Drag to reorder">⠿</span></div>`).join("")}</div></div>` : "";
@@ -6139,6 +6201,9 @@ $("setPick").addEventListener("click", async e => {
   if (pa) { if (pa.dataset.pickArtist === "__new") { openArtistModal("plan"); return; } const r = await getProjectRecord(pa.dataset.pickArtist); if (r) await linkArtist(normalizeRecord(r)); return; }
   if (e.target.closest("[data-open-artist]")) { if (project.artistId) { await persistNow(); await openProject(project.artistId); } return; }
   if (!artistRec) return;
+  if (e.target.closest("[data-hook-play]")) return;   /* ▶ is hold-to-play: see pointerdown below */
+  const fo = e.target.closest("[data-sp-fold]");
+  if (fo) { const id = fo.dataset.spFold; if (spOpenSongs.has(id)) spOpenSongs.delete(id); else spOpenSongs.add(id); renderSetPick(); return; }
   const sp = e.target.closest("[data-sp-speed]"), tg = e.target.closest("[data-sp-toggle]"), sg = e.target.closest("[data-sp-song]");
   const asOf = id => artistRec.sections.find(x => x.id === id);
   let changed = false;
@@ -7647,6 +7712,7 @@ function makeSheet(root, box, onClose, scrim, opts) {
 }
 var tplSheet = makeSheet($("tplModal"), $("tplModal").querySelector(".modal-inner"), () => closeTplModal());
 var notesSheet = makeSheet($("notesModal"), $("notesInner"), () => $("notesModal").classList.add("hidden"));
+var hookSheet = makeSheet($("hookModal"), $("hookInner"), () => closeHooks());
 var tempoSheet = makeSheet($("tempoModal"), $("tempoModal").querySelector(".modal-inner"), () => tapClose());
 var songSheet = makeSheet($("songPage"), $("songPage"), () => closeSongPage(), $("songScrim"));
 var artistSheetCtl = makeSheet($("artistSheet"), $("artistSheet"), () => { $("artistSheet").style.visibility = "hidden"; $("artistScrim").classList.add("hidden"); goToProjects(); }, $("artistScrim"), { ignore: "#songPage, #songScrim, .modal", onStart: () => artistCloseStart() });
