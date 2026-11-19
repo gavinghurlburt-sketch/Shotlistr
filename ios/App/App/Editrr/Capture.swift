@@ -629,6 +629,11 @@ struct CaptureView: View {
 
     private var full: Bool { capture.takes.count >= maxTakes }
 
+    /// Steps of the zoom along the wheel's scale, one every 10 points, for the haptic ticks.
+    private var zoomTick: Int {
+        Int((ZoomScale(range: capture.zoomRange).spot(capture.zoomShown) / 10).rounded())
+    }
+
     private var recordLabel: String {
         if capture.recording { return "Stop" }
         return full ? "That's \(maxTakes) takes" : "Record to the song"
@@ -674,7 +679,6 @@ struct CaptureView: View {
                         lensRow.opacity(wheelOn ? 0.05 : 1)
                         if wheelOn { zoomWheel.transition(.opacity) }
                     }
-                    .sensoryFeedback(.selection, trigger: capture.currentLens?.id)
                     .sensoryFeedback(.impact(weight: .light), trigger: wheelOn)
                 }
                 controls
@@ -718,6 +722,10 @@ struct CaptureView: View {
                     .transition(.scale(scale: 0.92).combined(with: .opacity))
             }
         }
+        // Zooming clicks like the iPhone camera: a light tick as the scale passes each mark
+        // (wheel or pinch), a firmer one at each lens.
+        .sensoryFeedback(.selection, trigger: zoomTick)
+        .sensoryFeedback(.impact(weight: .medium), trigger: capture.currentLens?.id)
         .preferredColorScheme(.dark)
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
@@ -1258,8 +1266,8 @@ struct ZoomScale {
     let low: Double
     let high: Double
     /// Room for the first doubling, and how fast later doublings shrink.
-    private static let first = 105.0
-    private static let shrink = 0.35
+    private static let first = 125.0
+    private static let shrink = 0.3
 
     init(range: ClosedRange<Double>) {
         low = max(range.lowerBound, 0.01)
