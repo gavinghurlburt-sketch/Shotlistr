@@ -258,6 +258,14 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         zoomShown = Double(zoom / zoomBase)
     }
 
+    /// The zoom you can reach, as shown (.5 to 15 on a three-lens phone), for the zoom wheel.
+    var zoomRange: ClosedRange<Double> {
+        guard let device = cameraInput?.device else { return 1...1 }
+        let least = Double(device.minAvailableVideoZoomFactor / zoomBase)
+        let most = Double(min(device.maxAvailableVideoZoomFactor, zoomBase * 15) / zoomBase)
+        return least...max(least, most)
+    }
+
     /// The lens the zoom is on: the biggest one at or below it.
     var currentLens: Lens? {
         lenses.last { $0.shown <= zoomShown + 0.01 } ?? lenses.first
@@ -581,6 +589,16 @@ struct CaptureView: View {
     @State private var note: String?
     /// The zoom when a pinch began.
     @State private var pinchFrom: CGFloat?
+    /// Holding or sliding a lens button shows the zoom wheel.
+    @State private var wheelOn = false
+    /// The press on a lens button right now.
+    @State private var pressId: UUID?
+    /// Where the wheel's drag began: the finger's x and the zoom then.
+    @State private var wheelFrom: (x: CGFloat, zoom: CGFloat)?
+    /// Bumped on each press, so an old "hide the wheel" timer does nothing.
+    @State private var hideToken = 0
+    /// How far to slide for twice the zoom (the scale moves with your finger).
+    private static let wheelPointsPerDoubling: CGFloat = 120
     @Environment(\.dismiss) private var dismiss
 
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
@@ -649,7 +667,15 @@ struct CaptureView: View {
                         .padding(.bottom, 14)
                         .transition(.opacity)
                 }
-                if !capture.recording { lensRow }
+                if !capture.recording {
+                    ZStack(alignment: .bottom) {
+                        // Stays in place under the wheel, so the press that opened it keeps going.
+                        lensRow.opacity(wheelOn ? 0.05 : 1)
+                        if wheelOn { zoomWheel.transition(.opacity) }
+                    }
+                    .sensoryFeedback(.selection, trigger: capture.currentLens?.id)
+                    .sensoryFeedback(.impact(weight: .light), trigger: wheelOn)
+                }
                 controls
             }
             .foregroundStyle(.white)
@@ -671,15 +697,15 @@ struct CaptureView: View {
                     .onTapGesture { withAnimation(.snappy) { menuOpen = false } }
                     .accessibilityHidden(true)
                 VStack {
+                    Spacer()
                     HStack {
                         Spacer()
                         optionsMenu
                     }
-                    Spacer()
                 }
-                .padding(.top, 52)
+                .padding(.bottom, 104)
                 .padding(.horizontal, 12)
-                .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+                .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
             }
 
             if asking {
@@ -697,7 +723,7 @@ struct CaptureView: View {
         .task { await capture.prepare() }
         .onDisappear { capture.stop() }
         .onChange(of: capture.recording) { _, recording in
-            if recording { menuOpen = false; note = nil }
+            if recording { menuOpen = false; note = nil; wheelOn = false }
         }
     }
 
@@ -800,14 +826,8 @@ struct CaptureView: View {
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: 0)
-            Button { withAnimation(.snappy) { menuOpen.toggle() } } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Options")
-            .disabled(capture.recording)
-            .opacity(capture.recording ? 0.3 : 1)
+            // Balances the X so the title sits in the middle.
+            Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, 8)
         .shadow(color: .black.opacity(0.5), radius: 4)
@@ -853,11 +873,14 @@ struct CaptureView: View {
         }
     }
 
-    /// Count-in on the left, record in the middle, click on the right. That's all.
+    /// Count-in and click on the left, record in the middle, the menu on the right. That's all.
     private var controls: some View {
         HStack(spacing: 0) {
-            tempoButton("Count-in", icon: "metronome", on: capture.countIn) { capture.countIn.toggle() }
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 14) {
+                tempoButton("Count-in", icon: "metronome", on: capture.countIn) { capture.countIn.toggle() }
+                tempoButton("Click", icon: "waveform.path", on: capture.click) { capture.click.toggle() }
+            }
+            .frame(maxWidth: .infinity)
             Button {
                 if capture.recording { capture.stopRecording() } else { capture.record() }
             } label: {
@@ -875,7 +898,7 @@ struct CaptureView: View {
             .opacity(capture.ready && (!full || capture.recording) ? 1 : 0.4)
             .accessibilityLabel(recordLabel)
             .sensoryFeedback(.impact, trigger: capture.recording)
-            tempoButton("Click", icon: "waveform.path", on: capture.click) { capture.click.toggle() }
+            menuButton
                 .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 12)
@@ -898,14 +921,18 @@ struct CaptureView: View {
             }
             action()
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.title2.weight(.semibold))
+                    .font(.body.weight(.semibold))
                     .symbolVariant(lit ? .fill : .none)
-                Text(name).font(.caption.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(.ultraThinMaterial))
+                    .overlay(Circle().strokeBorder(.white.opacity(lit ? 0 : 0.18), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(Tint.accent.opacity(lit ? 0.9 : 0), lineWidth: 1.5))
+                Text(name).font(.caption2.weight(.semibold))
             }
-            .foregroundStyle(lit ? Tint.accent : .white.opacity(known ? 0.85 : 0.4))
-            .frame(width: 76, height: 64)
+            .foregroundStyle(lit ? Tint.accent : .white.opacity(known ? 0.9 : 0.4))
+            .frame(width: 56, height: 64)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -913,6 +940,31 @@ struct CaptureView: View {
         .disabled(capture.recording)
         .accessibilityLabel(name)
         .accessibilityValue(lit ? "On" : "Off")
+    }
+
+    /// The menu, like the iPhone camera's: six dots on a frosted glass circle.
+    private var menuButton: some View {
+        Button { withAnimation(.snappy) { menuOpen.toggle() } } label: {
+            Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+                ForEach(0..<2, id: \.self) { _ in
+                    GridRow {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Circle().frame(width: 4.5, height: 4.5)
+                        }
+                    }
+                }
+            }
+            .foregroundStyle(menuOpen ? Tint.accent : .white)
+            .frame(width: 48, height: 48)
+            .background(Circle().fill(.ultraThinMaterial))
+            .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .environment(\.colorScheme, .dark)
+        .accessibilityLabel("Options")
+        .opacity(capture.recording ? 0 : 1)
+        .disabled(capture.recording)
     }
 
     /// The options pop-up, in creatrr's rounded frosted glass.
@@ -978,16 +1030,18 @@ struct CaptureView: View {
                 HStack(spacing: 4) {
                     ForEach(capture.lenses) { lens in
                         let on = capture.currentLens == lens
-                        Button { withAnimation(.snappy) { capture.pick(lens) } } label: {
-                            Text(on ? zoomLabel(capture.zoomShown) + "\u{00D7}" : zoomLabel(lens.shown))
-                                .font(.system(size: on ? 13 : 11, weight: .bold).monospacedDigit())
-                                .foregroundStyle(on ? Tint.accent : .white)
-                                .frame(width: on ? 40 : 32, height: on ? 40 : 32)
-                                .background(Circle().fill(.black.opacity(0.45)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Zoom \(zoomLabel(lens.shown))")
-                        .accessibilityAddTraits(on ? .isSelected : [])
+                        Text(on ? zoomLabel(capture.zoomShown) + "\u{00D7}" : zoomLabel(lens.shown))
+                            .font(.system(size: on ? 13 : 11, weight: .bold).monospacedDigit())
+                            .foregroundStyle(on ? Tint.accent : .white)
+                            .frame(width: on ? 40 : 32, height: on ? 40 : 32)
+                            .background(Circle().fill(.black.opacity(0.45)))
+                            .contentShape(Circle())
+                            // Tap for the lens; hold or slide for the zoom wheel.
+                            .gesture(lensGesture(lens))
+                            .accessibilityLabel("Zoom \(zoomLabel(lens.shown))")
+                            .accessibilityHint("Hold and slide to zoom")
+                            .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityAction { withAnimation(.snappy) { capture.pick(lens) } }
                     }
                 }
                 .padding(4)
@@ -1003,6 +1057,130 @@ struct CaptureView: View {
             .accessibilityLabel(capture.front ? "Use the back camera" : "Use the front camera")
         }
         .padding(.bottom, 14)
+    }
+
+    /// A lens button: a tap goes to that lens. Holding it, or sliding off it, brings up the zoom
+    /// wheel, and sliding left or right zooms in or out, like the iPhone camera.
+    private func lensGesture(_ lens: CaptureModel.Lens) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if pressId == nil {
+                    let id = UUID()
+                    pressId = id
+                    hideToken += 1
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(300))
+                        if pressId == id && !wheelOn { withAnimation(.snappy) { wheelOn = true } }
+                    }
+                }
+                let dx = value.translation.width
+                if !wheelOn && abs(dx) > 10 { withAnimation(.snappy) { wheelOn = true } }
+                guard wheelOn else { return }
+                let from = wheelFrom ?? (x: dx, zoom: capture.zoomFactor)
+                wheelFrom = from
+                capture.setZoom(from.zoom * pow(2, -(dx - from.x) / Self.wheelPointsPerDoubling))
+            }
+            .onEnded { _ in
+                let wheel = wheelOn
+                pressId = nil
+                wheelFrom = nil
+                guard wheel else {
+                    withAnimation(.snappy) { capture.pick(lens) }
+                    return
+                }
+                // The wheel stays a moment, then the lens buttons come back.
+                hideToken += 1
+                let token = hideToken
+                Task {
+                    try? await Task.sleep(for: .seconds(1.2))
+                    if token == hideToken && pressId == nil {
+                        withAnimation(.easeOut(duration: 0.25)) { wheelOn = false }
+                    }
+                }
+            }
+    }
+
+    /// The zoom wheel: a dark dome whose scale slides under a yellow mark as you drag.
+    private var zoomWheel: some View {
+        let shown = capture.zoomShown
+        let range = capture.zoomRange
+        let lenses = capture.lenses.map(\.shown)
+        return VStack(spacing: 2) {
+            Text(zoomLabel(shown) + "\u{00D7}")
+                .font(.system(size: 15, weight: .bold).monospacedDigit())
+                .foregroundStyle(Tint.accent)
+                .shadow(color: .black.opacity(0.6), radius: 3)
+            Canvas { context, size in
+                Self.drawWheel(context, size: size, shown: shown, range: range, lenses: lenses, label: zoomLabel)
+            }
+            .frame(height: 124)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private static func drawWheel(_ context: GraphicsContext, size: CGSize, shown: Double,
+                                  range: ClosedRange<Double>, lenses: [Double],
+                                  label: (Double) -> String) {
+        let radius = size.width * 0.85
+        let center = CGPoint(x: size.width / 2, y: radius + 8)
+        context.fill(Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
+                                            width: radius * 2, height: radius * 2)),
+                     with: .color(.black.opacity(0.55)))
+        // Radians for each doubling, so the scale moves as far as the finger.
+        let perDoubling = Double(wheelPointsPerDoubling / radius)
+        let now = log2(max(shown, 0.01))
+        func angle(_ value: Double) -> Double { (log2(value) - now) * perDoubling }
+        func point(_ angle: Double, _ distance: CGFloat) -> CGPoint {
+            CGPoint(x: center.x + distance * CGFloat(sin(angle)), y: center.y - distance * CGFloat(cos(angle)))
+        }
+        func tick(_ value: Double, length: CGFloat, width: CGFloat, opacity: Double) {
+            let a = angle(value)
+            guard abs(a) < 1.2 else { return }
+            var path = Path()
+            path.move(to: point(a, radius - 8))
+            path.addLine(to: point(a, radius - 8 - length))
+            context.stroke(path, with: .color(.white.opacity(opacity)), lineWidth: width)
+        }
+        guard range.lowerBound > 0 else { return }
+        // Small ticks every tenth of a doubling.
+        let low = Int((log2(range.lowerBound) * 10).rounded(.up))
+        let high = Int((log2(range.upperBound) * 10).rounded(.down))
+        if low <= high {
+            for step in low...high where step % 10 != 0 {
+                tick(pow(2, Double(step) / 10), length: 8, width: 1, opacity: 0.45)
+            }
+        }
+        // Big ticks and numbers at each lens and each doubling (.5, 1, 2, 4, 8), never crowded.
+        var marks = lenses.filter { range.contains($0) }
+        let first = Int(log2(range.lowerBound).rounded(.up))
+        let last = Int(log2(range.upperBound).rounded(.down))
+        if first <= last {
+            for power in first...last {
+                let value = pow(2, Double(power))
+                if !marks.contains(where: { abs(log2($0) - log2(value)) < 0.3 }) { marks.append(value) }
+            }
+        }
+        for value in marks {
+            tick(value, length: 15, width: 2, opacity: 0.95)
+            let a = angle(value)
+            guard abs(a) < 1.1 else { continue }
+            context.draw(Text(label(value))
+                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.white),
+                         at: point(a, radius - 38))
+        }
+        // The yellow mark at the top: where the zoom is now.
+        var mark = Path()
+        mark.move(to: CGPoint(x: center.x - 5, y: 0))
+        mark.addLine(to: CGPoint(x: center.x + 5, y: 0))
+        mark.addLine(to: CGPoint(x: center.x, y: 7))
+        mark.closeSubpath()
+        context.fill(mark, with: .color(Tint.accent))
+        var line = Path()
+        line.move(to: point(0, radius - 2))
+        line.addLine(to: point(0, radius - 26))
+        context.stroke(line, with: .color(Tint.accent), lineWidth: 2)
     }
 
     /// 0.5 shows as .5, whole numbers without a decimal, the rest to one place.
