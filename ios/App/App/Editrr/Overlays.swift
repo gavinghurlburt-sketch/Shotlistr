@@ -8,16 +8,18 @@ import UniformTypeIdentifiers
 
 // MARK: - What an overlay is
 
-/// The shape that cuts an overlay out: nothing, a circle or a rectangle, soft at its edge, and
-/// turned inside out with Invert.
+/// The shape that cuts an overlay out: nothing, a circle, a square or your own shape made of
+/// points, soft at its edge, and turned inside out with Invert.
 enum MaskShape: String, Codable, CaseIterable, Sendable {
-    case off, circle, rectangle
+    // `rectangle` is the square (the name it was saved under before).
+    case off, circle, rectangle, custom
 
     var name: String {
         switch self {
         case .off: "None"
         case .circle: "Circle"
-        case .rectangle: "Rectangle"
+        case .rectangle: "Square"
+        case .custom: "Custom"
         }
     }
 
@@ -25,9 +27,19 @@ enum MaskShape: String, Codable, CaseIterable, Sendable {
         switch self {
         case .off: "square.slash"
         case .circle: "circle"
-        case .rectangle: "rectangle"
+        case .rectangle: "square"
+        case .custom: "pentagon"
         }
     }
+}
+
+/// One of a Custom mask's points, from the shape's middle in shape units (y down). A shape unit
+/// is the overlay's shorter side times the mask's size, so a Custom shape grows with a pinch.
+struct MaskPoint: Codable, Equatable, Hashable, Sendable {
+    var x: Double
+    var y: Double
+    /// How far a point can go from the middle.
+    static let reach = 2.0
 }
 
 struct OverlayMask: Codable, Equatable, Sendable {
@@ -42,11 +54,102 @@ struct OverlayMask: Codable, Equatable, Sendable {
     /// projects saved before masks could move still open.
     var centerX: Double? = nil
     var centerY: Double? = nil
+    /// How far a Circle or Square is stretched across and down by its side handles (nil: even).
+    var wide: Double? = nil
+    var tall: Double? = nil
+    /// Custom's points, in order around the shape (nil until Custom is first picked).
+    var points: [MaskPoint]? = nil
+    /// Custom: a smooth curve through the points instead of straight lines.
+    var smooth: Bool? = nil
 
     var middleX: Double { centerX ?? 0.5 }
     var middleY: Double { centerY ?? 0.5 }
+    var across: Double { wide ?? 1 }
+    var down: Double { tall ?? 1 }
+    var curved: Bool { smooth ?? false }
+    /// Custom's points, or the corners of the Circle or Square it starts from.
+    var anchors: [MaskPoint] {
+        if let points, points.count >= 3 { return points }
+        return corners
+    }
+    var corners: [MaskPoint] {
+        let x = across / 2, y = down / 2
+        return [MaskPoint(x: -x, y: -y), MaskPoint(x: x, y: -y), MaskPoint(x: x, y: y), MaskPoint(x: -x, y: y)]
+    }
     /// The biggest it can be made: twice the overlay, so a moved shape can still cover it.
     static let largest = 2.0
+    /// How thin and how stretched a side handle can make a Circle or Square, in shape units.
+    static let thinnest = 0.05
+    static let widest = 6.0
+}
+
+/// A mask's outline through its points: straight lines, or a curve that passes through every point.
+enum MaskOutline {
+    static func path(_ points: [CGPoint], smooth: Bool) -> CGPath {
+        let path = CGMutablePath()
+        guard points.count >= 3 else { return path }
+        guard smooth else {
+            path.addLines(between: points)
+            path.closeSubpath()
+            return path
+        }
+        let n = points.count
+        path.move(to: points[0])
+        for i in 0..<n {
+            let p0 = points[(i - 1 + n) % n], p1 = points[i], p2 = points[(i + 1) % n], p3 = points[(i + 2) % n]
+            let c1 = CGPoint(x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6)
+            let c2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6)
+            path.addCurve(to: p2, control1: c1, control2: c2)
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// Custom mask shapes drawn once into a picture (white inside, black outside) and reused on every
+/// frame, so a moving or growing shape doesn't redraw.
+final class MaskPictures: @unchecked Sendable {
+    static let shared = MaskPictures()
+    /// Pixels to one shape unit.
+    static let scale: CGFloat = 600
+    private let lock = NSLock()
+    private var cache: [String: (image: CIImage, box: CGRect)] = [:]
+
+    /// The picture, and the box it covers in shape units (y up, as Core Image counts).
+    func picture(_ points: [MaskPoint], smooth: Bool) -> (image: CIImage, box: CGRect)? {
+        let key = points.map { "\($0.x),\($0.y)" }.joined(separator: ";") + (smooth ? "~" : "")
+        lock.lock()
+        if let hit = cache[key] {
+            lock.unlock()
+            return hit
+        }
+        lock.unlock()
+        let path = MaskOutline.path(points.map { CGPoint(x: $0.x, y: -$0.y) }, smooth: smooth)
+        let bounds = path.boundingBoxOfPath
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        let s = Self.scale
+        let width = Int((bounds.width * s).rounded(.up)) + 2
+        let height = Int((bounds.height * s).rounded(.up)) + 2
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        context.setFillColor(gray: 0, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.translateBy(x: 1 - bounds.minX * s, y: 1 - bounds.minY * s)
+        context.scaleBy(x: s, y: s)
+        context.addPath(path)
+        context.setFillColor(gray: 1, alpha: 1)
+        context.fillPath()
+        guard let drawn = context.makeImage() else { return nil }
+        let box = CGRect(x: bounds.minX - 1 / s, y: bounds.minY - 1 / s,
+                         width: CGFloat(width) / s, height: CGFloat(height) / s)
+        let made = (image: CIImage(cgImage: drawn), box: box)
+        lock.lock()
+        if cache.count > 40 { cache.removeAll() }
+        cache[key] = made
+        lock.unlock()
+        return made
+    }
 }
 
 /// A picture or video on top of the main video track, as saved.
@@ -327,26 +430,43 @@ enum OverlayRender {
         let feather = min(1, max(0, mask.feather))
         // Core Image counts y from the bottom.
         let middle = CGPoint(x: rect.minX + rect.width * mask.middleX, y: rect.maxY - rect.height * mask.middleY)
+        // One shape unit: the overlay's shorter side times the size.
+        let unit = min(rect.width, rect.height) * size
+        let across = min(OverlayMask.widest, max(OverlayMask.thinnest, mask.across))
+        let down = min(OverlayMask.widest, max(OverlayMask.thinnest, mask.down))
         var shape: CIImage
         switch mask.shape {
         case .off:
             return nil
         case .circle:
-            let radius = min(rect.width, rect.height) / 2 * size
+            // A round gradient, stretched into an oval by the side handles.
+            let radius = unit / 2
             let soft = radius * feather * 0.9
             let gradient = CIFilter.radialGradient()
-            gradient.center = middle
+            gradient.center = .zero
             gradient.radius0 = Float(max(0, radius - soft))
             gradient.radius1 = Float(radius + 0.5)
             gradient.color0 = .white
             gradient.color1 = .black
-            shape = gradient.outputImage ?? CIImage(color: .black)
+            shape = (gradient.outputImage ?? CIImage(color: .black))
+                .transformed(by: CGAffineTransform(scaleX: across, y: down))
+                .transformed(by: CGAffineTransform(translationX: middle.x, y: middle.y))
         case .rectangle:
-            let box = CGRect(x: middle.x - rect.width * size / 2, y: middle.y - rect.height * size / 2,
-                             width: rect.width * size, height: rect.height * size)
+            let width = unit * across, height = unit * down
+            let box = CGRect(x: middle.x - width / 2, y: middle.y - height / 2, width: width, height: height)
             let blur = min(box.width, box.height) * feather * 0.25
             shape = CIImage(color: .white).cropped(to: box)
                 .composited(over: CIImage(color: .black).cropped(to: rect.insetBy(dx: -blur * 3, dy: -blur * 3)))
+            if blur > 0.5 { shape = shape.applyingGaussianBlur(sigma: blur) }
+        case .custom:
+            guard let drawn = MaskPictures.shared.picture(mask.anchors, smooth: mask.curved) else { return nil }
+            let factor = unit / MaskPictures.scale
+            let placed = drawn.image
+                .transformed(by: CGAffineTransform(scaleX: factor, y: factor))
+                .transformed(by: CGAffineTransform(translationX: middle.x + drawn.box.minX * unit,
+                                                   y: middle.y + drawn.box.minY * unit))
+            let blur = min(drawn.box.width, drawn.box.height) * unit * feather * 0.25
+            shape = placed.composited(over: CIImage(color: .black).cropped(to: rect.insetBy(dx: -blur * 3, dy: -blur * 3)))
             if blur > 0.5 { shape = shape.applyingGaussianBlur(sigma: blur) }
         }
         shape = shape.cropped(to: rect)

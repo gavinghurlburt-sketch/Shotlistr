@@ -537,22 +537,14 @@ struct EditingView: View {
                                     .strokeBorder(Tint.accent.opacity(model.maskEditing ? 0.4 : 1), lineWidth: 2)
                                     .frame(width: box.width * stage.size.width, height: box.height * stage.size.height)
                                     .position(x: box.midX * stage.size.width, y: box.midY * stage.size.height)
-                                // While the Mask sheet is open: a dashed outline of the mask, which the fingers move.
-                                if model.maskEditing, let shape = model.overlay(id)?.mask.shape,
-                                   let mask = model.maskBox(id) {
-                                    let dash = StrokeStyle(lineWidth: 2, dash: [6, 4])
-                                    Group {
-                                        if shape == .circle {
-                                            Ellipse().stroke(Tint.accent, style: dash)
-                                        } else {
-                                            Rectangle().stroke(Tint.accent, style: dash)
-                                        }
-                                    }
-                                    .frame(width: mask.width * stage.size.width, height: mask.height * stage.size.height)
-                                    .position(x: mask.midX * stage.size.width, y: mask.midY * stage.size.height)
-                                }
                             }
                             .allowsHitTesting(false)
+                        }
+                    }
+                    // While the Mask sheet is open: the mask's yellow outline with its handles.
+                    .overlay {
+                        if model.maskEditing, let id = model.overlayPick {
+                            MaskHandles(model: model, id: id)
                         }
                     }
                     // The lyrics, picked (or on the lyrics page): a yellow box with transform handles.
@@ -1612,7 +1604,12 @@ struct VideoStage: View {
 
     /// A tap on the words picks the lyrics; a tap away from them lets go. A tap on an overlay picks it.
     private func tapped(_ at: CGPoint) {
-        guard !model.lyricTimeline, !model.maskEditing else { return }
+        guard !model.lyricTimeline else { return }
+        // The Mask sheet is open: a tap adds a point to a Custom shape (and does nothing otherwise).
+        if model.maskEditing {
+            model.addMaskPoint(at: at)
+            return
+        }
         if let box = model.lyricsBox(), box.insetBy(dx: -0.04, dy: -0.03).contains(at) {
             model.pickLyrics(true)
             return
@@ -1703,6 +1700,133 @@ struct VideoStage: View {
         pinch = 1
         move = .zero
         model.stageFraming(scale: scale, shift: kept)
+    }
+}
+
+/// While the Mask sheet is open: the mask's outline in creatrr yellow with small square handles.
+/// Circle and Square have one on each side: drag it to stretch that side while the other stays.
+/// Custom has one on each point: drag it to move the point, tap it to pick it (to remove it), and
+/// tap the video to add one. Dragging anywhere else moves the whole mask, and a pinch sizes it.
+struct MaskHandles: View {
+    let model: EditorModel
+    let id: UUID
+    private static let space = "maskHandles"
+    /// Where the held handle was when the finger went down, as fractions of the frame.
+    @State private var grab: CGPoint?
+    @State private var moved = false
+
+    var body: some View {
+        GeometryReader { stage in
+            let w = max(stage.size.width, 1), h = max(stage.size.height, 1)
+            if let mask = model.overlayHere(id)?.mask, mask.shape != .off, let box = model.maskBox(id) {
+                let frame = CGRect(x: box.minX * w, y: box.minY * h, width: box.width * w, height: box.height * h)
+                let points = model.maskAnchors(id).map { CGPoint(x: $0.x * w, y: $0.y * h) }
+                ZStack {
+                    outline(mask, frame: frame, points: points)
+                        .shadow(color: .black.opacity(0.45), radius: 1.5)
+                        .allowsHitTesting(false)
+                    if mask.shape == .custom {
+                        ForEach(Array(points.enumerated()), id: \.offset) { index, point in
+                            handle(picked: model.maskPoint == index)
+                                .gesture(pointDrag(index, from: point, w: w, h: h))
+                                .position(point)
+                                .accessibilityLabel("Mask point \(index + 1)")
+                        }
+                    } else {
+                        ForEach(0..<4, id: \.self) { side in
+                            let point = sidePoint(side, frame)
+                            handle(picked: false)
+                                .gesture(sideDrag(side, from: point, w: w, h: h))
+                                .position(point)
+                                .accessibilityLabel(["Top", "Right", "Bottom", "Left"][side] + " side of the mask")
+                        }
+                    }
+                }
+            }
+        }
+        .coordinateSpace(name: Self.space)
+    }
+
+    @ViewBuilder
+    private func outline(_ mask: OverlayMask, frame: CGRect, points: [CGPoint]) -> some View {
+        switch mask.shape {
+        case .circle:
+            Ellipse()
+                .stroke(Tint.accent, lineWidth: 2)
+                .frame(width: frame.width, height: frame.height)
+                .position(x: frame.midX, y: frame.midY)
+        case .custom:
+            Path(MaskOutline.path(points, smooth: mask.curved))
+                .stroke(Tint.accent, lineWidth: 2)
+        default:
+            Rectangle()
+                .stroke(Tint.accent, lineWidth: 2)
+                .frame(width: frame.width, height: frame.height)
+                .position(x: frame.midX, y: frame.midY)
+        }
+    }
+
+    /// A small square: white, or yellow when it's the picked point.
+    private func handle(picked: Bool) -> some View {
+        Rectangle()
+            .fill(picked ? Tint.accent : Color.white)
+            .overlay(Rectangle().strokeBorder(Tint.accent, lineWidth: 2))
+            .frame(width: 12, height: 12)
+            .shadow(color: .black.opacity(0.4), radius: 1.5)
+            .frame(width: 40, height: 40)
+            .contentShape(Rectangle())
+    }
+
+    /// The middle of a side: 0 top, 1 right, 2 bottom, 3 left.
+    private func sidePoint(_ side: Int, _ frame: CGRect) -> CGPoint {
+        switch side {
+        case 0: CGPoint(x: frame.midX, y: frame.minY)
+        case 1: CGPoint(x: frame.maxX, y: frame.midY)
+        case 2: CGPoint(x: frame.midX, y: frame.maxY)
+        default: CGPoint(x: frame.minX, y: frame.midY)
+        }
+    }
+
+    /// Where the held handle is now: where it started plus how far the finger went (so grabbing a
+    /// handle off its middle doesn't make it jump).
+    private func target(_ value: DragGesture.Value, w: CGFloat, h: CGFloat) -> CGPoint {
+        let start = grab ?? .zero
+        return CGPoint(x: start.x + value.translation.width / w, y: start.y + value.translation.height / h)
+    }
+
+    private func sideDrag(_ side: Int, from point: CGPoint, w: CGFloat, h: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.space))
+            .onChanged { value in
+                if grab == nil {
+                    grab = CGPoint(x: point.x / w, y: point.y / h)
+                    model.beginMaskHandle()
+                }
+                model.dragMaskSide(side, to: target(value, w: w, h: h))
+            }
+            .onEnded { _ in
+                grab = nil
+                model.endMaskMove()
+            }
+    }
+
+    /// A tap picks the point; a drag moves it.
+    private func pointDrag(_ index: Int, from point: CGPoint, w: CGFloat, h: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
+            .onChanged { value in
+                if grab == nil {
+                    grab = CGPoint(x: point.x / w, y: point.y / h)
+                    model.maskPoint = index
+                    model.beginMaskHandle()
+                }
+                guard moved || hypot(value.translation.width, value.translation.height) > 3 else { return }
+                moved = true
+                model.dragMaskPoint(index, to: target(value, w: w, h: h))
+            }
+            .onEnded { _ in
+                grab = nil
+                moved = false
+                model.endMaskMove()
+            }
     }
 }
 
@@ -2233,64 +2357,115 @@ struct MaskSheet: View {
 
     var body: some View {
         let mask = model.overlayPick.flatMap { model.overlayHere($0)?.mask } ?? OverlayMask()
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Mask").font(.headline)
-                Text("Drag on the video to move the mask. Pinch to size it.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.65))
-            }
-            HStack(spacing: 8) {
-                ForEach(MaskShape.allCases, id: \.self) { shape in
-                    let on = mask.shape == shape
-                    Button {
-                        var next = mask
-                        next.shape = shape
-                        model.setOverlayMask(next)
-                        model.showOverlayNow()
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: shape.icon).font(.title3)
-                            Text(shape.name).font(.caption)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mask").font(.headline)
+                    Text(hint(mask.shape))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 8) {
+                    ForEach(MaskShape.allCases, id: \.self) { shape in
+                        let on = mask.shape == shape
+                        Button {
+                            var next = mask
+                            next.shape = shape
+                            // Custom starts from the corners of the shape as it is, ready to drag.
+                            if shape == .custom, (next.points?.count ?? 0) < 3 { next.points = mask.corners }
+                            model.maskPoint = nil
+                            model.setOverlayMask(next)
+                            model.showOverlayNow()
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: shape.icon).font(.title3)
+                                Text(shape.name).font(.caption)
+                            }
+                            .foregroundStyle(on ? Tint.accent : .white.opacity(0.85))
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                            .background(on ? Tint.surface3 : Tint.surface2, in: Corner.chip)
+                            .overlay(Corner.chip.strokeBorder(on ? Tint.accent : .clear, lineWidth: 2))
+                            .contentShape(Rectangle())
                         }
-                        .foregroundStyle(on ? Tint.accent : .white.opacity(0.85))
-                        .frame(maxWidth: .infinity, minHeight: 56)
-                        .background(on ? Tint.surface3 : Tint.surface2, in: Corner.chip)
-                        .overlay(Corner.chip.strokeBorder(on ? Tint.accent : .clear, lineWidth: 2))
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
-            }
-            if mask.shape != .off {
-                row("Size", value: mask.size, range: 0.1...OverlayMask.largest) { value in
-                    var next = mask
-                    next.size = value
-                    return next
-                }
-                row("Soft edge", value: mask.feather, range: 0...1) { value in
-                    var next = mask
-                    next.feather = value
-                    return next
-                }
-                Toggle("Invert (keep the outside)", isOn: Binding(
-                    get: { mask.invert },
-                    set: { value in
+                if mask.shape == .custom { points(mask) }
+                if mask.shape != .off {
+                    row("Size", value: mask.size, range: 0.1...OverlayMask.largest) { value in
                         var next = mask
-                        next.invert = value
-                        model.setOverlayMask(next)
-                        model.showOverlayNow()
+                        next.size = value
+                        return next
                     }
-                ))
-                .font(.subheadline)
-                .tint(Tint.accent)
-                keyframes
+                    row("Soft edge", value: mask.feather, range: 0...1) { value in
+                        var next = mask
+                        next.feather = value
+                        return next
+                    }
+                    Toggle("Invert (keep the outside)", isOn: Binding(
+                        get: { mask.invert },
+                        set: { value in
+                            var next = mask
+                            next.invert = value
+                            model.setOverlayMask(next)
+                            model.showOverlayNow()
+                        }
+                    ))
+                    .font(.subheadline)
+                    .tint(Tint.accent)
+                    keyframes
+                }
             }
-            Spacer(minLength: 0)
+            .padding(20)
         }
-        .padding(20)
+        .scrollIndicators(.hidden)
         .foregroundStyle(.white)
+    }
+
+    private func hint(_ shape: MaskShape) -> String {
+        switch shape {
+        case .off: "Pick a shape to cut the overlay out."
+        case .custom: "Tap the video to add a point. Drag a point to move it. Drag anywhere else to move the shape, pinch to size it."
+        default: "Drag a square handle to stretch that side. Drag anywhere else to move it, pinch to size it."
+        }
+    }
+
+    /// Custom: straight or curved lines between the points, and removing the picked point.
+    private func points(_ mask: OverlayMask) -> some View {
+        let count = mask.anchors.count
+        let canRemove = model.maskPoint.map { $0 < count } == true && count > 3
+        return HStack(spacing: 8) {
+            Button {
+                var next = mask
+                next.smooth = !mask.curved
+                model.setOverlayMask(next)
+                model.showOverlayNow()
+            } label: {
+                Label("Curved", systemImage: mask.curved ? "checkmark" : "scribble")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(mask.curved ? Tint.accent : .white)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(Tint.surface2, in: Corner.chip)
+                    .overlay(Corner.chip.strokeBorder(mask.curved ? Tint.accent : .clear, lineWidth: 1.5))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(mask.curved ? .isSelected : [])
+            Button {
+                model.removeMaskPoint()
+            } label: {
+                Label("Remove point", systemImage: "minus.square")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(canRemove ? Tint.bad : .white.opacity(0.35))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(Tint.surface2, in: Corner.chip)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canRemove)
+        }
     }
 
     /// The mask's keyframes. Until the first one, placing the mask sets it for the whole overlay.

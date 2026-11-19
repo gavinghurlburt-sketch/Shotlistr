@@ -113,6 +113,8 @@ final class EditorModel {
     private(set) var maskEditing = false
     /// The mask as it was when the fingers went down.
     @ObservationIgnored private var maskMoveStart: OverlayMask?
+    /// The Custom mask point last tapped or added (it can be removed).
+    var maskPoint: Int?
     /// The clip a finger is dragging right now.
     var dragging: Int?
     /// The hand-off (an index into `cuts`) a finger is dragging right now.
@@ -2184,6 +2186,7 @@ final class EditorModel {
         guard let id = overlayPick, let overlay = overlay(id) else { return }
         pause()
         overlayEditStart = (overlay, snapshot())
+        maskPoint = nil
         maskEditing = true
     }
 
@@ -2220,21 +2223,147 @@ final class EditorModel {
         redraw()
     }
 
+    /// A mask's middle on the video, and how long one shape unit is across and down, as fractions
+    /// of the frame. The frame is 9 wide to 16 tall, so a unit is a bigger fraction across.
+    private func maskUnits(_ mask: OverlayMask, in box: CGRect) -> (middle: CGPoint, x: Double, y: Double) {
+        let size = min(OverlayMask.largest, max(0.1, mask.size))
+        let unit = Double(min(box.width * 9, box.height * 16)) * size
+        let middle = CGPoint(x: Double(box.minX) + Double(box.width) * mask.middleX,
+                             y: Double(box.minY) + Double(box.height) * mask.middleY)
+        return (middle, unit / 9, unit / 16)
+    }
+
+    /// Custom's points on the video, as fractions of the frame.
+    func maskAnchors(_ id: UUID) -> [CGPoint] {
+        guard let overlay = overlayHere(id), overlay.mask.shape == .custom, let box = overlayBox(id) else { return [] }
+        let units = maskUnits(overlay.mask, in: box)
+        return overlay.mask.anchors.map { point in
+            CGPoint(x: Double(units.middle.x) + point.x * units.x, y: Double(units.middle.y) + point.y * units.y)
+        }
+    }
+
     /// Where the picked overlay's mask sits, as fractions of the frame (for its outline).
     func maskBox(_ id: UUID) -> CGRect? {
         guard let overlay = overlayHere(id), overlay.mask.shape != .off, let box = overlayBox(id) else { return nil }
         let mask = overlay.mask
-        let size = min(OverlayMask.largest, max(0.1, mask.size))
-        let middle = CGPoint(x: box.minX + box.width * mask.middleX, y: box.minY + box.height * mask.middleY)
-        var width = box.width * size
-        var height = box.height * size
-        if mask.shape == .circle {
-            // A circle as wide as the overlay's shorter side. The frame is 9 wide to 16 tall.
-            let across = min(box.width * 9, box.height * 16) * size
-            width = across / 9
-            height = across / 16
+        if mask.shape == .custom {
+            let points = maskAnchors(id)
+            guard let minX = points.map({ $0.x }).min(), let maxX = points.map({ $0.x }).max(),
+                  let minY = points.map({ $0.y }).min(), let maxY = points.map({ $0.y }).max() else { return nil }
+            return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
         }
-        return CGRect(x: middle.x - width / 2, y: middle.y - height / 2, width: width, height: height)
+        let units = maskUnits(mask, in: box)
+        let width: Double = units.x * min(OverlayMask.widest, max(OverlayMask.thinnest, mask.across))
+        let height: Double = units.y * min(OverlayMask.widest, max(OverlayMask.thinnest, mask.down))
+        return CGRect(x: Double(units.middle.x) - width / 2, y: Double(units.middle.y) - height / 2,
+                      width: width, height: height)
+    }
+
+    /// A finger went down on one of the mask's handles.
+    func beginMaskHandle() {
+        guard maskEditing, let id = overlayPick, let overlay = overlayHere(id), overlay.mask.shape != .off else { return }
+        pause()
+        maskMoveStart = overlay.mask
+    }
+
+    /// A Circle or Square side handle (0 top, 1 right, 2 bottom, 3 left) dragged to `point`
+    /// (fractions of the frame): that side follows the finger and the opposite side stays put.
+    func dragMaskSide(_ side: Int, to point: CGPoint) {
+        guard let start = maskMoveStart, let id = overlayPick, let box = overlayBox(id),
+              box.width > 0, box.height > 0 else { return }
+        let units = maskUnits(start, in: box)
+        guard units.x > 0, units.y > 0 else { return }
+        var next = start
+        var middleX = Double(units.middle.x), middleY = Double(units.middle.y)
+        let x = Double(point.x), y = Double(point.y)
+        // How far the finger is from the side that stays, toward the side it holds (a side can't
+        // be pulled past the other one: it stops at a sliver).
+        if side == 1 || side == 3 {
+            let half = units.x * start.across / 2
+            let fixed = side == 1 ? middleX - half : middleX + half
+            let pulled = side == 1 ? x - fixed : fixed - x
+            let span = min(OverlayMask.widest, max(OverlayMask.thinnest, pulled / units.x))
+            middleX = side == 1 ? fixed + units.x * span / 2 : fixed - units.x * span / 2
+            next.wide = span
+        } else {
+            let half = units.y * start.down / 2
+            let fixed = side == 2 ? middleY - half : middleY + half
+            let pulled = side == 2 ? y - fixed : fixed - y
+            let span = min(OverlayMask.widest, max(OverlayMask.thinnest, pulled / units.y))
+            middleY = side == 2 ? fixed + units.y * span / 2 : fixed - units.y * span / 2
+            next.tall = span
+        }
+        let centerX: Double = (middleX - Double(box.minX)) / Double(box.width)
+        let centerY: Double = (middleY - Double(box.minY)) / Double(box.height)
+        next.centerX = min(1.5, max(-0.5, centerX))
+        next.centerY = min(1.5, max(-0.5, centerY))
+        setOverlayMask(next)
+    }
+
+    /// One of Custom's points dragged to `point` (fractions of the frame).
+    func dragMaskPoint(_ index: Int, to point: CGPoint) {
+        guard let start = maskMoveStart, start.shape == .custom, let id = overlayPick, let box = overlayBox(id) else { return }
+        let units = maskUnits(start, in: box)
+        guard units.x > 0, units.y > 0 else { return }
+        var points = start.anchors
+        guard points.indices.contains(index) else { return }
+        points[index] = unitPoint(point, units: units)
+        var next = start
+        next.points = points
+        setOverlayMask(next)
+    }
+
+    private func unitPoint(_ point: CGPoint, units: (middle: CGPoint, x: Double, y: Double)) -> MaskPoint {
+        let reach = MaskPoint.reach
+        let x: Double = (Double(point.x) - Double(units.middle.x)) / units.x
+        let y: Double = (Double(point.y) - Double(units.middle.y)) / units.y
+        return MaskPoint(x: min(reach, max(-reach, x)), y: min(reach, max(-reach, y)))
+    }
+
+    /// A tap on the video with Custom on: a new point there, put into the outline between the two
+    /// points whose line it's closest to.
+    func addMaskPoint(at point: CGPoint) {
+        guard maskEditing, let id = overlayPick, let overlay = overlayHere(id), overlay.mask.shape == .custom,
+              let box = overlayBox(id) else { return }
+        let units = maskUnits(overlay.mask, in: box)
+        guard units.x > 0, units.y > 0 else { return }
+        pause()
+        let new = unitPoint(point, units: units)
+        var points = overlay.mask.anchors
+        // Shape units are as long across as down on screen, so distances can be measured in them.
+        var best = points.count
+        var nearest = Double.infinity
+        for i in points.indices {
+            let a = points[i], b = points[(i + 1) % points.count]
+            let dx = b.x - a.x, dy = b.y - a.y
+            let length = dx * dx + dy * dy
+            let t = length > 0 ? min(1, max(0, ((new.x - a.x) * dx + (new.y - a.y) * dy) / length)) : 0
+            let distance = hypot(new.x - (a.x + t * dx), new.y - (a.y + t * dy))
+            if distance < nearest {
+                nearest = distance
+                best = i + 1
+            }
+        }
+        points.insert(new, at: best)
+        var next = overlay.mask
+        next.points = points
+        maskPoint = best
+        setOverlayMask(next)
+        showOverlayNow()
+    }
+
+    /// Takes away the Custom point last tapped (a shape keeps at least three).
+    func removeMaskPoint() {
+        guard let index = maskPoint, let id = overlayPick, let overlay = overlayHere(id),
+              overlay.mask.shape == .custom else { return }
+        var points = overlay.mask.anchors
+        guard points.count > 3, points.indices.contains(index) else { return }
+        points.remove(at: index)
+        var next = overlay.mask
+        next.points = points
+        maskPoint = nil
+        setOverlayMask(next)
+        showOverlayNow()
     }
 
     func setOverlayMask(_ mask: OverlayMask) {
@@ -2244,6 +2373,10 @@ final class EditorModel {
         var stored = overlays[index]
         stored.mask.shape = mask.shape
         stored.mask.invert = mask.invert
+        stored.mask.wide = mask.wide
+        stored.mask.tall = mask.tall
+        stored.mask.points = mask.points
+        stored.mask.smooth = mask.smooth
         let at = playheadFrame
         var pose = stored.posed(at: at).pose
         pose.maskX = mask.middleX
@@ -2262,6 +2395,7 @@ final class EditorModel {
     func endMaskEdit() {
         maskEditing = false
         maskMoveStart = nil
+        maskPoint = nil
         endOverlayTransform()
     }
 
