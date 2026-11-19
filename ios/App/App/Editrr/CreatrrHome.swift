@@ -242,23 +242,3 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
         }
     }
 }
-
-/// What editrr's back button says; changes when your plan does.
-@MainActor @Observable
-final class CreatrrNav {
-    var backTitle = "Artist"
-}
-
-/// editrr inside creatrr: dark, creatrr's yellow, with a way back to the artist page.
-struct EditrrRoot: View {
-    let nav: CreatrrNav
-    let back: () -> Void
-
-    var body: some View {
-        EditorView()
-            .environment(\.creatrrBack, back)
-            .environment(\.creatrrBackTitle, nav.backTitle)
-            .environment(\.colorScheme, .dark)
-            .tint(Tint.accent)
-    }
-}
