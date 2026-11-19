@@ -536,6 +536,14 @@ table.sched tr.done-row td { background-color: var(--done); }
 .part-refs.view { padding: 0 0 12px; }
 .part-refs .pref { padding: 0; border: 0; border-radius: 10px; overflow: hidden; height: 56px; min-width: 40px; background-color: var(--surface-2); cursor: pointer; }
 .part-refs .pref img { height: 100%; width: auto; display: block; }
+.part-info { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.part-when { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; padding-left: 2px; }
+.part-hook { display: flex; align-items: center; gap: 10px; max-width: 100%; min-height: 36px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.part-hook.set { border-radius: 14px; padding: 6px 12px 6px 6px; }
+.part-hook .ph-thumb { width: 56px; flex: none; }
+.part-hook .ph-thumb .hd { border-radius: 9px; }
+.part-hook .ph-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.part-hook .ph-text small { font-weight: 400; font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .part-refs .pref-rec { margin-left: auto; flex: none; position: relative; width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 3px solid rgba(255,255,255,.92); background: transparent; cursor: pointer; }
 .part-refs .pref-rec::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #ff3b30; }
 .part-refs .pref-rec:active::after { inset: 7px; }
@@ -5739,8 +5747,31 @@ function partRefsEdit(pt) {
   const shoot = isNativeApp();
   const add = shoot ? "" : `<button type="button" class="pref add" data-c="part-ref-add" aria-label="Add reference photos">+ Photos</button>${songRefPool(sg).length ? `<button type="button" class="pref add" data-c="part-ref-song" aria-label="Choose from the song's references">From song</button>` : ""}`;
   const rec = shoot ? `<button type="button" class="pref-rec" data-c="part-shoot" aria-label="Shoot this section" title="${currentTrackUrl ? "Shoot this section" : "Upload the track first"}"${currentTrackUrl ? "" : " disabled"}></button>` : "";
-  return `<div class="part-refs" data-section-id="${pt.id}">${refs.map((src, i) => `<button type="button" class="pref" data-c="part-ref-open" data-i="${i}" aria-label="Reference ${i + 1}"><img src="${src}" alt=""></button>`).join("")}${add}${rec}</div>`;
+  return `<div class="part-refs" data-section-id="${pt.id}">${partInfo(pt)}${refs.map((src, i) => `<button type="button" class="pref" data-c="part-ref-open" data-i="${i}" aria-label="Reference ${i + 1}"><img src="${src}" alt=""></button>`).join("")}${add}${rec}</div>`;
 }
+/* a section's time as seconds (it may be stored as "1:05") */
+function secTime(raw) {
+  if (typeof raw === "number") return raw;
+  const m = String(raw == null ? "" : raw).match(/(\d+):(\d{1,2}(?:\.\d+)?)/);
+  return m ? parseInt(m[1], 10) * 60 + parseFloat(m[2]) : null;
+}
+/* under a section's name: where it starts and how long it runs, and its shot idea (a hook card with its animation) */
+function partInfo(pt) {
+  const start = secTime(pt.time);
+  let when = "";
+  if (start != null) {
+    const later = songParts(pt.songId).map(x => secTime(x.time)).filter(t => t != null && t > start + 0.05);
+    const end = later.length ? Math.min(...later) : trackDuration();
+    const len = end > start ? Math.round(end - start) : 0;
+    when = fmtClock(start) + (len ? ` \u00b7 ${len} sec` : "");
+  }
+  const hr = sectionHookRow(pt), h = hr && hookOf(hr);
+  const idea = h
+    ? `<button type="button" class="part-hook set" data-c="part-hook" aria-label="Shot idea: ${esc(h.name)}. Tap to change">${h.nodiagram ? "" : `<span class="ph-thumb">${hookDiagram(h.id)}</span>`}<span class="ph-text"><b>${esc(h.name)}</b>${h.gist ? `<small>${esc(h.gist)}</small>` : ""}</span></button>`
+    : `<button type="button" class="part-hook" data-c="part-hook">+ Shot idea</button>`;
+  return `<div class="part-info">${when ? `<span class="part-when">${when}</span>` : ""}${idea}</div>`;
+}
+function fmtClock(sec) { const w = Math.max(0, Math.floor(sec)); return Math.floor(w / 60) + ":" + String(w % 60).padStart(2, "0"); }
 function sectionRefs(sec) {
   const src = sec.srcId && artistRec ? (artistRec.sections || []).find(x => x.id === sec.srcId) : null;
   const out = [...(sec.refs || [])];
@@ -6015,7 +6046,7 @@ function paintHooks(keepScroll) {
     <div class="suggest-row" style="margin-top:12px"><button type="button" class="btn" data-hook-close>Done</button></div>`;
   if (sc) $("hookInner").scrollTop = sc;
 }
-function closeHooks() { stopHookListen(); $("hookModal").classList.add("hidden"); renderHookPanel(); }
+function closeHooks() { stopHookListen(); $("hookModal").classList.add("hidden"); renderHookPanel(); refreshPartRefs(); }
 /* ---- import a hook from a screen recording or screenshots (Plus / Pro / Artist, signed in) ---- */
 var HOOK_FN = "https://anuybnbilfjthbhsxhdk.supabase.co/functions/v1/hook-import";
 var hookImp = { stage: "pick", usage: null, frames: [], hook: null, link: "", err: "" };
@@ -6832,6 +6863,7 @@ document.addEventListener("click", e => {
     }
     case "sug-dismiss": { const sg = activeSong(); if (sg) delete suggestMap[sg.id]; renderSuggest(); break; }
     case "part-ref-add": { if (!sec) return; partRefTarget = sec.id; $("partRefInput").click(); break; }
+    case "part-hook": { if (sec) openHooks(sec.id); break; }
     case "part-shoot": {
       if (!sec || !currentTrackUrl) return;
       const toSec = raw => { const m = String(raw == null ? "" : raw).match(/(\d+):(\d{1,2}(?:\.\d+)?)/);
