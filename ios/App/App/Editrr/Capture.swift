@@ -565,6 +565,8 @@ struct CameraPreview: UIViewRepresentable {
 /// lines up to the song on its own.
 struct CaptureView: View {
     let songName: String
+    /// The section being filmed (Verse, Chorus...), shown under the song's name.
+    let partName: String?
     /// The most takes this time (10 videos in a project, minus any already picked).
     let maxTakes: Int
     let done: ([CapturedTake]) -> Void
@@ -585,9 +587,10 @@ struct CaptureView: View {
     /// Every take starts in the same place: there's no picking another spot here.
     init(song: AVAsset, length: Double, songName: String, parts: [CreatrrPart] = [],
          part: CreatrrPart.ID? = nil, start: Double? = nil, end: Double? = nil,
-         tempo: CaptureTempo? = nil, maxTakes: Int = 10, draft: (([CapturedTake]) -> Void)? = nil,
-         done: @escaping ([CapturedTake]) -> Void) {
+         partName: String? = nil, tempo: CaptureTempo? = nil, maxTakes: Int = 10,
+         draft: (([CapturedTake]) -> Void)? = nil, done: @escaping ([CapturedTake]) -> Void) {
         self.songName = songName
+        self.partName = partName
         self.draft = draft
         let usable = parts.filter { $0.time < length }
         self.maxTakes = max(1, maxTakes)
@@ -633,6 +636,7 @@ struct CaptureView: View {
 
             VStack(spacing: 0) {
                 topBar
+                takeBar
                 Spacer(minLength: 0)
                 if let message = capture.problem ?? note {
                     Text(message)
@@ -772,6 +776,7 @@ struct CaptureView: View {
         .frostedPopup()
     }
 
+    /// Close, the song and section you're filming, and the options.
     private var topBar: some View {
         HStack(spacing: 12) {
             Button { close() } label: {
@@ -781,14 +786,45 @@ struct CaptureView: View {
             }
             .accessibilityLabel("Close")
             .disabled(capture.recording)
-            Spacer()
-            if capture.recording {
-                HStack(spacing: 6) {
-                    Circle().fill(Tint.bad).frame(width: 9, height: 9)
-                    Text(clock(capture.songNow)).monospacedDigit()
+            Spacer(minLength: 0)
+            HStack(spacing: 7) {
+                Text(songName)
+                    .font(.headline)
+                    .lineLimit(1)
+                if let partName, !partName.isEmpty {
+                    Text(partName)
+                        .font(.headline.weight(.regular))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
                 }
-                .font(.headline)
-            } else if !capture.takes.isEmpty {
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            Button { withAnimation(.snappy) { menuOpen.toggle() } } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Options")
+            .disabled(capture.recording)
+            .opacity(capture.recording ? 0.3 : 1)
+        }
+        .padding(.horizontal, 8)
+        .shadow(color: .black.opacity(0.5), radius: 4)
+    }
+
+    /// Under the title: the time while filming, or Retake and Use once there are takes.
+    @ViewBuilder private var takeBar: some View {
+        if capture.recording {
+            HStack(spacing: 6) {
+                Circle().fill(Tint.bad).frame(width: 9, height: 9)
+                Text(clock(capture.songNow)).monospacedDigit()
+            }
+            .font(.headline)
+            .frame(height: 38)
+            .shadow(color: .black.opacity(0.5), radius: 4)
+        } else if !capture.takes.isEmpty {
+            HStack(spacing: 10) {
                 // Film the last take again.
                 Button { capture.retake() } label: {
                     Label("Retake", systemImage: "arrow.counterclockwise")
@@ -814,18 +850,7 @@ struct CaptureView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Use \(capture.takes.count) \(capture.takes.count == 1 ? "take" : "takes")")
             }
-            Spacer()
-            Button { withAnimation(.snappy) { menuOpen.toggle() } } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Options")
-            .disabled(capture.recording)
-            .opacity(capture.recording ? 0.3 : 1)
         }
-        .padding(.horizontal, 8)
-        .shadow(color: .black.opacity(0.5), radius: 4)
     }
 
     /// Count-in on the left, record in the middle, click on the right. That's all.
