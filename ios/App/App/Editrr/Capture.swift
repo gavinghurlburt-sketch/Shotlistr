@@ -473,34 +473,39 @@ struct CameraPreview: UIViewRepresentable {
 /// lines up to the song on its own.
 struct CaptureView: View {
     let songName: String
-    /// The song's parts from creatrr (empty for other songs).
-    let parts: [CreatrrPart]
     /// The most takes this time (10 videos in a project, minus any already picked).
     let maxTakes: Int
     let done: ([CapturedTake]) -> Void
     @State private var capture: CaptureModel
-    @State private var pickedPart: CreatrrPart.ID?
+    /// The options pop-up (speed, camera, delete a take).
+    @State private var menuOpen = false
+    /// A short note over the record button (the count-in and click need a tempo).
+    @State private var note: String?
     @Environment(\.dismiss) private var dismiss
 
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
+    /// Every take starts in the same place: there's no picking another spot here.
     init(song: AVAsset, length: Double, songName: String, parts: [CreatrrPart] = [],
          part: CreatrrPart.ID? = nil, tempo: CaptureTempo? = nil, maxTakes: Int = 10,
          done: @escaping ([CapturedTake]) -> Void) {
         self.songName = songName
         let usable = parts.filter { $0.time < length }
-        self.parts = usable
         self.maxTakes = max(1, maxTakes)
         self.done = done
         let model = CaptureModel(song: song, length: length, tempo: tempo)
         if let part, let index = usable.firstIndex(where: { $0.id == part }) {
             model.start = usable[index].time
             model.partEnd = index + 1 < usable.count ? usable[index + 1].time : nil
-            _pickedPart = State(initialValue: part)
         }
         _capture = State(initialValue: model)
     }
 
     private var full: Bool { capture.takes.count >= maxTakes }
+
+    private var recordLabel: String {
+        if capture.recording { return "Stop" }
+        return full ? "That's \(maxTakes) takes" : "Record to the song"
+    }
 
     var body: some View {
         ZStack {
@@ -513,13 +518,16 @@ struct CaptureView: View {
             VStack(spacing: 0) {
                 topBar
                 Spacer(minLength: 0)
-                if let problem = capture.problem {
-                    Text(problem)
+                if let message = capture.problem ?? note {
+                    Text(message)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
                         .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(Tint.bad.opacity(0.85))
-                        .padding(.bottom, 10)
+                        .background(capture.problem != nil ? Tint.bad.opacity(0.85) : Color.black.opacity(0.55))
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 14)
+                        .transition(.opacity)
                 }
                 controls
             }
@@ -534,21 +542,44 @@ struct CaptureView: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
+
+            if menuOpen {
+                // Tap anywhere else to close the pop-up.
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(.snappy) { menuOpen = false } }
+                    .accessibilityHidden(true)
+                VStack {
+                    HStack {
+                        Spacer()
+                        optionsMenu
+                    }
+                    Spacer()
+                }
+                .padding(.top, 52)
+                .padding(.horizontal, 12)
+                .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+            }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
         .task { await capture.prepare() }
         .onDisappear { capture.stop() }
+        .onChange(of: capture.recording) { _, recording in
+            if recording { menuOpen = false; note = nil }
+        }
+    }
+
+    private func finish() {
+        capture.stop()
+        done(capture.takes)
+        dismiss()
     }
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            Button {
-                capture.stop()
-                done(capture.takes)
-                dismiss()
-            } label: {
+            Button { finish() } label: {
                 Image(systemName: "xmark")
                     .font(.title3.weight(.semibold))
                     .frame(width: 44, height: 44)
@@ -563,17 +594,26 @@ struct CaptureView: View {
                 }
                 .font(.headline)
             } else if !capture.takes.isEmpty {
-                Text("\(capture.takes.count) of \(maxTakes) \(maxTakes == 1 ? "take" : "takes")")
-                    .font(.headline)
-                    .monospacedDigit()
+                // Done filming: use the takes.
+                Button { finish() } label: {
+                    Text("Use \(capture.takes.count) of \(maxTakes)")
+                        .font(.headline)
+                        .monospacedDigit()
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 16)
+                        .frame(height: 38)
+                        .background(Capsule().fill(Tint.accent))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Use \(capture.takes.count) \(capture.takes.count == 1 ? "take" : "takes")")
             }
             Spacer()
-            Button { capture.flip() } label: {
-                Image(systemName: "arrow.triangle.2.circlepath.camera")
+            Button { withAnimation(.snappy) { menuOpen.toggle() } } label: {
+                Image(systemName: "ellipsis.circle")
                     .font(.title3.weight(.semibold))
                     .frame(width: 44, height: 44)
             }
-            .accessibilityLabel("Switch camera")
+            .accessibilityLabel("Options")
             .disabled(capture.recording)
             .opacity(capture.recording ? 0.3 : 1)
         }
@@ -581,167 +621,166 @@ struct CaptureView: View {
         .shadow(color: .black.opacity(0.5), radius: 4)
     }
 
+    /// Count-in on the left, record in the middle, click on the right. That's all.
     private var controls: some View {
-        VStack(spacing: 14) {
-            if !capture.recording {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(songName).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Spacer()
-                        Text("Starts at \(clock(capture.start))")
-                            .font(.subheadline).monospacedDigit()
-                            .foregroundStyle(.white.opacity(0.75))
-                    }
-                    if !parts.isEmpty { partChips }
-                    Slider(value: $capture.start, in: 0...max(1, capture.songLength - 1), step: 0.5, onEditingChanged: { editing in
-                        // Dragging picks your own spot instead of a part.
-                        if editing {
-                            pickedPart = nil
-                            capture.partEnd = nil
-                        }
-                    })
-                    .tint(Tint.accent)
-                    .accessibilityLabel("Where in the song to start")
-                }
-                HStack(spacing: 6) {
-                    ForEach(CaptureModel.Speed.allCases) { speed in
-                        Button(speed.label) { capture.speed = speed }
-                            .font(.footnote.weight(.semibold))
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(capture.speed == speed ? Tint.accent : Color.white.opacity(0.12))
-                            .foregroundStyle(capture.speed == speed ? Color.black : Color.white)
-                            .accessibilityHint(speed.detail)
+        HStack(spacing: 0) {
+            tempoButton("Count-in", icon: "metronome", on: capture.countIn) { capture.countIn.toggle() }
+                .frame(maxWidth: .infinity)
+            Button {
+                if capture.recording { capture.stopRecording() } else { capture.record() }
+            } label: {
+                ZStack {
+                    Circle().strokeBorder(.white, lineWidth: 4).frame(width: 78, height: 78)
+                    if capture.recording {
+                        Corner.small.fill(Tint.bad).frame(width: 30, height: 30)
+                    } else {
+                        Circle().fill(Tint.bad).frame(width: 62, height: 62)
                     }
                 }
-                tempoRow
             }
-
-            HStack {
-                // Take the last one back.
-                Button { capture.dropLastTake() } label: {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 52, height: 52)
-                }
-                .accessibilityLabel("Delete the last take")
-                .opacity(capture.takes.isEmpty || capture.recording ? 0 : 1)
-                .disabled(capture.takes.isEmpty || capture.recording)
-
-                Spacer()
-                Button {
-                    if capture.recording { capture.stopRecording() } else { capture.record() }
-                } label: {
-                    ZStack {
-                        Circle().strokeBorder(.white, lineWidth: 4).frame(width: 78, height: 78)
-                        if capture.recording {
-                            Corner.small.fill(Tint.bad).frame(width: 30, height: 30)
-                        } else {
-                            Circle().fill(Tint.bad).frame(width: 62, height: 62)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(!capture.ready || (full && !capture.recording))
-                .opacity(capture.ready && (!full || capture.recording) ? 1 : 0.4)
-                .accessibilityLabel(capture.recording ? "Stop" : "Record to the song")
-                .sensoryFeedback(.impact, trigger: capture.recording)
-                Spacer()
-
-                Button {
-                    capture.stop()
-                    done(capture.takes)
-                    dismiss()
-                } label: {
-                    Text("Use")
-                        .font(.headline)
-                        .foregroundStyle(.black)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(Tint.accent))
-                }
-                .accessibilityLabel("Use these takes")
-                .opacity(capture.takes.isEmpty || capture.recording ? 0 : 1)
-                .disabled(capture.takes.isEmpty || capture.recording)
-            }
-
-            if !capture.recording {
-                Text(capture.takes.isEmpty
-                     ? (capture.countIn && capture.tempo != nil
-                        ? "A bar of clicks, then the song starts at your spot. Each take lines up on its own."
-                        : "The song starts a moment before your spot. Each take lines up on its own.")
-                     : full ? "That's \(maxTakes) \(maxTakes == 1 ? "take" : "takes"). Tap Use." : "Record more takes, or tap Use.")
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.65))
-                    .multilineTextAlignment(.center)
-            }
+            .buttonStyle(.plain)
+            .disabled(!capture.ready || (full && !capture.recording))
+            .opacity(capture.ready && (!full || capture.recording) ? 1 : 0.4)
+            .accessibilityLabel(recordLabel)
+            .sensoryFeedback(.impact, trigger: capture.recording)
+            tempoButton("Click", icon: "waveform.path", on: capture.click) { capture.click.toggle() }
+                .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+        .shadow(color: .black.opacity(0.5), radius: 4)
     }
 
-    /// Count-in and Click, from the song's tempo in creatrr.
-    private var tempoRow: some View {
+    /// Count-in or Click: an icon with its name under it, yellow when on. Needs the song's tempo.
+    private func tempoButton(_ name: String, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
         let known = capture.tempo != nil
-        return VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                tempoChip("Count-in", icon: "metronome", on: capture.countIn && known) { capture.countIn.toggle() }
-                tempoChip("Click", icon: "waveform.path", on: capture.click && known) { capture.click.toggle() }
-                if let tempo = capture.tempo {
-                    Text("\(Int(tempo.bpm.rounded())) BPM")
-                        .font(.footnote.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.6))
+        let lit = on && known
+        return Button {
+            guard known else {
+                withAnimation(.snappy) { note = "Set the song's tempo in creatrr to use the count-in and click." }
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    withAnimation(.snappy) { note = nil }
                 }
+                return
             }
-            .disabled(!known)
-            .opacity(known ? 1 : 0.4)
-            if !known {
-                Text("Set the song's tempo in creatrr to use the count-in and click.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
+            action()
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.title2.weight(.semibold))
+                    .symbolVariant(lit ? .fill : .none)
+                Text(name).font(.caption.weight(.semibold))
             }
-        }
-    }
-
-    private func tempoChip(_ name: String, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(name, systemImage: icon)
-                .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(on ? Tint.accent : Color.white.opacity(0.12))
-                .foregroundStyle(on ? Color.black : Color.white)
+            .foregroundStyle(lit ? Tint.accent : .white.opacity(known ? 0.85 : 0.4))
+            .frame(width: 76, height: 64)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
+        .opacity(capture.recording ? 0 : 1)
+        .disabled(capture.recording)
+        .accessibilityLabel(name)
+        .accessibilityValue(lit ? "On" : "Off")
     }
 
-    /// creatrr's parts: tap one to start there; the take stops when the part ends.
-    private var partChips: some View {
-        ScrollView(.horizontal) {
+    /// The options pop-up, in creatrr's rounded frosted glass.
+    private var optionsMenu: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Speed")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
             HStack(spacing: 6) {
-                ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
-                    let picked = pickedPart == part.id
-                    Button {
-                        pickedPart = part.id
-                        capture.start = part.time
-                        capture.partEnd = index + 1 < parts.count ? parts[index + 1].time : nil
-                    } label: {
-                        HStack(spacing: 6) {
-                            Rectangle().fill(part.tint).frame(width: 4, height: 16)
-                            Text(part.name).lineLimit(1)
-                        }
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 10).padding(.vertical, 7)
-                        .background(picked ? part.tint.opacity(0.45) : Tint.surface2, in: Capsule())
-                        .overlay(Capsule().strokeBorder(picked ? part.tint : .clear, lineWidth: 1.5))
+                ForEach(CaptureModel.Speed.allCases) { speed in
+                    let picked = capture.speed == speed
+                    Button { capture.speed = speed } label: {
+                        Text(speed.label)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(picked ? Color.black : Color.white)
+                            .padding(.horizontal, 12)
+                            .frame(height: 32)
+                            .background {
+                                if picked {
+                                    Capsule().fill(Tint.accent)
+                                } else {
+                                    Capsule().fill(.white.opacity(0.1))
+                                }
+                            }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(part.name), starts at \(clock(part.time))")
+                    .accessibilityHint(speed.detail)
+                    .accessibilityAddTraits(picked ? .isSelected : [])
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+
+            menuDivider
+            menuRow("Switch camera", icon: "arrow.triangle.2.circlepath.camera") {
+                capture.flip()
+                withAnimation(.snappy) { menuOpen = false }
+            }
+            menuDivider
+            menuRow("Delete the last take", icon: "arrow.uturn.backward", danger: true) {
+                capture.dropLastTake()
+                withAnimation(.snappy) { menuOpen = false }
+            }
+            .disabled(capture.takes.isEmpty)
+            .opacity(capture.takes.isEmpty ? 0.4 : 1)
+            if let tempo = capture.tempo {
+                menuDivider
+                Text("\(songName) · \(Int(tempo.bpm.rounded())) BPM")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
         }
-        .scrollIndicators(.hidden)
+        .frame(width: 270, alignment: .leading)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+            ZStack {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(Tint.surface.opacity(0.5))
+            }
+        }
+        .overlay {
+            let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+            ZStack {
+                shape.strokeBorder(.white.opacity(0.07), lineWidth: 1)
+                shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.32), .clear], startPoint: .top, endPoint: .center),
+                                   lineWidth: 1)
+            }
+            .allowsHitTesting(false)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .environment(\.colorScheme, .dark)
+        .shadow(color: .black.opacity(0.38), radius: 20, y: 14)
+    }
+
+    private var menuDivider: some View {
+        Rectangle().fill(.white.opacity(0.1)).frame(height: 1)
+    }
+
+    private func menuRow(_ name: String, icon: String, danger: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.body.weight(.semibold))
+                    .frame(width: 22)
+                Text(name).font(.body)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(danger ? Tint.bad : .white)
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func clock(_ seconds: Double) -> String {
