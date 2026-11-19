@@ -63,6 +63,22 @@ struct SavedProject: Codable, Equatable, Identifiable {
     var order: [Int]?
     /// A horizontal (16:9, 1920 x 1080) project, shot sideways. nil: vertical, like every older one.
     var wide: Bool?
+    /// Music added on the edit page, playing under everything (nil: none).
+    var music: SavedMusic?
+}
+
+/// Music added on the edit page (a song from Files, or a creatrr song or section). It plays under
+/// everything else, from where it was added.
+struct SavedMusic: Codable, Equatable {
+    /// The file, kept in the project's folder.
+    var source: MediaSource
+    var name: String
+    /// Where in the file it starts playing (a creatrr section's start), in seconds.
+    var from: Double
+    /// Timeline time it starts at.
+    var at: Double
+    /// How long it plays (a section's length, or the rest of the file).
+    var length: Double
 }
 
 /// Saved projects live in Application Support/Projects/<id>/, each with project.json, a small

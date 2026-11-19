@@ -212,6 +212,13 @@ final class EditorModel {
     var lyricSelected: Int?
     /// The lyrics are picked on the video (tap the words): a drag on the video moves them.
     var lyricsPicked = false
+    /// Music added on the edit page (nil: none). It plays under everything.
+    var music: SavedMusic?
+    /// The music row is picked: its tools show (move it to the playhead, delete).
+    var musicPicked = false
+    @ObservationIgnored private var musicTrack: AVAssetTrack?
+    /// Where the music file's sound starts (usually 0).
+    @ObservationIgnored private var musicTrackStart: Double = 0
     /// Where the words sit while a finger moves them (percent), nil otherwise.
     private(set) var lyricMoveSpot: CGPoint?
     @ObservationIgnored private var lyricMoveStart: CGPoint?
@@ -545,6 +552,7 @@ final class EditorModel {
         problem = nil
         notice = nil
         wide = pendingWide
+        clearMusic()
         overlays = []
         trackKeys = []
         splits = []
@@ -1232,6 +1240,7 @@ final class EditorModel {
         project.splits = splits.isEmpty ? nil : splits
         project.order = order.isEmpty ? nil : order
         project.wide = wide ? true : nil
+        project.music = music
         return project
     }
 
@@ -1303,6 +1312,18 @@ final class EditorModel {
                 return
             }
             songAsset = asset
+        }
+        // Added music: left out (with a note) if its file is gone.
+        clearMusic()
+        if let added = saved.music {
+            if let asset = await PhotosLoader.open(added.source, project: saved.id),
+               let audio = try? await asset.loadTracks(withMediaType: .audio).first {
+                musicTrackStart = (try? await audio.load(.timeRange))?.start.seconds ?? 0
+                musicTrack = audio
+                music = added
+            } else {
+                notice = "The music added to \u{201C}\(saved.name)\u{201D} is missing, so it's left out."
+            }
         }
 
         // 2. Picture details, and the sounds for the waveforms.
@@ -1415,6 +1436,7 @@ final class EditorModel {
         lastAuto = nil
         currentProject = nil
         wide = false
+        clearMusic()
         refreshProjects()
         pause()
         player.replaceCurrentItem(with: nil)
@@ -1626,6 +1648,7 @@ final class EditorModel {
         if index != nil {
             overlayPick = nil
             lyricsPicked = false
+            musicPicked = false
         }
         selected = nil
         notice = nil
@@ -2154,6 +2177,7 @@ final class EditorModel {
             editPick = nil
             selected = nil
             lyricsPicked = false
+            musicPicked = false
         }
         notice = nil
     }
@@ -2964,7 +2988,7 @@ final class EditorModel {
             overlayBoard.update(overlays, media: overlayMedia, track: trackKeys)
             let built = try TimelineBuilder.build(layers: layers, soundtrack: soundtrack, duration: duration,
                                                   length: timelineEnd, videoSound: kind == .video,
-                                                  overlays: overlays, media: overlayMedia)
+                                                  music: musicPlay, overlays: overlays, media: overlayMedia)
             self.built = built
             segments = Program.segments(cuts: cuts, layers: layers, duration: duration)
             let item = AVPlayerItem(asset: built.composition)
@@ -3404,6 +3428,7 @@ final class EditorModel {
         // Picked even while hidden, so its tools can show them again.
         lyricsPicked = on && hasLyrics
         guard lyricsPicked else { return }
+        musicPicked = false
         overlayPick = nil
         editPick = nil
         selected = nil
@@ -4556,6 +4581,125 @@ final class EditorModel {
     static func length(_ seconds: Double) -> String {
         let whole = Int(seconds.rounded())
         return whole < 60 ? "\(whole) seconds" : String(format: "%d:%02d", whole / 60, whole % 60)
+    }
+
+    // MARK: Music
+
+    /// Added music, ready for the timeline (nil: none, or its file couldn't be read).
+    private var musicPlay: TimelineBuilder.Music? {
+        guard let music, let musicTrack else { return nil }
+        return TimelineBuilder.Music(track: musicTrack, from: musicTrackStart + music.from,
+                                     at: music.at, length: music.length)
+    }
+
+    private func clearMusic() {
+        music = nil
+        musicTrack = nil
+        musicTrackStart = 0
+        musicPicked = false
+    }
+
+    /// The + on the edit page: a song from Files, from the playhead on.
+    func addMusicFile(_ url: URL) async {
+        guard let id = currentProject?.id else { return }
+        let allowed = url.startAccessingSecurityScopedResource()
+        defer { if allowed { url.stopAccessingSecurityScopedResource() } }
+        guard let source = Self.keepMusic(url, in: id) else {
+            problem = "Couldn't open that file. Try another song."
+            return
+        }
+        await placeMusic(source, name: url.deletingPathExtension().lastPathComponent, from: 0, length: nil)
+    }
+
+    /// The + on the edit page: a creatrr song, or just one of its sections, from the playhead on.
+    func addMusic(_ song: CreatrrSong, part: CreatrrPart?) async {
+        guard let id = currentProject?.id else { return }
+        guard let url = CreatrrLibrary.audioURL(song), let source = Self.keepMusic(url, in: id) else {
+            problem = "Couldn't open that song from creatrr. Check it has a track, then try again."
+            return
+        }
+        var from = 0.0
+        var length: Double?
+        var name = song.name
+        if let part {
+            from = max(0, part.time)
+            if let index = song.parts.firstIndex(where: { $0.id == part.id }), let end = song.partEnd(index), end > from {
+                length = end - from
+            }
+            name = "\(song.name) · \(part.name)"
+        }
+        await placeMusic(source, name: name, from: from, length: length)
+    }
+
+    /// A copy of the file in the project's folder, so the music stays with the project.
+    private static func keepMusic(_ url: URL, in id: UUID) -> MediaSource? {
+        let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
+        let name = "music-" + UUID().uuidString + "." + ext
+        let to = ProjectStore.folder(for: id).appendingPathComponent(name)
+        do {
+            try FileManager.default.copyItem(at: url, to: to)
+        } catch {
+            return nil
+        }
+        return .file(name)
+    }
+
+    /// Puts the music on the timeline at the playhead (it takes the place of any music added before).
+    private func placeMusic(_ source: MediaSource, name: String, from: Double, length: Double?) async {
+        guard let id = currentProject?.id else { return }
+        pause()
+        problem = nil
+        busy = "Adding the music…"
+        defer { busy = nil }
+        guard let asset = await PhotosLoader.open(source, project: id),
+              let audio = try? await asset.loadTracks(withMediaType: .audio).first,
+              let range = try? await audio.load(.timeRange), range.duration.seconds > 0.1 else {
+            if let url = ProjectStore.url(of: source, in: id) { try? FileManager.default.removeItem(at: url) }
+            problem = "That file has no sound to add."
+            return
+        }
+        let fileLength = range.duration.seconds
+        let start = min(max(0, from), max(0, fileLength - 0.1))
+        let plays = min(length ?? fileLength - start, fileLength - start)
+        let at = min(max(time, loopStart), max(loopStart, loopEnd - 0.1))
+        // The music it takes the place of goes, file and all.
+        if let old = music, old.source != source, let url = ProjectStore.url(of: old.source, in: id) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        musicTrack = audio
+        musicTrackStart = range.start.seconds
+        music = SavedMusic(source: source, name: name, from: start, at: at, length: plays)
+        overlayPick = nil
+        editPick = nil
+        lyricsPicked = false
+        musicPicked = true
+        rebuildAll()
+    }
+
+    func pickMusic(_ on: Bool) {
+        musicPicked = on && music != nil
+        guard musicPicked else { return }
+        overlayPick = nil
+        editPick = nil
+        lyricsPicked = false
+    }
+
+    /// The music starts at the playhead instead.
+    func moveMusicHere() {
+        guard var moved = music else { return }
+        moved.at = min(max(time, loopStart), max(loopStart, loopEnd - 0.1))
+        guard abs(moved.at - (music?.at ?? 0)) > 0.001 else { return }
+        music = moved
+        rebuildAll()
+    }
+
+    /// Takes the added music off (the song or the videos' own sound stays).
+    func deleteMusic() {
+        if let old = music, let id = currentProject?.id, let url = ProjectStore.url(of: old.source, in: id) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        clearMusic()
+        rebuildAll()
     }
 
     // MARK: Exporting

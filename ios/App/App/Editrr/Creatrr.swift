@@ -183,6 +183,8 @@ struct CreatrrSongsSheet: View {
 
 /// Shoot: pick a creatrr song, then the part to film. The camera opens at that part.
 struct ShootSongSheet: View {
+    /// Picking music to add on the edit page, instead of a part to film.
+    var forMusic = false
     let pick: (CreatrrSong, CreatrrPart?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var songs: [CreatrrSong] = []
@@ -191,10 +193,11 @@ struct ShootSongSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Shoot")
+                Text(forMusic ? "Add music from creatrr" : "Shoot")
                     .font(.title2.weight(.bold))
                     .padding(.top, 22)
-                Text("Pick a song, then the part to film. Up to 10 takes, each lined up to the song.")
+                Text(forMusic ? "Pick a song, then the whole song or one section. It starts at the playhead."
+                              : "Pick a song, then the part to film. Up to 10 takes, each lined up to the song.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
@@ -254,7 +257,8 @@ struct ShootSongSheet: View {
     /// The song's parts (and the whole song), each starting the camera there.
     private func partRows(_ song: CreatrrSong) -> some View {
         VStack(spacing: 6) {
-            partButton(song, nil, name: "Whole song", detail: "From the top", tint: .white.opacity(0.5))
+            partButton(song, nil, name: "Whole song", detail: forMusic ? "All of it" : "From the top",
+                       tint: .white.opacity(0.5))
             ForEach(song.parts) { part in
                 partButton(song, part, name: part.name, detail: "Starts at \(clock(part.time))", tint: part.tint)
             }
@@ -276,9 +280,9 @@ struct ShootSongSheet: View {
                     Text(detail).font(.caption).foregroundStyle(.white.opacity(0.6)).monospacedDigit()
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "record.circle")
+                Image(systemName: forMusic ? "plus.circle" : "record.circle")
                     .font(.title3)
-                    .foregroundStyle(Tint.bad)
+                    .foregroundStyle(forMusic ? Tint.accent : Tint.bad)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
@@ -286,7 +290,7 @@ struct ShootSongSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Shoot \(name)")
+        .accessibilityLabel(forMusic ? "Add \(name)" : "Shoot \(name)")
     }
 
     private func partsCount(_ song: CreatrrSong) -> String {

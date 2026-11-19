@@ -256,6 +256,14 @@ enum TimelineBuilder {
         var duration: CMTime { composition.duration }
     }
 
+    /// Music added on the edit page: plays from `from` (file time) for `length`, at timeline `at`.
+    struct Music {
+        let track: AVAssetTrack
+        let from: Double
+        let at: Double
+        let length: Double
+    }
+
     /// The open project's frame: 1080 x 1920 (vertical), or 1920 x 1080 for a horizontal project.
     /// EditorModel sets it as a project opens or starts.
     static var canvas = CGSize(width: 1080, height: 1920)
@@ -272,10 +280,23 @@ enum TimelineBuilder {
     /// videos sit back to back), instead of the song. `length`: the whole timeline when clips
     /// after the performance run past the song (the song and videos still stop at `duration`).
     static func build(layers: [Layer], soundtrack: Soundtrack?, duration: Double, length: Double? = nil,
-                      videoSound: Bool = false,
+                      videoSound: Bool = false, music: Music? = nil,
                       overlays: [SavedOverlay] = [], media: [UUID: OverlayMedia] = [:]) throws -> Built {
         let composition = AVMutableComposition()
         let total = max(duration, length ?? duration)
+
+        // Added music: its own sound track, under everything, cut off where the timeline ends.
+        if let music, let audio = composition.addMutableTrack(withMediaType: .audio,
+                                                              preferredTrackID: kCMPersistentTrackID_Invalid) {
+            let place = max(0, music.at)
+            let play = min(music.length, total - place)
+            if play > 0.01 {
+                try audio.insertTimeRange(CMTimeRange(start: time(music.from), duration: time(play)),
+                                          of: music.track, at: time(place))
+            } else {
+                composition.removeTrack(audio)
+            }
+        }
 
         if let soundtrack, let audio = composition.addMutableTrack(withMediaType: .audio,
                                                                   preferredTrackID: kCMPersistentTrackID_Invalid) {

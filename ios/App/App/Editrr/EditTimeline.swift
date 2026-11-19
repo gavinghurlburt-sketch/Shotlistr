@@ -11,9 +11,10 @@ enum EditMetrics {
     static let lyricsHeight: CGFloat = 26
     /// Each overlay's row, above the video track.
     static let overlayHeight: CGFloat = 32
-    static func height(lyrics: Bool, overlays: Int = 0, texts: Int = 0) -> CGFloat {
+    static func height(lyrics: Bool, overlays: Int = 0, texts: Int = 0, music: Bool = false) -> CGFloat {
         LaneMetrics.rulerHeight + videoHeight + gap + audioHeight + 6 + LaneMetrics.chrome
             + (lyrics ? gap + lyricsHeight : 0)
+            + (music ? gap + audioHeight : 0)
             + CGFloat(overlays + texts) * (overlayHeight + gap)
     }
 }
@@ -24,8 +25,11 @@ enum EditMetrics {
 /// and the ones after close up). The ruler counts from the clip's start.
 struct EditTimeline: View {
     let model: EditorModel
-    /// The + at the end of the video track: adds a photo or video on the same track, after everything.
-    var onAdd: (() -> Void)?
+    /// What the + at the end of the video track adds.
+    enum Addition { case clip, musicFile, creatrrSong }
+    /// The + at the end of the video track: a photo or video on the same track after everything,
+    /// or music (from Files or a creatrr song) at the playhead.
+    var onAdd: ((Addition) -> Void)?
 
     @State private var dragStartTime: Double = 0
     @State private var zoomStart: Double?
@@ -35,7 +39,7 @@ struct EditTimeline: View {
 
     /// Which row a touch is on.
     private enum Row: Equatable {
-        case video, sound, lyrics
+        case video, sound, lyrics, music
         case overlay(UUID)
         /// A text lane (T1 is 0).
         case text(Int)
@@ -123,6 +127,25 @@ struct EditTimeline: View {
                 .frame(height: EditMetrics.audioHeight)
                 .background(LaneMetrics.row)
 
+                // Music added with the +, under the song.
+                if model.music != nil {
+                    Color.clear.frame(height: EditMetrics.gap)
+                    HStack(spacing: 0) {
+                        Image(systemName: "music.note")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(MusicTint.color)
+                            .frame(width: EditMetrics.sideWidth)
+                            .frame(maxHeight: .infinity)
+                            .accessibilityHidden(true)
+                        musicTrack
+                            .frame(width: laneWidth, height: EditMetrics.audioHeight)
+                            .clipped()
+                            .overlay { touches(width: laneWidth, row: .music) }
+                    }
+                    .frame(height: EditMetrics.audioHeight)
+                    .background(LaneMetrics.row)
+                }
+
                 if model.hasLyrics {
                     Color.clear.frame(height: EditMetrics.gap)
                     HStack(spacing: 0) {
@@ -182,14 +205,27 @@ struct EditTimeline: View {
     }
 
     /// A white + square at the end of the video track (held inside the track when the end is off
-    /// screen), like Edits: it adds a photo or video on the same track, after everything.
+    /// screen), like Edits. It asks what to add: a photo or video on the same track after
+    /// everything, or music from Files or creatrr at the playhead.
     @ViewBuilder private func addButton(laneWidth: CGFloat) -> some View {
-        if let onAdd, model.canAddToEnd {
+        if let onAdd {
             let end = model.loopEnd
             let side: CGFloat = 30
             let endX = laneWidth / 2 + CGFloat((end - model.time) * model.pixelsPerSecond)
             let x = min(max(endX - side / 2, 4), laneWidth - side - 4)
-            Button(action: onAdd) {
+            Menu {
+                Button { onAdd(.clip) } label: {
+                    Label(model.kind == .video ? "Video at the end" : "Photo or video at the end",
+                          systemImage: "photo.on.rectangle")
+                }
+                .disabled(!model.canAddToEnd)
+                Button { onAdd(.musicFile) } label: {
+                    Label("Music from Files", systemImage: "folder")
+                }
+                Button { onAdd(.creatrrSong) } label: {
+                    Label("Song or section from creatrr", systemImage: "music.note.list")
+                }
+            } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.black)
@@ -198,9 +234,9 @@ struct EditTimeline: View {
                     .shadow(color: .black.opacity(0.4), radius: 3)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .menuOrder(.fixed)
             .offset(x: x)
-            .accessibilityLabel("Add a photo or video at the end")
+            .accessibilityLabel("Add a photo, video or music")
         }
     }
 
@@ -418,6 +454,37 @@ struct EditTimeline: View {
 
     /// The sound: a performance's song from In to Out, or each video's own sound under it. Grey
     /// bars with their waveforms.
+    /// The added music: a bar from where it starts for as long as it plays, with its name. Picked,
+    /// it gets a yellow outline.
+    private var musicTrack: some View {
+        let time = model.time
+        let pps = model.pixelsPerSecond
+        let music = model.music
+        let picked = model.musicPicked
+        let end = model.loopEnd
+        return Canvas { context, size in
+            guard let music else { return }
+            let middle = size.width / 2
+            func x(_ seconds: Double) -> CGFloat { middle + CGFloat((seconds - time) * pps) }
+            let stop = min(music.at + music.length, end)
+            let band = CGRect(x: x(music.at), y: 2, width: max(0.5, x(stop) - x(music.at)), height: size.height - 4)
+            guard band.maxX > 0, band.minX < size.width else { return }
+            context.fill(Path(band), with: .color(MusicTint.color.opacity(0.55)))
+            if picked {
+                context.stroke(Path(band.insetBy(dx: 1, dy: 1)), with: .color(Tint.accent), lineWidth: 2)
+            }
+            var inside = context
+            inside.clip(to: Path(band.insetBy(dx: 6, dy: 0)))
+            inside.addFilter(.shadow(color: .black.opacity(0.6), radius: 2))
+            inside.draw(Text("\(Image(systemName: "music.note")) \(music.name)")
+                            .font(.caption2.weight(.bold)).foregroundStyle(.white),
+                        at: CGPoint(x: max(band.minX, 0) + 8, y: band.midY), anchor: .leading)
+        }
+        .accessibilityElement()
+        .accessibilityLabel(music.map { "Music: \($0.name)" } ?? "")
+        .accessibilityAddTraits(.isButton)
+    }
+
     private var songTrack: some View {
         let time = model.time
         let pps = model.pixelsPerSecond
@@ -780,6 +847,14 @@ struct EditTimeline: View {
             },
             swipeEnded: { model.endScrub() },
             tapped: { point in
+                // A tap on the music row picks the music (where it is): its tools. Again lets go.
+                if row == .music {
+                    let at = model.time + Double(point.x - width / 2) / model.pixelsPerSecond
+                    let on = model.music.map { at >= $0.at && at <= $0.at + $0.length } ?? false
+                    model.pickMusic(on && !model.musicPicked)
+                    return
+                }
+                model.pickMusic(false)
                 if let textLane {
                     // A tap on a text opens it to edit.
                     if let hit = textGrip(lane: textLane, at: point, width: width) {
@@ -880,4 +955,9 @@ struct EditTimeline: View {
                 model.endScrub()
             }
     }
+}
+
+/// The added music's color on the timeline (blue, apart from the song's grey).
+enum MusicTint {
+    static let color = Color(red: 0.35, green: 0.62, blue: 1.0)
 }

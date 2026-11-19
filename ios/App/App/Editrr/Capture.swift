@@ -967,39 +967,7 @@ struct CaptureView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Use \(capture.takes.count) \(capture.takes.count == 1 ? "take" : "takes")")
             }
-        } else {
-            shapePicker
         }
-    }
-
-    /// Vertical or Horizontal, before the first take. Vertical unless you pick otherwise.
-    private var shapePicker: some View {
-        HStack(spacing: 0) {
-            shapeChoice("Vertical", icon: "rectangle.portrait", wide: false)
-            shapeChoice("Horizontal", icon: "rectangle", wide: true)
-        }
-        .padding(3)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
-        .frame(height: 38)
-        .disabled(!capture.ready)
-        .sensoryFeedback(.selection, trigger: capture.wide)
-    }
-
-    private func shapeChoice(_ name: String, icon: String, wide: Bool) -> some View {
-        let on = capture.wide == wide
-        return Button { withAnimation(.snappy) { capture.setWide(wide) } } label: {
-            Label(name, systemImage: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(on ? Color.black : Color.white.opacity(0.85))
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(Capsule().fill(on ? Tint.accent : .clear))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(name)
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// Count-in and click on the left, record in the middle, the menu on the right. That's all.

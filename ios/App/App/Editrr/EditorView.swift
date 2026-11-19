@@ -568,6 +568,9 @@ struct EditingView: View {
     /// Picking a clip for the + at the end of the video track: it goes after everything.
     @State private var endPicking = false
     @State private var endItems: [PhotosPickerItem] = []
+    /// The +: music from Files, or a creatrr song or section.
+    @State private var musicFiles = false
+    @State private var musicSongs = false
     /// Read here so the timeline's height follows the tall-tracks switch.
     @AppStorage(LaneMetrics.tallKey) private var tallTracks = false
 
@@ -688,12 +691,16 @@ struct EditingView: View {
                     .frame(height: LaneMetrics.height(layers: model.laneCount, tall: tallTracks))
                     .transition(.scale(scale: 0.5, anchor: .top).combined(with: .opacity))
             } else {
-                EditTimeline(model: model) {
+                EditTimeline(model: model) { addition in
                     model.pause()
-                    endPicking = true
+                    switch addition {
+                    case .clip: endPicking = true
+                    case .musicFile: musicFiles = true
+                    case .creatrrSong: musicSongs = true
+                    }
                 }
                     .frame(height: EditMetrics.height(lyrics: model.hasLyrics, overlays: model.onTop.count,
-                                                      texts: model.textLaneCount))
+                                                      texts: model.textLaneCount, music: model.music != nil))
                     // The grey rows run edge to edge of the screen, as in Edits.
                     .padding(.horizontal, -12)
                     .transition(.opacity)
@@ -730,6 +737,19 @@ struct EditingView: View {
             guard !chosen.isEmpty else { return }
             endItems = []
             Task { await model.addToEnd(chosen) }
+        }
+        // The +'s music: a song from Files, or a creatrr song or section, at the playhead.
+        .fileImporter(isPresented: $musicFiles, allowedContentTypes: [.audio]) { result in
+            guard case .success(let url) = result else { return }
+            Task { await model.addMusicFile(url) }
+        }
+        .sheet(isPresented: $musicSongs) {
+            ShootSongSheet(forMusic: true) { song, part in
+                Task { await model.addMusic(song, part: part) }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .frostedSheet()
         }
         .sheet(isPresented: $masking, onDismiss: { model.endMaskEdit() }) {
             MaskSheet(model: model)
@@ -836,6 +856,8 @@ struct EditingView: View {
                 } else {
                     performanceTools
                 }
+            } else if model.musicPicked, let music = model.music {
+                musicTools(music)
             } else if model.lyricsPicked, model.hasLyrics {
                 lyricsTools
             } else if let id = model.overlayPick, model.overlay(id) != nil {
@@ -927,6 +949,29 @@ struct EditingView: View {
                 ToolItem(icon: "square.and.arrow.up", text: "Export", on: true) {
                     model.resetExport()
                     exporting = true
+                }
+            }
+        }
+    }
+
+    /// The added music picked: start it at the playhead, or delete it.
+    private func musicTools(_ music: SavedMusic) -> some View {
+        HStack(spacing: 0) {
+            Button { model.pickMusic(false) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 40, height: 52)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to all tools")
+            Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ToolItem(icon: "arrow.right.to.line", text: "Start here",
+                             spoken: "Start the music at the playhead") { model.moveMusicHere() }
+                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                             spoken: "Delete the music") { model.deleteMusic() }
                 }
             }
         }
