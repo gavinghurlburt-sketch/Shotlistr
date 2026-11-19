@@ -266,6 +266,9 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         return least...max(least, most)
     }
 
+    /// Zooms to a zoom as shown (1 is the main camera).
+    func setZoomShown(_ shown: Double) { setZoom(CGFloat(shown) * zoomBase) }
+
     /// The lens the zoom is on: the biggest one at or below it.
     var currentLens: Lens? {
         lenses.last { $0.shown <= zoomShown + 0.01 } ?? lenses.first
@@ -594,11 +597,9 @@ struct CaptureView: View {
     /// The press on a lens button right now.
     @State private var pressId: UUID?
     /// Where the wheel's drag began: the finger's x and the zoom then.
-    @State private var wheelFrom: (x: CGFloat, zoom: CGFloat)?
+    @State private var wheelFrom: (x: CGFloat, spot: Double)?
     /// Bumped on each press, so an old "hide the wheel" timer does nothing.
     @State private var hideToken = 0
-    /// How far to slide for twice the zoom (the scale moves with your finger).
-    private static let wheelPointsPerDoubling: CGFloat = 120
     @Environment(\.dismiss) private var dismiss
 
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
@@ -1076,9 +1077,10 @@ struct CaptureView: View {
                 let dx = value.translation.width
                 if !wheelOn && abs(dx) > 10 { withAnimation(.snappy) { wheelOn = true } }
                 guard wheelOn else { return }
-                let from = wheelFrom ?? (x: dx, zoom: capture.zoomFactor)
+                let scale = ZoomScale(range: capture.zoomRange)
+                let from = wheelFrom ?? (x: dx, spot: scale.spot(capture.zoomShown))
                 wheelFrom = from
-                capture.setZoom(from.zoom * pow(2, -(dx - from.x) / Self.wheelPointsPerDoubling))
+                capture.setZoomShown(scale.zoom(at: from.spot - Double(dx - from.x)))
             }
             .onEnded { _ in
                 let wheel = wheelOn
@@ -1127,10 +1129,11 @@ struct CaptureView: View {
         context.fill(Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
                                             width: radius * 2, height: radius * 2)),
                      with: .color(.black.opacity(0.55)))
-        // Radians for each doubling, so the scale moves as far as the finger.
-        let perDoubling = Double(wheelPointsPerDoubling / radius)
-        let now = log2(max(shown, 0.01))
-        func angle(_ value: Double) -> Double { (log2(value) - now) * perDoubling }
+        // Uneven like the iPhone's: wide at .5 to 2, tighter and tighter toward the top zoom.
+        // The scale moves exactly as far as the finger.
+        let scale = ZoomScale(range: range)
+        let now = scale.spot(shown)
+        func angle(_ value: Double) -> Double { (scale.spot(value) - now) / Double(radius) }
         func point(_ angle: Double, _ distance: CGFloat) -> CGPoint {
             CGPoint(x: center.x + distance * CGFloat(sin(angle)), y: center.y - distance * CGFloat(cos(angle)))
         }
@@ -1143,12 +1146,17 @@ struct CaptureView: View {
             context.stroke(path, with: .color(.white.opacity(opacity)), lineWidth: width)
         }
         guard range.lowerBound > 0 else { return }
-        // Small ticks every tenth of a doubling.
+        // Small ticks every tenth of a doubling, thinned out where the scale gets tight.
         let low = Int((log2(range.lowerBound) * 10).rounded(.up))
         let high = Int((log2(range.upperBound) * 10).rounded(.down))
         if low <= high {
-            for step in low...high where step % 10 != 0 {
-                tick(pow(2, Double(step) / 10), length: 8, width: 1, opacity: 0.45)
+            var lastSpot = -Double.infinity
+            for step in low...high {
+                let value = pow(2, Double(step) / 10)
+                let spot = scale.spot(value)
+                guard spot - lastSpot >= 5 else { continue }
+                lastSpot = spot
+                if step % 10 != 0 { tick(value, length: 8, width: 1, opacity: 0.45) }
             }
         }
         // Big ticks and numbers at each lens and each doubling (.5, 1, 2, 4, 8), never crowded.
@@ -1158,7 +1166,7 @@ struct CaptureView: View {
         if first <= last {
             for power in first...last {
                 let value = pow(2, Double(power))
-                if !marks.contains(where: { abs(log2($0) - log2(value)) < 0.3 }) { marks.append(value) }
+                if !marks.contains(where: { abs(scale.spot($0) - scale.spot(value)) < 24 }) { marks.append(value) }
             }
         }
         for value in marks {
@@ -1240,5 +1248,35 @@ extension View {
             .clipShape(shape)
             .environment(\.colorScheme, .dark)
             .shadow(color: .black.opacity(0.38), radius: 20, y: 14)
+    }
+}
+
+/// Where each zoom sits along the zoom wheel, in points. Like the iPhone camera's dial it isn't
+/// even: each doubling takes less room than the one before, so .5 to 2 is roomy and the top zoom
+/// is one short slide away.
+struct ZoomScale {
+    let low: Double
+    let high: Double
+    /// Room for the first doubling, and how fast later doublings shrink.
+    private static let first = 105.0
+    private static let shrink = 0.35
+
+    init(range: ClosedRange<Double>) {
+        low = max(range.lowerBound, 0.01)
+        high = max(range.upperBound, low)
+    }
+
+    /// Points from the lowest zoom.
+    func spot(_ zoom: Double) -> Double {
+        let doublings = log2(min(max(zoom, low), high) / low)
+        return Self.first * (1 - exp(-Self.shrink * doublings)) / Self.shrink
+    }
+
+    /// The zoom at a point along the wheel (clamped to the ends).
+    func zoom(at spot: Double) -> Double {
+        let end = self.spot(high)
+        let clamped = min(max(spot, 0), end)
+        let doublings = -log(1 - clamped * Self.shrink / Self.first) / Self.shrink
+        return min(high, low * pow(2, doublings))
     }
 }
