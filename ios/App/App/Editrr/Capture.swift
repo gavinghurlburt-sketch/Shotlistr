@@ -91,8 +91,21 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     var start: Double = 0
     /// Song time where the picked creatrr part ends; the take stops a second after it.
     var partEnd: Double?
-    var speed: Speed = .normal { didSet { if speed != oldValue { configureFrameRate() } } }
+    var speed: Speed = .normal {
+        didSet {
+            guard speed != oldValue else { return }
+            configureFrameRate()
+            // A new camera format starts back at no zoom: keep the zoom you had.
+            setZoom(zoomBase * CGFloat(zoomShown))
+        }
+    }
     var front = false
+    /// The lenses to pick from (0.5, 1, 3...), for the camera in use.
+    var lenses: [Lens] = []
+    /// The zoom you see, where 1 is the main camera.
+    var zoomShown: Double = 1
+    /// The camera's own zoom factor for 1 (the ultra wide counts as 1 on cameras that have it).
+    @ObservationIgnored private var zoomBase: CGFloat = 1
     var recording = false
     /// Song time now, while recording (for the readout).
     var songNow: Double = 0
@@ -170,6 +183,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         session.commitConfiguration()
         configureFrameRate()
         orientOutput()
+        setUpLenses()
         let running = session
         await Task.detached { running.startRunning() }.value
         ready = cameraInput != nil
@@ -189,8 +203,64 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         try? audio.setCategory(.playback, mode: .moviePlayback)
     }
 
+    /// One of the back camera's lenses, as the zoom it gives (0.5, 1, 2, 3, 5...).
+    struct Lens: Identifiable, Equatable {
+        let id: Int
+        let shown: Double
+        let factor: CGFloat
+    }
+
+    /// The front camera, or the back one with all its lenses joined (so zoom moves across them).
     private static func camera(front: Bool) -> AVCaptureDevice? {
-        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: front ? .front : .back)
+        if front { return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) }
+        for type in [AVCaptureDevice.DeviceType.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera,
+                     .builtInWideAngleCamera] {
+            if let device = AVCaptureDevice.default(type, for: .video, position: .back) { return device }
+        }
+        return nil
+    }
+
+    /// Works out the lens buttons for the camera in use, and starts at 1.
+    private func setUpLenses() {
+        guard let device = cameraInput?.device else { lenses = []; return }
+        let switches = device.virtualDeviceSwitchOverVideoZoomFactors.map { CGFloat($0.doubleValue) }
+        let ultraWide = device.constituentDevices.contains { $0.deviceType == .builtInUltraWideCamera }
+        zoomBase = ultraWide ? (switches.first ?? 2) : 1
+        var factors: [CGFloat] = [1] + switches
+        // No zoom lens: offer 2 (a closer crop of the main camera).
+        if !front && switches.count == (ultraWide ? 1 : 0) { factors.append(zoomBase * 2) }
+        factors = factors.filter { $0 >= device.minAvailableVideoZoomFactor && $0 <= device.maxAvailableVideoZoomFactor }
+        lenses = factors.enumerated().map { Lens(id: $0.offset, shown: Double($0.element / zoomBase), factor: $0.element) }
+        setZoom(zoomBase, smooth: false)
+    }
+
+    /// The camera's zoom factor right now (for pinching from).
+    var zoomFactor: CGFloat { cameraInput?.device.videoZoomFactor ?? 1 }
+
+    /// Zooms to a lens, gliding there.
+    func pick(_ lens: Lens) { setZoom(lens.factor, smooth: true) }
+
+    /// Sets the zoom (pinching sets it straight; a lens button glides).
+    func setZoom(_ factor: CGFloat, smooth: Bool = false) {
+        guard let device = cameraInput?.device else { return }
+        let most = min(device.maxAvailableVideoZoomFactor, zoomBase * 15)
+        let zoom = min(max(factor, device.minAvailableVideoZoomFactor), most)
+        do {
+            try device.lockForConfiguration()
+            if smooth {
+                device.ramp(toVideoZoomFactor: zoom, withRate: 8)
+            } else {
+                device.cancelVideoZoomRamp()
+                device.videoZoomFactor = zoom
+            }
+            device.unlockForConfiguration()
+        } catch {}
+        zoomShown = Double(zoom / zoomBase)
+    }
+
+    /// The lens the zoom is on: the biggest one at or below it.
+    var currentLens: Lens? {
+        lenses.last { $0.shown <= zoomShown + 0.01 } ?? lenses.first
     }
 
     func flip() {
@@ -208,6 +278,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         session.commitConfiguration()
         configureFrameRate()
         orientOutput()
+        setUpLenses()
     }
 
     /// Upright video; the front camera is mirrored like a mirror.
@@ -443,6 +514,13 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         guard let last = takes.popLast() else { return }
         try? FileManager.default.removeItem(at: last.url)
     }
+
+    /// Throws the last take away and films it again.
+    func retake() {
+        guard ready, !recording, !takes.isEmpty else { return }
+        dropLastTake()
+        record()
+    }
 }
 
 /// The camera picture, filling its space.
@@ -481,6 +559,8 @@ struct CaptureView: View {
     @State private var menuOpen = false
     /// A short note over the record button (the count-in and click need a tempo).
     @State private var note: String?
+    /// The zoom when a pinch began.
+    @State private var pinchFrom: CGFloat?
     @Environment(\.dismiss) private var dismiss
 
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
@@ -514,6 +594,17 @@ struct CaptureView: View {
                 .aspectRatio(9.0 / 16.0, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(edges: .bottom)
+                .contentShape(Rectangle())
+                .gesture(
+                    // Pinch to zoom, even while filming.
+                    MagnifyGesture()
+                        .onChanged { value in
+                            let from = pinchFrom ?? capture.zoomFactor
+                            pinchFrom = from
+                            capture.setZoom(from * value.magnification)
+                        }
+                        .onEnded { _ in pinchFrom = nil }
+                )
 
             VStack(spacing: 0) {
                 topBar
@@ -529,6 +620,7 @@ struct CaptureView: View {
                         .padding(.bottom, 14)
                         .transition(.opacity)
                 }
+                if !capture.recording { lensRow }
                 controls
             }
             .foregroundStyle(.white)
@@ -594,6 +686,18 @@ struct CaptureView: View {
                 }
                 .font(.headline)
             } else if !capture.takes.isEmpty {
+                // Film the last take again.
+                Button { capture.retake() } label: {
+                    Label("Retake", systemImage: "arrow.counterclockwise")
+                        .font(.headline)
+                        .padding(.horizontal, 14)
+                        .frame(height: 38)
+                        .background(Capsule().strokeBorder(.white.opacity(0.8), lineWidth: 1.5))
+                        .background(Capsule().fill(.black.opacity(0.3)))
+                }
+                .buttonStyle(.plain)
+                .disabled(!capture.ready)
+                .accessibilityLabel("Retake the last take")
                 // Done filming: use the takes.
                 Button { finish() } label: {
                     Text("Use \(capture.takes.count) of \(maxTakes)")
@@ -718,11 +822,6 @@ struct CaptureView: View {
             .padding(.bottom, 12)
 
             menuDivider
-            menuRow("Switch camera", icon: "arrow.triangle.2.circlepath.camera") {
-                capture.flip()
-                withAnimation(.snappy) { menuOpen = false }
-            }
-            menuDivider
             menuRow("Delete the last take", icon: "arrow.uturn.backward", danger: true) {
                 capture.dropLastTake()
                 withAnimation(.snappy) { menuOpen = false }
@@ -760,6 +859,48 @@ struct CaptureView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .environment(\.colorScheme, .dark)
         .shadow(color: .black.opacity(0.38), radius: 20, y: 14)
+    }
+
+    /// The lenses (0.5, 1, 3...) and the front/back switch, like the iPhone camera.
+    private var lensRow: some View {
+        HStack(spacing: 10) {
+            if capture.lenses.count > 1 {
+                HStack(spacing: 4) {
+                    ForEach(capture.lenses) { lens in
+                        let on = capture.currentLens == lens
+                        Button { withAnimation(.snappy) { capture.pick(lens) } } label: {
+                            Text(on ? zoomLabel(capture.zoomShown) + "\u{00D7}" : zoomLabel(lens.shown))
+                                .font(.system(size: on ? 13 : 11, weight: .bold).monospacedDigit())
+                                .foregroundStyle(on ? Tint.accent : .white)
+                                .frame(width: on ? 40 : 32, height: on ? 40 : 32)
+                                .background(Circle().fill(.black.opacity(0.45)))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Zoom \(zoomLabel(lens.shown))")
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+                .padding(4)
+                .background(Capsule().fill(.black.opacity(0.25)))
+            }
+            Button { capture.flip() } label: {
+                Image(systemName: "arrow.triangle.2.circlepath.camera")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(.black.opacity(0.45)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(capture.front ? "Use the back camera" : "Use the front camera")
+        }
+        .padding(.bottom, 14)
+    }
+
+    /// 0.5 shows as .5, whole numbers without a decimal, the rest to one place.
+    private func zoomLabel(_ value: Double) -> String {
+        let tenth = (value * 10).rounded() / 10
+        if tenth < 1 { return String(format: ".%d", Int((tenth * 10).rounded())) }
+        if tenth == tenth.rounded() { return String(Int(tenth)) }
+        return String(format: "%.1f", tenth)
     }
 
     private var menuDivider: some View {
