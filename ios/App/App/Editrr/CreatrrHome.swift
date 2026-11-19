@@ -29,6 +29,9 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     private var headerBottom: CGFloat = 170
     /// What editrr's back button says.
     let nav = CreatrrNav()
+    /// editrr opened from inside a page (a song's sections, a project), where creatrr's tabs aren't
+    /// on screen: it takes the whole screen and shows its own Back.
+    private var bare = false
 
     private lazy var toEditor: UIScreenEdgePanGestureRecognizer = {
         let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(pan(_:)))
@@ -58,6 +61,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         content?.add(messages, name: "creatrrTier")
         content?.add(messages, name: "creatrrEditrr")
         content?.add(messages, name: "creatrrHome")
+        content?.add(messages, name: "creatrrShoot")
         nav.backTitle = artistTier ? "Artist" : "Artists"
         view.addGestureRecognizer(toEditor)
         view.addGestureRecognizer(toArtist)
@@ -88,7 +92,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     private func layoutEditor() {
         guard let editor else { return }
         let size = view.bounds.size
-        let top = EditrrStage.editing ? 0 : min(max(0, headerBottom), size.height * 0.5)
+        let top = EditrrStage.editing || bare ? 0 : min(max(0, headerBottom), size.height * 0.5)
         editor.view.frame = CGRect(x: (1 - reveal) * size.width, y: top, width: size.width, height: size.height - top)
     }
 
@@ -116,6 +120,17 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         show(editor: true)
     }
 
+    /// A section's red record button: editrr opens and films takes to that part of the song.
+    func shootFromWeb(key: String, time: Double?) {
+        guard !panning, !key.isEmpty else { return }
+        EditrrShoot.pending = EditrrShoot.Request(key: key, time: time)
+        if showingEditor {
+            EditrrShare.run(webView, now: true)
+        } else {
+            show(editor: true)
+        }
+    }
+
     /// Projects, Artists, the bell or your account was tapped in the header while Edits was open.
     func closeFromWeb() {
         guard !panning else { return }
@@ -130,6 +145,11 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     }
 
     private func prepareEditor() {
+        if !showingEditor {
+            // Opening from inside a page: no tabs above, so editrr fills the screen with its own Back.
+            bare = webHome == "away"
+            nav.bare = bare
+        }
         if editor == nil {
             _ = FontLibrary.shared   // your lyric fonts, ready before a project draws its words
             let host = UIHostingController(rootView: EditrrRoot(nav: nav, back: { [weak self] in self?.show(editor: false) }))
@@ -143,7 +163,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         }
         editor?.view.isHidden = false
         // The header only lines up with editrr's home when the page is at the top.
-        if let scroll = webView?.scrollView {
+        if !bare, let scroll = webView?.scrollView {
             scroll.setContentOffset(CGPoint(x: 0, y: -scroll.adjustedContentInset.top), animated: false)
         }
     }
@@ -256,8 +276,8 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
 
     // MARK: Status bar, rotation
 
-    /// The status bar sits over creatrr's header unless an edit is open.
-    private var statusOwner: UIViewController? { showingEditor && EditrrStage.editing ? editor : artist }
+    /// The status bar sits over creatrr's header unless editrr has the whole screen.
+    private var statusOwner: UIViewController? { showingEditor && (EditrrStage.editing || bare) ? editor : artist }
     override var childForStatusBarStyle: UIViewController? { statusOwner }
     override var childForStatusBarHidden: UIViewController? { statusOwner }
     override var childForHomeIndicatorAutoHidden: UIViewController? { showingEditor ? editor : artist }
@@ -279,6 +299,10 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
                 if let tier = message.body as? String { home?.setTier(tier) }
             case "creatrrEditrr":
                 if (message.body as? String) == "close" { home?.closeFromWeb() } else { home?.openFromWeb() }
+            case "creatrrShoot":
+                if let info = message.body as? [String: Any], let key = info["key"] as? String {
+                    home?.shootFromWeb(key: key, time: (info["time"] as? NSNumber).map { $0.doubleValue })
+                }
             case "creatrrHome":
                 if let info = message.body as? [String: Any], let place = info["place"] as? String {
                     let bottom = (info["top"] as? NSNumber).map { CGFloat(truncating: $0) }

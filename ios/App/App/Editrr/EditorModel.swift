@@ -254,6 +254,73 @@ final class EditorModel {
     var capturedCount = 0
     /// The parts of a song picked from creatrr (Verse, Chorus...), for Record to jump to.
     @ObservationIgnored private(set) var captureParts: [CreatrrPart] = []
+    /// The tempo of a song picked from creatrr, for Record's count-in and click.
+    @ObservationIgnored private(set) var captureTempo: CaptureTempo?
+
+    // MARK: Shoot
+
+    /// Shoot's list of creatrr songs and parts is showing.
+    var shootPicking = false
+    /// Shoot's camera, once its song is ready.
+    var shootPlan: ShootPlan?
+    /// The song and part picked on Shoot's list, waiting for the list to close.
+    @ObservationIgnored var shootChoice: (song: CreatrrSong, part: CreatrrPart?)?
+
+    /// Shoot: gets the song ready, then opens the camera at the part.
+    func shoot(_ song: CreatrrSong, part: CreatrrPart?) async {
+        guard busy == nil else { return }
+        resetNewVideos()
+        projectName = ""
+        pendingKind = .performance
+        await chooseCreatrrSong(song)
+        guard let ready = captureSong, problem == nil else {
+            pendingKind = nil
+            return
+        }
+        shootPlan = ShootPlan(song: ready.asset, length: ready.length, songName: song.name, partName: part?.name,
+                              parts: song.parts, part: part?.id, tempo: song.tempo)
+    }
+
+    /// Shoot's takes make a new project, named for the song and part, lined up and open.
+    func finishShoot(_ plan: ShootPlan, takes: [CapturedTake]) async {
+        guard !takes.isEmpty else {
+            pendingKind = nil
+            return
+        }
+        addCaptured(takes)
+        projectName = plan.partName.map { "\(plan.songName) · \($0)" } ?? plan.songName
+        await start()
+    }
+
+    /// A section's red record button in creatrr: finds the song (creatrr shares its songs as editrr
+    /// opens) and shoots that part.
+    func shootFromCreatrr(_ request: EditrrShoot.Request) async {
+        if stage == .editing { startOver() }
+        guard busy == nil else { return }
+        problem = nil
+        busy = "Getting the song from creatrr…"
+        var found: CreatrrSong?
+        for attempt in 0..<40 {
+            // creatrr shares its songs fresh as editrr opens: give it a moment to bring the tempo too.
+            if let song = CreatrrLibrary.songs().first(where: { $0.key == request.key }) {
+                found = song
+                if song.bpm != nil || attempt >= 12 { break }
+            }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        busy = nil
+        guard let song = found else {
+            problem = "Couldn't get that song from creatrr. Check it has a track, then try again."
+            return
+        }
+        var part: CreatrrPart?
+        if let time = request.time,
+           let near = song.parts.min(by: { abs($0.time - time) < abs($1.time - time) }),
+           abs(near.time - time) < 0.5 {
+            part = near
+        }
+        await shoot(song, part: part)
+    }
 
     /// Uses a song from creatrr, with its parts.
     func chooseCreatrrSong(_ song: CreatrrSong) async {
@@ -265,6 +332,7 @@ final class EditorModel {
         guard pendingSong != nil, problem == nil else { return }
         songName = song.name
         captureParts = song.parts
+        captureTempo = song.tempo
     }
 
     /// A fresh start for New video: nothing picked or recorded yet.
@@ -370,6 +438,7 @@ final class EditorModel {
             guard !audio.isEmpty else { throw EditorError.noSound }
             pendingSong = asset
             captureParts = []
+            captureTempo = nil
             pendingSongLength = try? await asset.load(.duration).seconds
             pendingSongSource = .file(kept.path)
             songName = url.deletingPathExtension().lastPathComponent
@@ -394,6 +463,7 @@ final class EditorModel {
             guard !audio.isEmpty else { throw EditorError.noSound }
             pendingSong = asset
             captureParts = []
+            captureTempo = nil
             pendingSongLength = try? await asset.load(.duration).seconds
             pendingSongSource = picked.source
             songName = "Sound from a video"
@@ -406,6 +476,7 @@ final class EditorModel {
     func chooseNoSong() {
         pendingSong = nil
         captureParts = []
+        captureTempo = nil
         pendingSongLength = nil
         pendingSongSource = nil
         songName = nil

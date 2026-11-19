@@ -78,6 +78,10 @@ enum EditrrShare {
         let size: Int
         let type: String
         let file: String
+        let bpm: Double?
+        let beat: Double?
+        let countIn: Bool?
+        let click: Bool?
     }
     /// What editrr reads: each song's audio file (inside the shared folder) and its parts.
     private struct Shared: Codable {
@@ -86,6 +90,11 @@ enum EditrrShare {
         let project: String
         let parts: [Part]
         let audio: String
+        /// The song's tempo (for the count-in and click when filming), when creatrr knows it.
+        let bpm: Double?
+        let beat: Double?
+        let countIn: Bool?
+        let click: Bool?
     }
 
     /// Opens creatrr's database the same way the app does (so it's never created differently).
@@ -120,8 +129,11 @@ enum EditrrShare {
           .filter(x => x.time != null).sort((x, y) => x.time - y.time);
         const prev = songs[key];
         if (prev && prev.parts.length >= parts.length) continue;
+        const tp = (content ? sg.tempo : p.tempo) || {}, bpm = Number(tp.bpm), beat = Number(tp.offset);
         songs[key] = { key, name: String(sg.name || "Untitled song"), project: String(p.docTitle || p.artist || ""),
-                       parts, size: a.size, type: a.type, file: a.name };
+                       parts, size: a.size, type: a.type, file: a.name,
+                       bpm: bpm > 0 ? bpm : null, beat: tp.offset != null && isFinite(beat) ? beat : null,
+                       countIn: !!tp.countIn, click: !!tp.click };
       }
     }
     return JSON.stringify(Object.values(songs));
@@ -182,7 +194,8 @@ enum EditrrShare {
             guard fm.fileExists(atPath: url.path) else { continue }
             keep.insert(name)
             shared.append(Shared(key: song.key, name: song.name, project: song.project, parts: song.parts,
-                                 audio: "audio/" + name))
+                                 audio: "audio/" + name, bpm: song.bpm, beat: song.beat,
+                                 countIn: song.countIn, click: song.click))
         }
         // Songs that are gone from creatrr leave editrr too.
         for old in (try? fm.contentsOfDirectory(atPath: audioFolder.path)) ?? [] where !keep.contains(old) {

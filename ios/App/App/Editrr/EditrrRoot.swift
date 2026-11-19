@@ -17,7 +17,7 @@ struct EditrrRoot: View {
     var body: some View {
         EditorView()
             .environment(\.creatrrBack, back)
-            .environment(\.creatrrBackTitle, nav.backTitle)
+            .environment(\.creatrrBackTitle, nav.backTitle).environment(\.creatrrBare, nav.bare)
             .environment(\.colorScheme, .dark)
             .tint(Tint.accent)
     }

@@ -19,6 +19,16 @@ struct CapturedTake: Identifiable, Sendable {
     let hint: TakeHint
 }
 
+/// A song's tempo from creatrr, for the count-in and the click.
+struct CaptureTempo: Equatable, Sendable {
+    let bpm: Double
+    /// Song time of a downbeat (the click's grid lines up to it).
+    let beat: Double
+    /// Whether creatrr had the count-in and click on for this song.
+    var countIn: Bool
+    var click: Bool
+}
+
 /// Where recorded takes wait until a project adopts them (a project keeps its own link).
 enum TakeStore {
     static var folder: URL {
@@ -89,6 +99,19 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     var takes: [CapturedTake] = []
     var problem: String?
     var ready = false
+    /// The song's tempo, when creatrr knows it (the count-in and click need it).
+    let tempo: CaptureTempo?
+    /// One bar of clicks before the song starts at your spot (no lead-in of the song then).
+    var countIn = false
+    /// A click on every beat while you film (the accent on each bar's first beat).
+    var click = false
+    /// 4, 3, 2, 1 during the count-in.
+    var countBeat: Int?
+    /// Plays the count-in and the click, timed to the song.
+    @ObservationIgnored private let clickEngine = AVAudioEngine()
+    @ObservationIgnored private let clicker = AVAudioPlayerNode()
+    @ObservationIgnored private var clickReady = false
+    @ObservationIgnored private var countTimers: [DispatchWorkItem] = []
 
     /// The part of the song this take is for (where the song starts playing from, before the lead-in).
     @ObservationIgnored private var playFrom: Double = 0
@@ -98,7 +121,8 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     @ObservationIgnored private var recordStartHost: CMTime = .invalid
     @ObservationIgnored private var pendingURL: URL?
 
-    init(song asset: AVAsset, length: Double) {
+    init(song asset: AVAsset, length: Double, tempo: CaptureTempo? = nil) {
+        self.tempo = tempo.flatMap { $0.bpm >= 30 && $0.bpm <= 300 ? $0 : nil }
         let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .timeDomain
         let player = AVPlayer(playerItem: item)
@@ -107,6 +131,8 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         song = player
         songLength = length
         super.init()
+        countIn = self.tempo?.countIn ?? false
+        click = self.tempo?.click ?? false
     }
 
     // MARK: Setup
@@ -153,6 +179,8 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     func stop() {
         if recording { output.stopRecording() }
         song.pause()
+        stopClicks()
+        if clickReady { clickEngine.stop() }
         let running = session
         Task.detached { running.stopRunning() }
         // Back to playing out loud for editing, like the app starts.
@@ -223,7 +251,8 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
             return
         }
         problem = nil
-        playFrom = max(0, start - Self.leadIn * speed.songRate)
+        // With the count-in, the song starts right at your spot after a bar of clicks.
+        playFrom = counting ? start : max(0, start - Self.leadIn * speed.songRate)
         recordStartHost = .invalid
         songStartHost = .invalid
         let url = TakeStore.newURL()
@@ -251,8 +280,11 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     /// Starts the song a moment after recording starts, at a known host time.
     private func beginSong(recordingStarted: CMTime) {
         recordStartHost = recordingStarted
-        let at = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(seconds: 0.25, preferredTimescale: 600))
+        // A bar of clicks first with the count-in (at the speed the song will play).
+        let wait = 0.25 + (counting ? 4 * beatLength / speed.songRate : 0)
+        let at = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(seconds: wait, preferredTimescale: 600))
         songStartHost = at
+        scheduleClicks(songStart: at)
         song.setRate(Float(speed.songRate), time: CMTime(seconds: playFrom, preferredTimescale: 600), atHostTime: at)
         if let endWatch { song.removeTimeObserver(endWatch) }
         endWatch = song.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 10), queue: .main) { [weak self] now in
@@ -276,6 +308,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     private func finishTake(_ url: URL, ok: Bool) {
         recording = false
         song.pause()
+        stopClicks()
         if let endWatch { song.removeTimeObserver(endWatch); self.endWatch = nil }
         guard ok, recordStartHost.isValid, songStartHost.isValid else {
             try? FileManager.default.removeItem(at: url)
@@ -305,6 +338,105 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
                 if granted == .authorized || granted == .limited { save() }
             }
         }
+    }
+
+    // MARK: Count-in and click
+
+    /// The count-in only works with a tempo.
+    private var counting: Bool { countIn && tempo != nil }
+    /// One beat, in song seconds.
+    private var beatLength: Double { 60 / (tempo?.bpm ?? 120) }
+
+    /// Queues the count-in's four clicks just before the song, and with Click on, one on every
+    /// beat of the song from where it starts to where the take will stop.
+    private func scheduleClicks(songStart: CMTime) {
+        guard let tempo, counting || click, startClicks() else { return }
+        let rate = speed.songRate
+        let beat = beatLength
+        let wallBeat = beat / rate
+        var times: [(at: Double, accent: Bool)] = []
+        let songAt = songStart.seconds
+        if counting {
+            for k in 0..<4 { times.append((songAt - Double(4 - k) * wallBeat, k == 0)) }
+            // 4, 3, 2, 1 on screen with the clicks.
+            for k in 0..<4 {
+                let item = DispatchWorkItem { [weak self] in
+                    MainActor.assumeIsolated { self?.countBeat = 4 - k }
+                }
+                countTimers.append(item)
+                let delay = max(0, songAt - Double(4 - k) * wallBeat - CMClockGetTime(CMClockGetHostTimeClock()).seconds)
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+            }
+            let clear = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated { self?.countBeat = nil }
+            }
+            countTimers.append(clear)
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0, songAt - CMClockGetTime(CMClockGetHostTimeClock()).seconds),
+                                          execute: clear)
+        }
+        if click {
+            // Beats on creatrr's grid, from where the song starts to where the take stops.
+            let end = min(songLength, (partEnd ?? songLength) + 1)
+            var k = Int(((playFrom - tempo.beat) / beat).rounded(.up))
+            while times.count < 2000 {
+                let songTime = tempo.beat + Double(k) * beat
+                if songTime > end { break }
+                let bar = ((k % 4) + 4) % 4
+                times.append((songAt + (songTime - playFrom) / rate, bar == 0))
+                k += 1
+            }
+        }
+        let now = CMClockGetTime(CMClockGetHostTimeClock()).seconds
+        for time in times where time.at > now + 0.01 {
+            let host = CMClockConvertHostTimeToSystemUnits(CMTime(seconds: time.at, preferredTimescale: 1_000_000_000))
+            clicker.scheduleBuffer(Self.clickSound(accent: time.accent), at: AVAudioTime(hostTime: host),
+                                   options: [], completionHandler: nil)
+        }
+    }
+
+    /// Starts the click player (once), ready to queue clicks.
+    private func startClicks() -> Bool {
+        if !clickReady {
+            clickEngine.attach(clicker)
+            clickEngine.connect(clicker, to: clickEngine.mainMixerNode, format: Self.clickFormat)
+            clickReady = true
+        }
+        if !clickEngine.isRunning {
+            do { try clickEngine.start() } catch { return false }
+        }
+        clicker.stop()
+        clicker.play()
+        return true
+    }
+
+    private func stopClicks() {
+        countTimers.forEach { $0.cancel() }
+        countTimers = []
+        countBeat = nil
+        if clickReady { clicker.stop() }
+    }
+
+    private static let clickFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+    private static let accentClick = makeClick(accent: true)
+    private static let plainClick = makeClick(accent: false)
+    private static func clickSound(accent: Bool) -> AVAudioPCMBuffer { accent ? accentClick : plainClick }
+
+    /// A short, bright tick (higher on a bar's first beat), the same as creatrr's click.
+    private static func makeClick(accent: Bool) -> AVAudioPCMBuffer {
+        let rate = clickFormat.sampleRate
+        let count = AVAudioFrameCount(0.07 * rate)
+        let buffer = AVAudioPCMBuffer(pcmFormat: clickFormat, frameCapacity: count)!
+        buffer.frameLength = count
+        let amp = accent ? 0.55 : 0.32
+        let pitch = accent ? 1600.0 : 1050.0
+        let samples = buffer.floatChannelData![0]
+        for i in 0..<Int(count) {
+            let t = Double(i) / rate
+            var level = amp * (t / 0.004)
+            if t >= 0.004 { level = amp * pow(0.0001 / amp, min(1, (t - 0.004) / 0.056)) }
+            samples[i] = Float(level * (sin(2 * Double.pi * pitch * t) >= 0 ? 1 : -1))
+        }
+        return buffer
     }
 
     func dropLastTake() {
@@ -343,18 +475,32 @@ struct CaptureView: View {
     let songName: String
     /// The song's parts from creatrr (empty for other songs).
     let parts: [CreatrrPart]
+    /// The most takes this time (10 videos in a project, minus any already picked).
+    let maxTakes: Int
     let done: ([CapturedTake]) -> Void
     @State private var capture: CaptureModel
     @State private var pickedPart: CreatrrPart.ID?
     @Environment(\.dismiss) private var dismiss
 
+    /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
     init(song: AVAsset, length: Double, songName: String, parts: [CreatrrPart] = [],
+         part: CreatrrPart.ID? = nil, tempo: CaptureTempo? = nil, maxTakes: Int = 10,
          done: @escaping ([CapturedTake]) -> Void) {
         self.songName = songName
-        self.parts = parts.filter { $0.time < length }
+        let usable = parts.filter { $0.time < length }
+        self.parts = usable
+        self.maxTakes = max(1, maxTakes)
         self.done = done
-        _capture = State(initialValue: CaptureModel(song: song, length: length))
+        let model = CaptureModel(song: song, length: length, tempo: tempo)
+        if let part, let index = usable.firstIndex(where: { $0.id == part }) {
+            model.start = usable[index].time
+            model.partEnd = index + 1 < usable.count ? usable[index + 1].time : nil
+            _pickedPart = State(initialValue: part)
+        }
+        _capture = State(initialValue: model)
     }
+
+    private var full: Bool { capture.takes.count >= maxTakes }
 
     var body: some View {
         ZStack {
@@ -378,6 +524,16 @@ struct CaptureView: View {
                 controls
             }
             .foregroundStyle(.white)
+
+            // The count-in: 4, 3, 2, 1 big in the middle.
+            if let beat = capture.countBeat {
+                Text("\(beat)")
+                    .font(.system(size: 120, weight: .heavy).monospacedDigit())
+                    .foregroundStyle(beat == 4 ? Tint.accent : .white)
+                    .shadow(color: .black.opacity(0.6), radius: 8)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
@@ -407,8 +563,9 @@ struct CaptureView: View {
                 }
                 .font(.headline)
             } else if !capture.takes.isEmpty {
-                Text(capture.takes.count == 1 ? "1 take" : "\(capture.takes.count) takes")
+                Text("\(capture.takes.count) of \(maxTakes) \(maxTakes == 1 ? "take" : "takes")")
                     .font(.headline)
+                    .monospacedDigit()
             }
             Spacer()
             Button { capture.flip() } label: {
@@ -456,6 +613,7 @@ struct CaptureView: View {
                             .accessibilityHint(speed.detail)
                     }
                 }
+                tempoRow
             }
 
             HStack {
@@ -483,8 +641,8 @@ struct CaptureView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(!capture.ready)
-                .opacity(capture.ready ? 1 : 0.4)
+                .disabled(!capture.ready || (full && !capture.recording))
+                .opacity(capture.ready && (!full || capture.recording) ? 1 : 0.4)
                 .accessibilityLabel(capture.recording ? "Stop" : "Record to the song")
                 .sensoryFeedback(.impact, trigger: capture.recording)
                 Spacer()
@@ -507,8 +665,10 @@ struct CaptureView: View {
 
             if !capture.recording {
                 Text(capture.takes.isEmpty
-                     ? "The song starts a moment before your spot. Each take lines up on its own."
-                     : "Record more takes, or tap Use.")
+                     ? (capture.countIn && capture.tempo != nil
+                        ? "A bar of clicks, then the song starts at your spot. Each take lines up on its own."
+                        : "The song starts a moment before your spot. Each take lines up on its own.")
+                     : full ? "That's \(maxTakes) \(maxTakes == 1 ? "take" : "takes"). Tap Use." : "Record more takes, or tap Use.")
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
@@ -518,6 +678,42 @@ struct CaptureView: View {
         .padding(.top, 14)
         .padding(.bottom, 10)
         .background(.ultraThinMaterial)
+    }
+
+    /// Count-in and Click, from the song's tempo in creatrr.
+    private var tempoRow: some View {
+        let known = capture.tempo != nil
+        return VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                tempoChip("Count-in", icon: "metronome", on: capture.countIn && known) { capture.countIn.toggle() }
+                tempoChip("Click", icon: "waveform.path", on: capture.click && known) { capture.click.toggle() }
+                if let tempo = capture.tempo {
+                    Text("\(Int(tempo.bpm.rounded())) BPM")
+                        .font(.footnote.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            .disabled(!known)
+            .opacity(known ? 1 : 0.4)
+            if !known {
+                Text("Set the song's tempo in creatrr to use the count-in and click.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+        }
+    }
+
+    private func tempoChip(_ name: String, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(name, systemImage: icon)
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(on ? Tint.accent : Color.white.opacity(0.12))
+                .foregroundStyle(on ? Color.black : Color.white)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// creatrr's parts: tap one to start there; the take stops when the part ends.

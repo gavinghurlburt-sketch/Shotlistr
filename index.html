@@ -536,6 +536,10 @@ table.sched tr.done-row td { background-color: var(--done); }
 .part-refs.view { padding: 0 0 12px; }
 .part-refs .pref { padding: 0; border: 0; border-radius: 10px; overflow: hidden; height: 56px; min-width: 40px; background-color: var(--surface-2); cursor: pointer; }
 .part-refs .pref img { height: 100%; width: auto; display: block; }
+.part-refs .pref-rec { margin-left: auto; flex: none; position: relative; width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 3px solid rgba(255,255,255,.92); background: transparent; cursor: pointer; }
+.part-refs .pref-rec::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #ff3b30; }
+.part-refs .pref-rec:active::after { inset: 7px; }
+.part-refs .pref-rec:disabled { opacity: .4; }
 .part-refs .pref.add { padding: 0 12px; font: inherit; font-size: 13px; color: var(--muted); background-color: color-mix(in srgb, var(--sec, #888) 14%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .hook-toggle { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; padding: 12px 14px; border-radius: 16px; background-color: var(--surface-2); cursor: pointer; }
 .hook-toggle input { width: 22px; height: 22px; flex: none; accent-color: var(--accent, #ffd60a); }
@@ -5712,7 +5716,11 @@ function songRefPool(sg) {
 }
 function partRefsEdit(pt) {
   const refs = pt.refs || [], sg = activeSong();
-  return `<div class="part-refs" data-section-id="${pt.id}">${refs.map((src, i) => `<button type="button" class="pref" data-c="part-ref-open" data-i="${i}" aria-label="Reference ${i + 1}"><img src="${src}" alt=""></button>`).join("")}<button type="button" class="pref add" data-c="part-ref-add" aria-label="Add reference photos">+ Photos</button>${songRefPool(sg).length ? `<button type="button" class="pref add" data-c="part-ref-song" aria-label="Choose from the song's references">From song</button>` : ""}</div>`;
+  /* in the app, a red record button on the right shoots this section in Edits (in place of + Photos) */
+  const shoot = isNativeApp();
+  const add = shoot ? "" : `<button type="button" class="pref add" data-c="part-ref-add" aria-label="Add reference photos">+ Photos</button>${songRefPool(sg).length ? `<button type="button" class="pref add" data-c="part-ref-song" aria-label="Choose from the song's references">From song</button>` : ""}`;
+  const rec = shoot ? `<button type="button" class="pref-rec" data-c="part-shoot" aria-label="Shoot this section" title="${currentTrackUrl ? "Shoot this section" : "Upload the track first"}"${currentTrackUrl ? "" : " disabled"}></button>` : "";
+  return `<div class="part-refs" data-section-id="${pt.id}">${refs.map((src, i) => `<button type="button" class="pref" data-c="part-ref-open" data-i="${i}" aria-label="Reference ${i + 1}"><img src="${src}" alt=""></button>`).join("")}${add}${rec}</div>`;
 }
 function sectionRefs(sec) {
   const src = sec.srcId && artistRec ? (artistRec.sections || []).find(x => x.id === sec.srcId) : null;
@@ -6805,6 +6813,17 @@ document.addEventListener("click", e => {
     }
     case "sug-dismiss": { const sg = activeSong(); if (sg) delete suggestMap[sg.id]; renderSuggest(); break; }
     case "part-ref-add": { if (!sec) return; partRefTarget = sec.id; $("partRefInput").click(); break; }
+    case "part-shoot": {
+      if (!sec || !currentTrackUrl) return;
+      const raw = sec.time, m = String(raw == null ? "" : raw).match(/(\d+):(\d{1,2}(?:\.\d+)?)/);
+      const time = typeof raw === "number" ? raw : (m ? parseInt(m[1], 10) * 60 + parseFloat(m[2]) : null);
+      const key = trackKey();
+      /* saved first, so Edits gets this song's sections and tempo as they are now */
+      Promise.resolve().then(() => persistNow()).catch(() => {}).then(() => {
+        try { window.webkit.messageHandlers.creatrrShoot.postMessage({ key: key, time: time }); } catch (e) {}
+      });
+      break;
+    }
     case "part-ref-open": { if (!sec) return; const editable = !!b.closest("#partsList"); openLightbox(() => editable ? sec.refs : sectionRefs(sec), +b.dataset.i, editable ? i => { sec.refs.splice(i, 1); scheduleSave(); refreshPartRefs(); } : null); break; }
     case "part-ref-song": { if (!sec) return; openRefPicker(sec.id); break; }
     case "part-more": { if (!sec) return; openPartId = openPartId === sec.id ? null : sec.id; renderPartsList(); break; }

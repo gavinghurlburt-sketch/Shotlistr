@@ -29,11 +29,38 @@ struct EditorView: View {
             model.saveNow()
         }
         .onReceive(NotificationCenter.default.publisher(for: .editrrSave)) { _ in model.saveNow() }
+        // Shoot: the list of creatrr songs and parts, then the camera at the part picked.
+        .sheet(isPresented: $model.shootPicking, onDismiss: {
+            guard let choice = model.shootChoice else { return }
+            model.shootChoice = nil
+            Task { await model.shoot(choice.song, part: choice.part) }
+        }) {
+            ShootSongSheet { song, part in model.shootChoice = (song, part) }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .frostedSheet()
+        }
+        .fullScreenCover(item: $model.shootPlan) { plan in
+            CaptureView(song: plan.song, length: plan.length, songName: plan.songName, parts: plan.parts,
+                        part: plan.part, tempo: plan.tempo, maxTakes: 10) { takes in
+                Task { await model.finishShoot(plan, takes: takes) }
+            }
+        }
+        // A section's red record button in creatrr.
+        .onReceive(NotificationCenter.default.publisher(for: .editrrShoot)) { _ in takeShoot() }
+        .onAppear { takeShoot() }
         // Inside creatrr, the left-edge swipe back to the artist page only works from home, so it
         // never fights the timeline.
         .onChange(of: model.stage, initial: true) { _, stage in
             EditrrStage.editing = stage == .editing
         }
+    }
+
+    /// Picks up a part creatrr asked to shoot.
+    private func takeShoot() {
+        guard let request = EditrrShoot.pending else { return }
+        EditrrShoot.pending = nil
+        Task { await model.shootFromCreatrr(request) }
     }
 }
 
@@ -47,16 +74,31 @@ struct SetupView: View {
     @State private var newName = ""
     @State private var deleting: SavedProject?
     @State private var showNew = false
+    /// Shoot was picked on the new video pop-up: its song list opens once the pop-up closes.
+    @State private var shootNext = false
     /// The new video pop-up: short for the first choice, full height once the steps show.
     @State private var newHeight: PresentationDetent = .medium
     @Environment(\.creatrrBack) private var back
     @Environment(\.creatrrBackTitle) private var backTitle
+    @Environment(\.creatrrBare) private var bare
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if back == nil {
+                    if back == nil || bare {
+                        // Opened from inside a creatrr page (no tabs above): a way back.
+                        if bare, let back {
+                            Button(action: back) {
+                                Label("Back", systemImage: "chevron.left")
+                                    .font(.headline)
+                                    .foregroundStyle(Tint.accent)
+                                    .frame(minHeight: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 8)
+                        }
                         Text("Edits")
                             .font(.system(size: 32, weight: .bold))
                             .tracking(-0.8)
@@ -75,7 +117,7 @@ struct SetupView: View {
                     }
 
                     if model.projects.isEmpty {
-                        Text("Nothing yet. Tap + to start one.")
+                        Text("Nothing yet. Tap New to start one.")
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.55))
                             .padding(.vertical, 12)
@@ -107,9 +149,18 @@ struct SetupView: View {
             .padding(.bottom, 18)
         }
         .background(Tint.backdrop.ignoresSafeArea())
-        .sheet(isPresented: $showNew) {
+        // Inside creatrr: swipe right anywhere to go back to Artists (or Projects).
+        .simultaneousGesture(swipeBack)
+        .sheet(isPresented: $showNew, onDismiss: {
+            guard shootNext else { return }
+            shootNext = false
+            model.shootPicking = true
+        }) {
             // A glassy pop-up from the bottom, like the lyrics options.
-            NewVideoSheet(model: model) { showNew = false }
+            NewVideoSheet(model: model, close: { showNew = false }, shoot: {
+                shootNext = true
+                showNew = false
+            })
                 .presentationDetents([.medium, .large], selection: $newHeight)
                 .presentationDragIndicator(.visible)
                 .presentationContentInteraction(.scrolls)
@@ -136,6 +187,16 @@ struct SetupView: View {
         } message: {
             Text("Your videos stay in Photos. Only the edit is deleted.")
         }
+    }
+
+    private var swipeBack: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                guard let back else { return }
+                let across = max(value.translation.width, value.predictedEndTranslation.width * 0.6)
+                guard across > 70, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                back()
+            }
     }
 
     /// Saved projects, last edited first, three to a row. Tap to open; hold for Rename and Delete.
@@ -165,6 +226,8 @@ struct SetupView: View {
 struct NewVideoSheet: View {
     @Bindable var model: EditorModel
     let close: () -> Void
+    /// Shoot: film takes to a part of a creatrr song.
+    var shoot: (() -> Void)? = nil
     @State private var showFiles = false
     @State private var showSongVideo = false
     @State private var showVideos = false
@@ -265,16 +328,27 @@ struct NewVideoSheet: View {
             divider.padding(.leading, 48)
             kindCard(.performance, icon: "music.note.list", title: "Edit a performance",
                      detail: "Sync takes to the song and cut between them.")
+            if let shoot {
+                divider.padding(.leading, 48)
+                choiceCard(icon: "record.circle", tint: Tint.bad, title: "Shoot",
+                           detail: "Pick part of a song and film up to 10 takes. Each one lines up to the song.",
+                           action: shoot)
+            }
         }
         .padding(.top, 6)
     }
 
     private func kindCard(_ kind: EditorModel.Kind, icon: String, title: String, detail: String) -> some View {
-        Button { model.pendingKind = kind } label: {
+        choiceCard(icon: icon, tint: Tint.accent, title: title, detail: detail) { model.pendingKind = kind }
+    }
+
+    private func choiceCard(icon: String, tint: Color, title: String, detail: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: icon)
                     .font(.title2.weight(.semibold))
-                    .foregroundStyle(Tint.accent)
+                    .foregroundStyle(tint)
                     .frame(width: 34)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline)
@@ -366,7 +440,8 @@ struct NewVideoSheet: View {
         .fullScreenCover(isPresented: $capturing) {
             if let song = model.captureSong {
                 CaptureView(song: song.asset, length: song.length,
-                            songName: model.songName ?? "Song", parts: model.captureParts) { takes in
+                            songName: model.songName ?? "Song", parts: model.captureParts,
+                            tempo: model.captureTempo, maxTakes: 10 - model.pickedVideoCount) { takes in
                     model.addCaptured(takes)
                 }
             }
