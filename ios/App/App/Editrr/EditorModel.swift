@@ -62,6 +62,14 @@ final class EditorModel {
     /// What's being made: videos back to back, or performance videos synced to a song.
     enum Kind: String { case video, performance }
     var kind: Kind = .performance
+    /// A horizontal project: a 16:9 frame that exports at 1920 x 1080. Off: vertical, 1080 x 1920.
+    var wide = false {
+        didSet { TimelineBuilder.canvas = TimelineBuilder.frame(wide: wide) }
+    }
+    /// The frame's width over its height, for the views that show it.
+    var aspect: CGFloat { wide ? 16.0 / 9.0 : 9.0 / 16.0 }
+    /// The next project is horizontal (its takes were filmed sideways).
+    @ObservationIgnored var pendingWide = false
     /// The kind picked on the new video sheet (nil until one is picked).
     var pendingKind: Kind?
     /// A performance's own page (every video on its lane, synced to the song). Off: the edit page.
@@ -360,12 +368,15 @@ final class EditorModel {
         pendingHints = [:]
         pickedVideoCount = 0
         capturedCount = 0
+        pendingWide = false
         TakeStore.clear()
     }
 
     /// Adds takes recorded to the song. They go after any videos already picked, up to 10 in all.
     func addCaptured(_ takes: [CapturedTake]) {
         problem = nil
+        // Takes filmed horizontal make a horizontal project.
+        if takes.contains(where: { $0.wide }) { pendingWide = true }
         var added = 0
         for take in takes where pendingVideos.count < 10 {
             pendingHints[pendingVideos.count] = take.hint
@@ -533,6 +544,7 @@ final class EditorModel {
         guard canStart else { return }
         problem = nil
         notice = nil
+        wide = pendingWide
         overlays = []
         trackKeys = []
         splits = []
@@ -1219,6 +1231,7 @@ final class EditorModel {
         project.trackKeys = trackKeys.isEmpty ? nil : trackKeys
         project.splits = splits.isEmpty ? nil : splits
         project.order = order.isEmpty ? nil : order
+        project.wide = wide ? true : nil
         return project
     }
 
@@ -1272,6 +1285,7 @@ final class EditorModel {
         busy = "Opening \u{201C}\(saved.name)\u{201D}…"
         defer { busy = nil }
         await PhotoAccess.ask()
+        wide = saved.wide ?? false
 
         // 1. The videos and the song, from Photos or the project's folder.
         var assets: [AVAsset] = []
@@ -1400,6 +1414,7 @@ final class EditorModel {
         saveNow()
         lastAuto = nil
         currentProject = nil
+        wide = false
         refreshProjects()
         pause()
         player.replaceCurrentItem(with: nil)
@@ -2319,13 +2334,15 @@ final class EditorModel {
     }
 
     /// A mask's middle on the video, and how long one shape unit is across and down, as fractions
-    /// of the frame. The frame is 9 wide to 16 tall, so a unit is a bigger fraction across.
+    /// of the frame. A vertical frame is 9 wide to 16 tall, so a unit is a bigger fraction across
+    /// (a horizontal one the other way round).
     private func maskUnits(_ mask: OverlayMask, in box: CGRect) -> (middle: CGPoint, x: Double, y: Double) {
         let size = min(OverlayMask.largest, max(0.1, mask.size))
-        let unit = Double(min(box.width * 9, box.height * 16)) * size
+        let across = Double(TimelineBuilder.canvas.width) / 120, down = Double(TimelineBuilder.canvas.height) / 120
+        let unit = Double(min(Double(box.width) * across, Double(box.height) * down)) * size
         let middle = CGPoint(x: Double(box.minX) + Double(box.width) * mask.middleX,
                              y: Double(box.minY) + Double(box.height) * mask.middleY)
-        return (middle, unit / 9, unit / 16)
+        return (middle, unit / across, unit / down)
     }
 
     /// Custom's points on the video, as fractions of the frame.
@@ -2505,8 +2522,9 @@ final class EditorModel {
         if overlay(id)?.isCutaway == true { return CGRect(x: 0, y: 0, width: 1, height: 1) }
         guard let overlay = overlayHere(id), let size = overlayMedia[id]?.size, size.width > 0 else { return nil }
         let width = overlay.scale
-        // The frame is 9:16, so a fraction of its width is 9/16 as much of its height.
-        let height = overlay.scale * Double(size.height / size.width) * 9 / 16
+        // A fraction of the frame's width is width/height as much of its height (9/16 when vertical).
+        let frame = TimelineBuilder.canvas
+        let height = overlay.scale * Double(size.height / size.width) * Double(frame.width / frame.height)
         return CGRect(x: overlay.x - width / 2, y: overlay.y - height / 2, width: width, height: height)
     }
 
@@ -4542,7 +4560,7 @@ final class EditorModel {
 
     // MARK: Exporting
 
-    /// Renders the edit (the real cuts, never a preview) to a 1080 x 1920, 30 fps video and saves it
+    /// Renders the edit (the real cuts, never a preview) to a 1080 x 1920 (or 1920 x 1080 horizontal), 30 fps video and saves it
     /// to Photos. That one file fits Reels, TikTok and Shorts. Without sound, the song can be added
     /// inside Instagram or TikTok instead.
     func startExport(withSound: Bool) {

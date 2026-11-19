@@ -61,6 +61,8 @@ struct SavedProject: Codable, Equatable, Identifiable {
     var splits: [Double]?
     /// Editing a video: the order the videos play in, as places in `layers` (nil: as listed).
     var order: [Int]?
+    /// A horizontal (16:9, 1920 x 1080) project, shot sideways. nil: vertical, like every older one.
+    var wide: Bool?
 }
 
 /// Saved projects live in Application Support/Projects/<id>/, each with project.json, a small

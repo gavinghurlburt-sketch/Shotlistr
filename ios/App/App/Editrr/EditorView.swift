@@ -576,10 +576,12 @@ struct EditingView: View {
             // The video stays clear: its buttons sit in the columns on either side, halfway between
             // hugging the video and the screen edges (the three stay centered together).
             GeometryReader { geo in
-            let atEdges = max(1, min(geo.size.width - 2 * (36 + 6), geo.size.height * 9 / 16))
+            // The frame's width over its height: 9/16 vertical, 16/9 horizontal.
+            let ratio = model.aspect
+            let atEdges = max(1, min(geo.size.width - 2 * (36 + 6), geo.size.height * ratio))
             let edgeGap = 6 + max(0, (geo.size.width - 2 * (36 + 6) - atEdges) / 2)
             let gap = max(10, (10 + edgeGap) / 2)
-            let videoWidth = max(1, min(geo.size.width - 2 * (36 + gap), geo.size.height * 9 / 16))
+            let videoWidth = max(1, min(geo.size.width - 2 * (36 + gap), geo.size.height * ratio))
             HStack(alignment: .top, spacing: gap) {
                 VStack(spacing: 6) {
                     // X: saves the project and goes back to Projects (New lives there now).
@@ -588,7 +590,10 @@ struct EditingView: View {
                     }
                     .buttonStyle(.plain)
                     showingBadge
-                    SafeZonePicker(zone: $safeZone, tile: true)
+                    // The apps' safe zones are for vertical video only.
+                    if !model.wide {
+                        SafeZonePicker(zone: $safeZone, tile: true)
+                    }
                     // Lyrics swaps the timeline for the lyrics timeline; it then reads Editing to go back.
                     Button { model.setLyricTimeline(!model.lyricTimeline) } label: {
                         if model.lyricTimeline {
@@ -612,8 +617,8 @@ struct EditingView: View {
                 .frame(maxHeight: .infinity, alignment: .top)
 
                 VideoStage(model: model, fullScreen: $fullScreen)
-                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                    .overlay { SafeZoneOverlay(zone: safeZone) }
+                    .aspectRatio(ratio, contentMode: .fit)
+                    .overlay { SafeZoneOverlay(zone: model.wide ? .off : safeZone) }
                     .clipShape(Corner.card)
                     // The picked clip is the one on screen: the video gets the same outline.
                     .overlay {
@@ -646,12 +651,14 @@ struct EditingView: View {
                         }
                     }
                     .overlay(alignment: .bottom) { message }
-                    .frame(width: videoWidth, height: videoWidth * 16 / 9)
+                    .frame(width: videoWidth, height: videoWidth / ratio)
 
-                // As tall as the video, top-aligned beside it.
+                // As tall as the video (a horizontal one is short, so its tools can run past it),
+                // top-aligned beside it.
                 FramingControls(model: model)
                     .frame(width: 36)
-                    .frame(height: videoWidth * 16 / 9, alignment: .top)
+                    .frame(height: model.wide ? max(videoWidth / ratio, geo.size.height) : videoWidth / ratio,
+                           alignment: .top)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
@@ -1186,7 +1193,7 @@ extension EditorModel.ExportState {
     }
 }
 
-/// Export: one 1080 x 1920 video saved to Photos, with or without the song.
+/// Export: one 1080 x 1920 (or 1920 x 1080 horizontal) video saved to Photos, with or without the song.
 struct ExportSheet: View {
     let model: EditorModel
     @Environment(\.dismiss) private var dismiss
@@ -1198,7 +1205,8 @@ struct ExportSheet: View {
                 EmptyView()
             } else {
                 Text("Export").font(.title2.weight(.bold))
-                Text("1080 x 1920, 30 fps. One video that fits Reels, TikTok and Shorts.")
+                Text(model.wide ? "1920 x 1080, 30 fps. A horizontal video for YouTube and screens."
+                                : "1080 x 1920, 30 fps. One video that fits Reels, TikTok and Shorts.")
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.75))
                     .multilineTextAlignment(.center)
@@ -1513,16 +1521,18 @@ struct FullScreenPreview: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { dismiss() }
-            // Same spot as the picture: fitted 9:16, centered.
+            // Same spot as the picture: fitted 9:16 (or 16:9), centered.
             Color.clear
-                .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .overlay { SafeZoneOverlay(zone: safeZone) }
+                .aspectRatio(model.aspect, contentMode: .fit)
+                .overlay { SafeZoneOverlay(zone: model.wide ? .off : safeZone) }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
         .overlay(alignment: .topLeading) {
-            SafeZonePicker(zone: $safeZone).padding(16)
+            if !model.wide {
+                SafeZonePicker(zone: $safeZone).padding(16)
+            }
         }
         .overlay(alignment: .topTrailing) {
             Button { dismiss() } label: {

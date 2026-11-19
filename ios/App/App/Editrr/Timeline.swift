@@ -256,7 +256,13 @@ enum TimelineBuilder {
         var duration: CMTime { composition.duration }
     }
 
-    static let canvas = CGSize(width: 1080, height: 1920)
+    /// The open project's frame: 1080 x 1920 (vertical), or 1920 x 1080 for a horizontal project.
+    /// EditorModel sets it as a project opens or starts.
+    static var canvas = CGSize(width: 1080, height: 1920)
+
+    static func frame(wide: Bool) -> CGSize {
+        wide ? CGSize(width: 1920, height: 1080) : CGSize(width: 1080, height: 1920)
+    }
 
     private static func time(_ seconds: Double) -> CMTime {
         CMTime(seconds: seconds, preferredTimescale: 600)

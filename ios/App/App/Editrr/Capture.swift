@@ -17,6 +17,8 @@ struct CapturedTake: Identifiable, Sendable {
     let id = UUID()
     let url: URL
     let hint: TakeHint
+    /// Filmed horizontal (16:9), with the phone sideways.
+    var wide = false
 }
 
 /// A song's tempo from creatrr, for the count-in and the click.
@@ -100,6 +102,15 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         }
     }
     var front = false
+    /// Films horizontal (16:9, the phone sideways) instead of vertical. Picked before the first
+    /// take: every take in a shoot is the same way, since they all go in one project.
+    var wide = false
+    /// How the phone is held (upright or sideways), from the view; flat keeps the last one.
+    @ObservationIgnored var tilt: UIDeviceOrientation = .portrait
+    /// Knows which way is up for the camera in use, so a sideways take is never upside down.
+    @ObservationIgnored private var rotation: AVCaptureDevice.RotationCoordinator?
+    /// Whether the take being filmed is horizontal (fixed when it starts).
+    @ObservationIgnored private var takeWide = false
     /// The lenses to pick from (0.5, 1, 3...), for the camera in use.
     var lenses: [Lens] = []
     /// The zoom you see, where 1 is the main camera.
@@ -182,6 +193,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         if session.canAddOutput(output) { session.addOutput(output) }
         session.commitConfiguration()
         configureFrameRate()
+        watchRotation()
         orientOutput()
         setUpLenses()
         let running = session
@@ -288,14 +300,40 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         }
         session.commitConfiguration()
         configureFrameRate()
+        watchRotation()
         orientOutput()
         setUpLenses()
     }
 
-    /// Upright video; the front camera is mirrored like a mirror.
+    /// Vertical or horizontal, before the first take (once there are takes, it stays).
+    func setWide(_ on: Bool) {
+        guard !recording, takes.isEmpty, on != wide else { return }
+        wide = on
+        orientOutput()
+    }
+
+    private func watchRotation() {
+        rotation = cameraInput.map { AVCaptureDevice.RotationCoordinator(device: $0.device, previewLayer: nil) }
+    }
+
+    /// Which way the picture is turned in the file: 90 is upright (vertical); a horizontal take is
+    /// 0 or 180, whichever way the phone is turned, so it's never upside down.
+    private var outputAngle: CGFloat {
+        guard wide else { return 90 }
+        if let angle = rotation?.videoRotationAngleForHorizonLevelCapture {
+            let turn = (angle.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+            if turn < 45 || turn >= 315 { return 0 }
+            if turn >= 135 && turn < 225 { return 180 }
+        }
+        // The camera can't tell (the phone is flat, say): go by how it was last held.
+        return tilt == .landscapeRight ? 180 : 0
+    }
+
+    /// Upright video (or level, horizontal); the front camera is mirrored like a mirror.
     private func orientOutput() {
         guard let connection = output.connection(with: .video) else { return }
-        if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+        let angle = outputAngle
+        if connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
         if connection.isVideoMirroringSupported {
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = front
@@ -347,6 +385,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         songStartHost = .invalid
         let url = TakeStore.newURL()
         pendingURL = url
+        takeWide = wide
         orientOutput()
         // Get the song ready to start the moment recording does.
         song.pause()
@@ -409,7 +448,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         let delay = CMTimeSubtract(songStartHost, recordStartHost).seconds
         let rate = speed.songRate
         let hint = TakeHint(songTime: playFrom - delay * rate, speed: rate)
-        takes.append(CapturedTake(url: url, hint: hint))
+        takes.append(CapturedTake(url: url, hint: hint, wide: takeWide))
         Self.keepInPhotos(url)
     }
 
@@ -600,8 +639,8 @@ struct CaptureView: View {
     @State private var wheelFrom: (x: CGFloat, spot: Double)?
     /// Bumped on each press, so an old "hide the wheel" timer does nothing.
     @State private var hideToken = 0
-    /// The phone is held sideways while filming vertical: say so, big.
-    @State private var sideways = false
+    /// How the phone is held: upright or sideways (flat on a table keeps the last one).
+    @State private var tilt: UIDeviceOrientation = .portrait
     @Environment(\.dismiss) private var dismiss
 
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
@@ -631,6 +670,10 @@ struct CaptureView: View {
 
     private var full: Bool { capture.takes.count >= maxTakes }
 
+    /// The phone is held the wrong way for what's being filmed: sideways while filming vertical,
+    /// or upright while filming horizontal. Said big, and Record waits until it's right.
+    private var heldWrong: Bool { capture.wide ? !tilt.isLandscape : tilt.isLandscape }
+
     /// Steps of the zoom along the wheel's scale, one every 10 points, for the haptic ticks.
     private var zoomTick: Int {
         Int((ZoomScale(range: capture.zoomRange).spot(capture.zoomShown) / 10).rounded())
@@ -638,7 +681,9 @@ struct CaptureView: View {
 
     private var recordLabel: String {
         if capture.recording { return "Stop" }
-        return full ? "That's \(maxTakes) takes" : "Record to the song"
+        if full { return "That's \(maxTakes) takes" }
+        if heldWrong { return capture.wide ? "Turn your phone sideways to record" : "Hold your phone upright to record" }
+        return "Record to the song"
     }
 
     var body: some View {
@@ -735,7 +780,9 @@ struct CaptureView: View {
         .onAppear {
             CameraLock.hold(true)
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-            sideways = UIDevice.current.orientation.isLandscape
+            let now = UIDevice.current.orientation
+            if now.isLandscape || now.isPortrait { tilt = now }
+            capture.tilt = tilt
         }
         .onDisappear {
             capture.stop()
@@ -746,18 +793,21 @@ struct CaptureView: View {
             let now = UIDevice.current.orientation
             // Flat on a table says nothing either way: keep what it was.
             if now.isLandscape || now.isPortrait {
-                withAnimation(.snappy) { sideways = now.isLandscape }
+                withAnimation(.snappy) { tilt = now }
+                capture.tilt = now
             }
         }
         .overlay {
-            if sideways {
-                // Takes are always filmed upright: make it impossible to miss.
+            if heldWrong {
+                // Held the wrong way for what's being filmed: make it impossible to miss.
                 VStack(spacing: 10) {
                     Image(systemName: "iphone.gen3")
                         .font(.system(size: 40, weight: .semibold))
-                    Text("Filming vertical")
+                        .rotationEffect(.degrees(capture.wide ? 90 : 0))
+                        .frame(width: 60, height: 60)
+                    Text(capture.wide ? "Filming horizontal" : "Filming vertical")
                         .font(.title3.weight(.bold))
-                    Text("Hold your phone upright")
+                    Text(capture.wide ? "Turn your phone sideways" : "Hold your phone upright")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.8))
                 }
@@ -902,7 +952,7 @@ struct CaptureView: View {
                         .background(Capsule().fill(.black.opacity(0.3)))
                 }
                 .buttonStyle(.plain)
-                .disabled(!capture.ready)
+                .disabled(!capture.ready || heldWrong)
                 .accessibilityLabel("Retake the last take")
                 // Done filming: use the takes.
                 Button { finish() } label: {
@@ -917,7 +967,39 @@ struct CaptureView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Use \(capture.takes.count) \(capture.takes.count == 1 ? "take" : "takes")")
             }
+        } else {
+            shapePicker
         }
+    }
+
+    /// Vertical or Horizontal, before the first take. Vertical unless you pick otherwise.
+    private var shapePicker: some View {
+        HStack(spacing: 0) {
+            shapeChoice("Vertical", icon: "rectangle.portrait", wide: false)
+            shapeChoice("Horizontal", icon: "rectangle", wide: true)
+        }
+        .padding(3)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .frame(height: 38)
+        .disabled(!capture.ready)
+        .sensoryFeedback(.selection, trigger: capture.wide)
+    }
+
+    private func shapeChoice(_ name: String, icon: String, wide: Bool) -> some View {
+        let on = capture.wide == wide
+        return Button { withAnimation(.snappy) { capture.setWide(wide) } } label: {
+            Label(name, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(on ? Color.black : Color.white.opacity(0.85))
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background(Capsule().fill(on ? Tint.accent : .clear))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// Count-in and click on the left, record in the middle, the menu on the right. That's all.
@@ -941,8 +1023,8 @@ struct CaptureView: View {
                 }
             }
             .buttonStyle(.plain)
-            .disabled(!capture.ready || (full && !capture.recording))
-            .opacity(capture.ready && (!full || capture.recording) ? 1 : 0.4)
+            .disabled(!capture.ready || (!capture.recording && (full || heldWrong)))
+            .opacity(capture.ready && (capture.recording || (!full && !heldWrong)) ? 1 : 0.4)
             .accessibilityLabel(recordLabel)
             .sensoryFeedback(.impact, trigger: capture.recording)
             menuButton
