@@ -7593,12 +7593,16 @@ document.addEventListener("click", e => {
     case "part-ref-add": { if (!sec) return; partRefTarget = sec.id; $("partRefInput").click(); break; }
     case "part-shoot": {
       if (!sec || !currentTrackUrl) return;
-      const raw = sec.time, m = String(raw == null ? "" : raw).match(/(\d+):(\d{1,2}(?:\.\d+)?)/);
-      const time = typeof raw === "number" ? raw : (m ? parseInt(m[1], 10) * 60 + parseFloat(m[2]) : null);
+      const toSec = raw => { const m = String(raw == null ? "" : raw).match(/(\d+):(\d{1,2}(?:\.\d+)?)/);
+        return typeof raw === "number" ? raw : (m ? parseInt(m[1], 10) * 60 + parseFloat(m[2]) : null); };
+      const time = toSec(sec.time);
+      /* where this section ends: the next section of this song (in this project) */
+      const later = songParts(sec.songId).map(x => toSec(x.time)).filter(t => t != null && time != null && t > time + 0.05);
+      const end = later.length ? Math.min(...later) : null;
       const key = trackKey();
       /* saved first, so Edits gets this song's sections and tempo as they are now */
       Promise.resolve().then(() => persistNow()).catch(() => {}).then(() => {
-        try { window.webkit.messageHandlers.creatrrShoot.postMessage({ key: key, time: time }); } catch (e) {}
+        try { window.webkit.messageHandlers.creatrrShoot.postMessage({ key: key, time: time, end: end, name: String(sec.name || "") }); } catch (e) {}
       });
       break;
     }

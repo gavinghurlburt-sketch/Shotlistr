@@ -121,9 +121,9 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     }
 
     /// A section's red record button: editrr opens and films takes to that part of the song.
-    func shootFromWeb(key: String, time: Double?) {
+    func shootFromWeb(key: String, time: Double?, end: Double?, name: String?) {
         guard !panning, !key.isEmpty else { return }
-        EditrrShoot.pending = EditrrShoot.Request(key: key, time: time)
+        EditrrShoot.pending = EditrrShoot.Request(key: key, time: time, end: end, name: name)
         if showingEditor {
             EditrrShare.run(webView, now: true)
         } else {
@@ -301,7 +301,9 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
                 if (message.body as? String) == "close" { home?.closeFromWeb() } else { home?.openFromWeb() }
             case "creatrrShoot":
                 if let info = message.body as? [String: Any], let key = info["key"] as? String {
-                    home?.shootFromWeb(key: key, time: (info["time"] as? NSNumber).map { $0.doubleValue })
+                    home?.shootFromWeb(key: key, time: (info["time"] as? NSNumber).map { $0.doubleValue },
+                                       end: (info["end"] as? NSNumber).map { $0.doubleValue },
+                                       name: info["name"] as? String)
                 }
             case "creatrrHome":
                 if let info = message.body as? [String: Any], let place = info["place"] as? String {

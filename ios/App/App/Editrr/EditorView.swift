@@ -42,7 +42,7 @@ struct EditorView: View {
         }
         .fullScreenCover(item: $model.shootPlan) { plan in
             CaptureView(song: plan.song, length: plan.length, songName: plan.songName, parts: plan.parts,
-                        part: plan.part, tempo: plan.tempo, maxTakes: 10) { takes in
+                        start: plan.start, end: plan.end, tempo: plan.tempo, maxTakes: 10) { takes in
                 Task { await model.finishShoot(plan, takes: takes) }
             }
         }

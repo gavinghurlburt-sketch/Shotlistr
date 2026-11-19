@@ -267,7 +267,7 @@ final class EditorModel {
     @ObservationIgnored var shootChoice: (song: CreatrrSong, part: CreatrrPart?)?
 
     /// Shoot: gets the song ready, then opens the camera at the part.
-    func shoot(_ song: CreatrrSong, part: CreatrrPart?) async {
+    func shoot(_ song: CreatrrSong, part: CreatrrPart?, end: Double? = nil) async {
         guard busy == nil else { return }
         resetNewVideos()
         projectName = ""
@@ -277,9 +277,16 @@ final class EditorModel {
             pendingKind = nil
             return
         }
+        // Where the part ends: what creatrr said, or the next part's start.
+        let known = part.flatMap { picked in song.parts.firstIndex(where: { $0.id == picked.id }) }
+        let partEnd = end ?? known.flatMap { song.partEnd($0) }
         shootPlan = ShootPlan(song: ready.asset, length: ready.length, songName: song.name, partName: part?.name,
-                              parts: song.parts, part: part?.id, tempo: song.tempo)
+                              parts: song.parts, part: part?.id, start: part?.time ?? 0,
+                              end: part == nil ? nil : partEnd, tempo: song.tempo)
     }
+
+    /// Shoot of one part: the new project's In and Out go there (its start, and 30 seconds on).
+    @ObservationIgnored private var shootRange: Double?
 
     /// Shoot's takes make a new project, named for the song and part, lined up and open.
     func finishShoot(_ plan: ShootPlan, takes: [CapturedTake]) async {
@@ -289,7 +296,9 @@ final class EditorModel {
         }
         addCaptured(takes)
         projectName = plan.partName.map { "\(plan.songName) · \($0)" } ?? plan.songName
+        shootRange = plan.partName == nil ? nil : plan.start
         await start()
+        shootRange = nil
     }
 
     /// A section's red record button in creatrr: finds the song (creatrr shares its songs as editrr
@@ -313,13 +322,18 @@ final class EditorModel {
             problem = "Couldn't get that song from creatrr. Check it has a track, then try again."
             return
         }
+        // The section tapped, even when the shared song lists other sections (a song can sit in
+        // more than one creatrr project, each with its own sections).
         var part: CreatrrPart?
-        if let time = request.time,
-           let near = song.parts.min(by: { abs($0.time - time) < abs($1.time - time) }),
-           abs(near.time - time) < 0.5 {
-            part = near
+        if let time = request.time {
+            if let near = song.parts.min(by: { abs($0.time - time) < abs($1.time - time) }),
+               abs(near.time - time) < 0.5 {
+                part = near
+            } else {
+                part = CreatrrPart(name: request.name ?? "Section", time: time, color: "")
+            }
         }
-        await shoot(song, part: part)
+        await shoot(song, part: part, end: request.end)
     }
 
     /// Uses a song from creatrr, with its parts.
@@ -732,6 +746,11 @@ final class EditorModel {
         cuts = [Cut(time: 0, layer: made.first(where: { $0.footage(in: duration)?.contains(0) == true })?.id ?? 0)]
         inPoint = 0
         outPoint = duration
+        // Shot to one part: start and end there (30 seconds), not at the top of the song.
+        if let from = shootRange, from >= 0, from < duration - 1 {
+            inPoint = from
+            outPoint = min(duration, from + 30)
+        }
         kind = .performance
         enterEditor()
         performancePage = true   // a new performance starts on its own page, to sync and cut

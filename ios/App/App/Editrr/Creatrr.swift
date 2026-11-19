@@ -21,6 +21,10 @@ enum EditrrShoot {
         let key: String
         /// Song time of the part (nil: from the top).
         let time: Double?
+        /// Where the part ends (the next section's start), when creatrr knows it.
+        var end: Double? = nil
+        /// The section's name in creatrr.
+        var name: String? = nil
     }
 
     @MainActor static var pending: Request? {
@@ -305,5 +309,9 @@ struct ShootPlan: Identifiable {
     let partName: String?
     let parts: [CreatrrPart]
     let part: CreatrrPart.ID?
+    /// Song time every take starts at (the part's start, or 0 for the whole song).
+    let start: Double
+    /// Where the part ends (takes stop a second after), nil for the whole song or the last part.
+    let end: Double?
     let tempo: CaptureTempo?
 }

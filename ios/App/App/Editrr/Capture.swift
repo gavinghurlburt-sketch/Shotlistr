@@ -566,8 +566,8 @@ struct CaptureView: View {
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
     /// Every take starts in the same place: there's no picking another spot here.
     init(song: AVAsset, length: Double, songName: String, parts: [CreatrrPart] = [],
-         part: CreatrrPart.ID? = nil, tempo: CaptureTempo? = nil, maxTakes: Int = 10,
-         done: @escaping ([CapturedTake]) -> Void) {
+         part: CreatrrPart.ID? = nil, start: Double? = nil, end: Double? = nil,
+         tempo: CaptureTempo? = nil, maxTakes: Int = 10, done: @escaping ([CapturedTake]) -> Void) {
         self.songName = songName
         let usable = parts.filter { $0.time < length }
         self.maxTakes = max(1, maxTakes)
@@ -576,6 +576,11 @@ struct CaptureView: View {
         if let part, let index = usable.firstIndex(where: { $0.id == part }) {
             model.start = usable[index].time
             model.partEnd = index + 1 < usable.count ? usable[index + 1].time : nil
+        }
+        // Shoot says exactly where to start and stop.
+        if let start, start < length {
+            model.start = max(0, start)
+            model.partEnd = end.flatMap { $0 > start ? $0 : nil }
         }
         _capture = State(initialValue: model)
     }
