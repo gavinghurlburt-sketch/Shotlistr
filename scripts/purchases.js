@@ -11,7 +11,7 @@ const TIER_BLURB = {
   pro: "Up to 50 artists, plus Video production with call sheets and an on-set tracker."
 };
 const TIER_PRICE_FALLBACK = { artist: "$1.99", plus: "$9.99", pro: "$29.99" };
-const LEGAL_BASE = "https://gavinghurlburt-sketch.github.io/Shotlistr/docs/";
+const LEGAL_BASE = "https://www.creatrr.co/docs/";
 const TIER_CACHE_KEY = "creatrr_plan_cache_v1";
 let subs = { tier: null, trial: false, loaded: false }, rcOfferings = null, pwBlocking = false, pwBusy = false, rcLoggedIn = false;
 const rcApi = () => window.__RC_MOCK || window.RC;
