@@ -600,6 +600,8 @@ struct CaptureView: View {
     @State private var wheelFrom: (x: CGFloat, spot: Double)?
     /// Bumped on each press, so an old "hide the wheel" timer does nothing.
     @State private var hideToken = 0
+    /// The phone is held sideways while filming vertical: say so, big.
+    @State private var sideways = false
     @Environment(\.dismiss) private var dismiss
 
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
@@ -730,7 +732,43 @@ struct CaptureView: View {
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
         .task { await capture.prepare() }
-        .onDisappear { capture.stop() }
+        .onAppear {
+            CameraLock.hold(true)
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            sideways = UIDevice.current.orientation.isLandscape
+        }
+        .onDisappear {
+            capture.stop()
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+            CameraLock.hold(false)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            let now = UIDevice.current.orientation
+            // Flat on a table says nothing either way: keep what it was.
+            if now.isLandscape || now.isPortrait {
+                withAnimation(.snappy) { sideways = now.isLandscape }
+            }
+        }
+        .overlay {
+            if sideways {
+                // Takes are always filmed upright: make it impossible to miss.
+                VStack(spacing: 10) {
+                    Image(systemName: "iphone.gen3")
+                        .font(.system(size: 40, weight: .semibold))
+                    Text("Filming vertical")
+                        .font(.title3.weight(.bold))
+                    Text("Hold your phone upright")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 26).padding(.vertical, 20)
+                .frostedPopup()
+                .allowsHitTesting(false)
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+            }
+        }
         .onChange(of: capture.recording) { _, recording in
             if recording { menuOpen = false; note = nil; wheelOn = false }
         }
@@ -1286,5 +1324,17 @@ struct ZoomScale {
         let clamped = min(max(spot, 0), end)
         let doublings = -log(1 - clamped * Self.shrink / Self.first) / Self.shrink
         return min(high, low * pow(2, doublings))
+    }
+}
+
+/// While the Shoot camera is open the screen stays upright (the app delegate reads this).
+enum CameraLock {
+    @MainActor static var upright = false
+
+    @MainActor static func hold(_ on: Bool) {
+        upright = on
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        for window in scene.windows { window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations() }
+        if on { scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { _ in } }
     }
 }
