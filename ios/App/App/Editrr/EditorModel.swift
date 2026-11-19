@@ -289,7 +289,8 @@ final class EditorModel {
     @ObservationIgnored private var shootRange: Double?
 
     /// Shoot's takes make a new project, named for the song and part, lined up and open.
-    func finishShoot(_ plan: ShootPlan, takes: [CapturedTake]) async {
+    /// `draft` saves the project and goes back to Edits instead of opening it.
+    func finishShoot(_ plan: ShootPlan, takes: [CapturedTake], draft: Bool = false) async {
         guard !takes.isEmpty else {
             pendingKind = nil
             return
@@ -299,6 +300,10 @@ final class EditorModel {
         shootRange = plan.partName == nil ? nil : plan.start
         await start()
         shootRange = nil
+        guard draft, stage == .editing else { return }
+        let name = currentProject?.name
+        startOver()
+        if let name { notice = "Saved \u{201C}\(name)\u{201D} as a draft. Open it from Edits when you're ready." }
     }
 
     /// A section's red record button in creatrr: finds the song (creatrr shares its songs as editrr

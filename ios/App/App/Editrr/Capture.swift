@@ -523,6 +523,12 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         try? FileManager.default.removeItem(at: last.url)
     }
 
+    /// Throws every take away (the copies in Photos stay).
+    func dropAllTakes() {
+        for take in takes { try? FileManager.default.removeItem(at: take.url) }
+        takes = []
+    }
+
     /// Throws the last take away and films it again.
     func retake() {
         guard ready, !recording, !takes.isEmpty else { return }
@@ -562,7 +568,11 @@ struct CaptureView: View {
     /// The most takes this time (10 videos in a project, minus any already picked).
     let maxTakes: Int
     let done: ([CapturedTake]) -> Void
+    /// Shoot: keep the takes as a draft project instead of editing now (the X asks).
+    let draft: (([CapturedTake]) -> Void)?
     @State private var capture: CaptureModel
+    /// The X asked "Draft shoot?".
+    @State private var asking = false
     /// The options pop-up (speed, camera, delete a take).
     @State private var menuOpen = false
     /// A short note over the record button (the count-in and click need a tempo).
@@ -575,8 +585,10 @@ struct CaptureView: View {
     /// Every take starts in the same place: there's no picking another spot here.
     init(song: AVAsset, length: Double, songName: String, parts: [CreatrrPart] = [],
          part: CreatrrPart.ID? = nil, start: Double? = nil, end: Double? = nil,
-         tempo: CaptureTempo? = nil, maxTakes: Int = 10, done: @escaping ([CapturedTake]) -> Void) {
+         tempo: CaptureTempo? = nil, maxTakes: Int = 10, draft: (([CapturedTake]) -> Void)? = nil,
+         done: @escaping ([CapturedTake]) -> Void) {
         self.songName = songName
+        self.draft = draft
         let usable = parts.filter { $0.time < length }
         self.maxTakes = max(1, maxTakes)
         self.done = done
@@ -665,6 +677,15 @@ struct CaptureView: View {
                 .padding(.horizontal, 12)
                 .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
             }
+
+            if asking {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(.snappy) { asking = false } }
+                    .accessibilityHidden(true)
+                draftAsk
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
@@ -682,14 +703,83 @@ struct CaptureView: View {
         dismiss()
     }
 
+    /// The X: with takes, Shoot asks whether to keep them as a draft or delete them.
+    private func close() {
+        guard draft != nil, !capture.takes.isEmpty else {
+            finish()
+            return
+        }
+        withAnimation(.snappy) { menuOpen = false; asking = true }
+    }
+
+    /// "Draft shoot?": Draft keeps the takes as a project in Edits, Delete throws them away.
+    private var draftAsk: some View {
+        let count = capture.takes.count
+        let takes = count == 1 ? "1 take" : "\(count) takes"
+        return VStack(spacing: 0) {
+            Text("Draft shoot?")
+                .font(.title3.weight(.bold))
+                .padding(.top, 22)
+            Text("Save your \(takes) as a draft in Edits to finish later, or delete them.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
+                .padding(.bottom, 18)
+            VStack(spacing: 10) {
+                Button {
+                    capture.stop()
+                    draft?(capture.takes)
+                    dismiss()
+                } label: {
+                    Text("Draft")
+                        .font(.headline)
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Capsule().fill(Tint.accent))
+                }
+                .buttonStyle(.plain)
+                Button {
+                    capture.dropAllTakes()
+                    finish()
+                } label: {
+                    Text("Delete")
+                        .font(.headline)
+                        .foregroundStyle(Tint.bad)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Capsule().fill(.white.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete \(takes)")
+                Button { withAnimation(.snappy) { asking = false } } label: {
+                    Text("Keep filming")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
+        .foregroundStyle(.white)
+        .frame(width: 300)
+        .frostedPopup()
+    }
+
     private var topBar: some View {
         HStack(spacing: 12) {
-            Button { finish() } label: {
+            Button { close() } label: {
                 Image(systemName: "xmark")
                     .font(.title3.weight(.semibold))
                     .frame(width: 44, height: 44)
             }
-            .accessibilityLabel(capture.takes.isEmpty ? "Close" : "Close and keep the takes")
+            .accessibilityLabel("Close")
             .disabled(capture.recording)
             Spacer()
             if capture.recording {
@@ -853,25 +943,7 @@ struct CaptureView: View {
             }
         }
         .frame(width: 270, alignment: .leading)
-        .background {
-            let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-            ZStack {
-                shape.fill(.ultraThinMaterial)
-                shape.fill(Tint.surface.opacity(0.5))
-            }
-        }
-        .overlay {
-            let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-            ZStack {
-                shape.strokeBorder(.white.opacity(0.07), lineWidth: 1)
-                shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.32), .clear], startPoint: .top, endPoint: .center),
-                                   lineWidth: 1)
-            }
-            .allowsHitTesting(false)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .environment(\.colorScheme, .dark)
-        .shadow(color: .black.opacity(0.38), radius: 20, y: 14)
+        .frostedPopup()
     }
 
     /// The lenses (0.5, 1, 3...) and the front/back switch, like the iPhone camera.
@@ -940,5 +1012,30 @@ struct CaptureView: View {
     private func clock(_ seconds: Double) -> String {
         let whole = max(0, Int(seconds.rounded(.down)))
         return "\(whole / 60):" + String(format: "%02d", whole % 60)
+    }
+}
+
+extension View {
+    /// creatrr's pop-up look: rounded, frosted glass with a thin light edge.
+    func frostedPopup(corner: CGFloat = 22) -> some View {
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+        return self
+            .background {
+                ZStack {
+                    shape.fill(.ultraThinMaterial)
+                    shape.fill(Tint.surface.opacity(0.5))
+                }
+            }
+            .overlay {
+                ZStack {
+                    shape.strokeBorder(.white.opacity(0.07), lineWidth: 1)
+                    shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.32), .clear], startPoint: .top, endPoint: .center),
+                                       lineWidth: 1)
+                }
+                .allowsHitTesting(false)
+            }
+            .clipShape(shape)
+            .environment(\.colorScheme, .dark)
+            .shadow(color: .black.opacity(0.38), radius: 20, y: 14)
     }
 }

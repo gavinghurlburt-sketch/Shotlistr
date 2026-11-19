@@ -42,7 +42,8 @@ struct EditorView: View {
         }
         .fullScreenCover(item: $model.shootPlan) { plan in
             CaptureView(song: plan.song, length: plan.length, songName: plan.songName, parts: plan.parts,
-                        start: plan.start, end: plan.end, tempo: plan.tempo, maxTakes: 10) { takes in
+                        start: plan.start, end: plan.end, tempo: plan.tempo, maxTakes: 10,
+                        draft: { takes in Task { await model.finishShoot(plan, takes: takes, draft: true) } }) { takes in
                 Task { await model.finishShoot(plan, takes: takes) }
             }
         }
@@ -115,6 +116,13 @@ struct SetupView: View {
                             .foregroundStyle(Tint.bad)
                             .padding(.bottom, 16)
                     }
+                    else if let notice = model.notice, !showNew {
+                        // e.g. a shoot just saved as a draft.
+                        Text(notice)
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.75))
+                            .padding(.bottom, 16)
+                    }
 
                     if model.projects.isEmpty {
                         Text("Nothing yet. Tap New to start one.")
@@ -137,6 +145,7 @@ struct SetupView: View {
             // New: a frosted "+ New…" pill at the bottom, like creatrr's.
             Button {
                 model.problem = nil
+                model.notice = nil
                 model.pendingKind = nil
                 model.resetNewVideos()
                 newHeight = .medium
