@@ -4,10 +4,10 @@ import WebKit
 import AVFoundation
 import Capacitor
 
-/// creatrr on iPhone. With creatrr Artist it's two pages side by side: your artist page (the web
-/// app) and editrr. Swipe in from the right edge (or tap Edit videos) to open editrr; swipe in from
-/// the left edge on editrr's home (or tap Artist) to come back. Plus and Pro show just the web app
-/// for now.
+/// creatrr on iPhone: the web app (Projects, Artists) with editrr (Edits) beside it. Tap Edits, or
+/// swipe in from the right edge, to open editrr: anywhere on creatrr Artist, and from the Artists
+/// tab on Plus and Pro. Swipe in from the left edge on editrr's home (or tap its back button) to
+/// come back.
 final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     static let tierKey = "creatrr.tier"
     static weak var current: CreatrrHome?
@@ -22,6 +22,10 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     private let track = UIView()
     private var panning = false
     private let messages = WebMessages()
+    /// Where the web app is: "projects" or "artists" on home, "away" inside a project or artist page.
+    private var webHome = "away"
+    /// What editrr's back button says.
+    let nav = CreatrrNav()
 
     private lazy var toEditor: UIScreenEdgePanGestureRecognizer = {
         let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(pan(_:)))
@@ -52,6 +56,8 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         let content = artist.webView?.configuration.userContentController
         content?.add(messages, name: "creatrrTier")
         content?.add(messages, name: "creatrrEditrr")
+        content?.add(messages, name: "creatrrHome")
+        nav.backTitle = artistTier ? "Artist" : "Artists"
         view.addGestureRecognizer(toEditor)
         view.addGestureRecognizer(toArtist)
         refreshSwipes()
@@ -59,7 +65,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
 
     /// Only the swipe that can go somewhere is on, so taps near the screen edges are never held up.
     private func refreshSwipes() {
-        toEditor.isEnabled = artistTier && !showingEditor
+        toEditor.isEnabled = canSwipeToEditor
         toArtist.isEnabled = showingEditor
     }
 
@@ -75,11 +81,28 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
 
     // MARK: Plan
 
+    /// creatrr Artist: from anywhere in the web app. Plus and Pro: from the Artists tab, since Edits
+    /// sits after it (inside a project the edges belong to Draft, Plan, Shoot and Cut).
+    private var canSwipeToEditor: Bool {
+        !showingEditor && (artistTier || webHome == "artists")
+    }
+
     func setTier(_ tier: String) {
         UserDefaults.standard.set(tier, forKey: Self.tierKey)
         artistTier = tier == "artist"
-        if !artistTier && showingEditor { show(editor: false, animated: false) }
+        nav.backTitle = artistTier ? "Artist" : "Artists"
         refreshSwipes()
+    }
+
+    func setWebHome(_ place: String) {
+        webHome = place
+        refreshSwipes()
+    }
+
+    /// Edits was tapped (or swiped to) in the web app.
+    func openFromWeb() {
+        guard !panning else { return }   // a swipe in from the edge is already opening it
+        show(editor: true)
     }
 
     // MARK: Moving between the pages
@@ -92,7 +115,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     private func prepareEditor() {
         if editor == nil {
             _ = FontLibrary.shared   // your lyric fonts, ready before a project draws its words
-            let host = UIHostingController(rootView: EditrrRoot(back: { [weak self] in self?.show(editor: false) }))
+            let host = UIHostingController(rootView: EditrrRoot(nav: nav, back: { [weak self] in self?.show(editor: false) }))
             host.overrideUserInterfaceStyle = .dark
             host.view.backgroundColor = UIColor(red: 0x12 / 255.0, green: 0x12 / 255.0, blue: 0x12 / 255.0, alpha: 1)
             addChild(host)
@@ -107,7 +130,6 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     func show(editor on: Bool, animated: Bool = true) {
         guard on != showingEditor || panning else { return }
         if on {
-            guard artistTier else { return }
             prepareEditor()
             pauseArtistSong()
         } else {
@@ -179,7 +201,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
 
     func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
         guard presentedViewController == nil else { return false }
-        if g === toEditor { return artistTier && !showingEditor }
+        if g === toEditor { return canSwipeToEditor }
         if g === toArtist { return showingEditor && !EditrrStage.editing }
         return true
     }
@@ -211,7 +233,9 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
             case "creatrrTier":
                 if let tier = message.body as? String { home?.setTier(tier) }
             case "creatrrEditrr":
-                home?.show(editor: true)
+                home?.openFromWeb()
+            case "creatrrHome":
+                if let place = message.body as? String { home?.setWebHome(place) }
             default:
                 break
             }
@@ -219,13 +243,21 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
     }
 }
 
+/// What editrr's back button says; changes when your plan does.
+@MainActor @Observable
+final class CreatrrNav {
+    var backTitle = "Artist"
+}
+
 /// editrr inside creatrr: dark, creatrr's yellow, with a way back to the artist page.
 struct EditrrRoot: View {
+    let nav: CreatrrNav
     let back: () -> Void
 
     var body: some View {
         EditorView()
             .environment(\.creatrrBack, back)
+            .environment(\.creatrrBackTitle, nav.backTitle)
             .environment(\.colorScheme, .dark)
             .tint(Tint.accent)
     }

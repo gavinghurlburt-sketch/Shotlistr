@@ -1273,8 +1273,10 @@ details.more > :not(summary) { margin-top: 8px; }
 /* creatrr Artist: home is just your artist (no Projects, calendar or shoots); editrr is one swipe away in the iPhone app */
 body.tier-artist .home-tabs .ht[data-home="projects"], body.tier-artist #paneProjects, body.tier-artist #artistShoots, body.tier-artist #artistChips { display: none !important; }
 body.tier-artist .home-tabs .ht + .ht { margin-left: 0; }
-#editrrBtn { display: none; }
-body.tier-artist.native-app #editrrBtn { display: inline-flex; }
+/* Edits (editrr) is a third home tab in the iPhone app only */
+body:not(.native-app) .home-tabs .ht[data-home="edits"] { display: none; }
+body.native-app:not(.tier-artist) .projects-title.home-tabs { font-size: 28px; }   /* three tabs fit a phone */
+.home-tabs .ht { white-space: nowrap; }
 .cover.init { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 26px; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
 .loose-row { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 10px; border-radius: 20px; background-color: var(--surface); margin-bottom: 8px; }
 .loose-name { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1780,10 +1782,9 @@ bitsperframe:             %d
   <!-- ===== projects ===== -->
   <section id="projectsView">
     <div class="projects-wrap">
-      <h1 class="projects-title home-tabs"><button type="button" class="ht on" data-home="projects">Projects</button><button type="button" class="ht" data-home="artists">Artists</button></h1>
+      <h1 class="projects-title home-tabs"><button type="button" class="ht on" data-home="projects">Projects</button><button type="button" class="ht" data-home="artists">Artists</button><button type="button" class="ht" data-home="edits">Edits</button></h1>
       <div class="row-flex">
         <button id="newBtn" class="btn primary">New…</button>
-        <button type="button" id="editrrBtn" class="btn">Edit videos ›</button>
       </div>
       <input type="file" id="importProjectInput" accept=".json,application/json" hidden>
       <div id="homeClip"><div id="homeSlider">
@@ -2927,6 +2928,20 @@ const LEGAL_BASE = "https://gavinghurlburt-sketch.github.io/Shotlistr/docs/";
 const TIER_CACHE_KEY = "creatrr_plan_cache_v1";
 let subs = { tier: null, trial: false, loaded: false }, rcOfferings = null, pwBlocking = false, pwBusy = false, rcLoggedIn = false;
 const rcApi = () => window.__RC_MOCK || window.RC;
+/* Your own Xcode runs (Debug builds) can try the app as each plan without buying it.
+   App Store and TestFlight builds are Release builds, so they never see this. */
+const PLAN_TESTER = !!window.__creatrrTester;
+const PREVIEW_KEY = "creatrr_preview_plan_v1";
+function previewPlan() {
+  if (!PLAN_TESTER) return null;
+  try { const t = localStorage.getItem(PREVIEW_KEY); return TIER_RANK[t] ? t : null; } catch (e) { return null; }
+}
+function setPreviewPlan(t) {
+  try { if (t && t !== subs.tier) localStorage.setItem(PREVIEW_KEY, t); else localStorage.removeItem(PREVIEW_KEY); } catch (e) {}
+  setTier(t || subs.tier || "plus");
+  if (t) closePaywall(true);
+  paintPlanRow();
+}
 
 function tierFromInfo(info) {
   const act = (info && info.entitlements && info.entitlements.active) || {};
@@ -2943,7 +2958,9 @@ function handleCustomerInfo(info) {
   const r = tierFromInfo(info);
   subs = { tier: r.tier, trial: r.trial, loaded: true };
   cachePlan(r.tier);
-  if (r.tier) { setTier(r.tier); closePaywall(true); } else openPaywall(true);
+  const pv = previewPlan();
+  if (pv) { setTier(pv); closePaywall(true); }
+  else if (r.tier) { setTier(r.tier); closePaywall(true); } else openPaywall(true);
   paintPlanRow();
 }
 
@@ -3052,6 +3069,10 @@ function paintPlanRow() {
   const row = $("acctPlanRow"); if (!row) return;
   row.innerHTML = `<div class="muted small" style="margin-bottom:6px">Plan</div><div style="display:flex;align-items:center;gap:10px"><b>${subs.tier ? TIERS[subs.tier].name + (subs.trial ? " · trial" : "") : "No plan"}</b><span class="spacer" style="flex:1"></span><button type="button" class="btn small" id="acctPlanBtn">${subs.tier ? "Change plan" : "Choose a plan"}</button></div>`;
   $("acctPlanBtn").addEventListener("click", () => { acctCloseModal(); openPaywall(false); });
+  if (!PLAN_TESTER) return;
+  const cur = previewPlan() || subs.tier;
+  row.insertAdjacentHTML("beforeend", `<div class="muted small" style="margin:14px 0 6px">Try the app as (your Xcode builds only, nothing is bought)</div><div class="theme-seg">${["artist", "plus", "pro"].map(t => `<button type="button" class="btn small${t === cur ? " primary" : ""}" data-preview-plan="${t}">${TIERS[t].name.replace("creatrr ", "")}</button>`).join("")}</div>`);
+  row.querySelectorAll("[data-preview-plan]").forEach(b => b.addEventListener("click", () => setPreviewPlan(b.dataset.previewPlan)));
 }
 
 /* ---- startup ---- */
@@ -3061,7 +3082,8 @@ async function subsInit() {
   const rs = $("acctReset");     // plan row sits below every account view (signed in or out), hidden on the code/reset steps
   if (rs && !$("acctPlanRow")) { rs.insertAdjacentHTML("afterend", '<div id="acctPlanRow" style="margin-top:16px"></div><style>#acctCode:not(.hidden) ~ #acctPlanRow, #acctReset:not(.hidden) ~ #acctPlanRow { display: none; }</style>'); }
   ensurePaywall();
-  const cached = cachedPlan(); if (cached) setTier(cached);
+  paintPlanRow();
+  const cached = previewPlan() || cachedPlan(); if (cached) setTier(cached);
   try {
     const api = rcApi();
     await api.configure({ apiKey: RC_API_KEY });
@@ -5487,6 +5509,16 @@ function isNativeApp() { try { return !!(window.Capacitor && Capacitor.isNativeP
 /* the iPhone app shows editrr beside the artist page on the Artist plan */
 function tellNativeTier() { try { window.webkit.messageHandlers.creatrrTier.postMessage(TIER); } catch (e) {} }
 function openEditrr() { try { window.webkit.messageHandlers.creatrrEditrr.postMessage("open"); } catch (e) {} }
+/* where you are, so the iPhone app knows when a swipe in from the right edge should open Edits:
+   "projects" or "artists" on home, "away" inside a project or an artist page */
+function tellNativeHome() {
+  try {
+    const pv = $("projectsView"), s = !pv || pv.classList.contains("hidden") || document.body.classList.contains("art-sheet") ? "away" : homeMode;
+    if (s === tellNativeHome.last) return;
+    tellNativeHome.last = s;
+    window.webkit.messageHandlers.creatrrHome.postMessage(s);
+  } catch (e) {}
+}
 function setTier(t) {
   if (!TIERS[t]) return;
   TIER = t; try { localStorage.setItem("producrr_tier", t); } catch (e) {}
@@ -5582,15 +5614,16 @@ function renderArtists(recs, projects) {
   }).join("");
 }
 var homeMode = "projects", artistTotal = 0;
+if (window.MutationObserver) { const mo = new MutationObserver(() => tellNativeHome()); mo.observe(document.body, { attributes: true, attributeFilter: ["class"] }); if ($("projectsView")) mo.observe($("projectsView"), { attributes: true, attributeFilter: ["class"] }); }
 function paintHomeMode() {
   document.body.classList.toggle("tier-artist", isArtistTier());
   document.body.classList.toggle("native-app", isNativeApp());
   if (isArtistTier() && homeMode !== "artists") { homeMode = "artists"; $("paneProjects").classList.add("off"); $("paneArtists").classList.remove("off"); $("homeSlider").style.transform = ""; }
-  tellNativeTier();
+  tellNativeTier(); tellNativeHome();
   document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === homeMode));
   $("brandTier").textContent = " " + TIER;
   document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Artist" : "Artists";
-  $("artistsHint").textContent = isArtistTier() ? (isNativeApp() ? "Your photo, songs and sections. Tap to open your artist page. Swipe in from the right edge to edit videos." : "Your photo, songs and sections. Tap to open your artist page.") : "Everyone you shoot for. Tap an artist to see their projects.";
+  $("artistsHint").textContent = isArtistTier() ? (isNativeApp() ? "Your photo, songs and sections. Tap to open your artist page. Swipe in from the right edge, or tap Edits, to edit videos." : "Your photo, songs and sections. Tap to open your artist page.") : "Everyone you shoot for. Tap an artist to see their projects.";
   $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
   $("newBtn").classList.toggle("hidden", homeMode === "artists" && isArtistTier() && artistTotal >= 1);
 }
@@ -5619,7 +5652,7 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false;
     const card = e.target.closest && e.target.closest(".project-card, .sr-card");
     onCard = !!card;
-    ok = e.touches.length === 1 && !isArtistTier() && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
+    ok = e.touches.length === 1 && (!isArtistTier() || isNativeApp()) && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
     if (ok && onCard && homeMode === "projects") ok = false; /* on a project card, swipe-left is Delete */
   }, { passive: true });
   document.addEventListener("touchmove", e => {
@@ -5629,7 +5662,9 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
       if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { ok = false; return; }
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         if (onCard && dx < 0) { ok = false; return; } /* artist card: swipe-left is Remove */
-        if ((homeMode === "projects" && dx > 0) || (homeMode === "artists" && dx < 0)) { ok = false; return; }
+        /* past Artists comes Edits (iPhone app only) */
+        if (homeMode === "artists" && dx < 0) { ok = false; if (isNativeApp() && !document.body.classList.contains("art-sheet")) openEditrr(); return; }
+        if (isArtistTier() || (homeMode === "projects" && dx > 0)) { ok = false; return; }
         locked = true; W = clip.clientWidth; pp.classList.remove("off"); pa.classList.remove("off"); slider.style.willChange = "transform";
       } else return;
     }
@@ -5696,7 +5731,7 @@ async function renderProjectsList() {
 }
 document.addEventListener("click", e => {
   const hm = e.target.closest("[data-home]");
-  if (hm) { setHomeMode(hm.dataset.home); return; }
+  if (hm) { if (hm.dataset.home === "edits") openEditrr(); else setHomeMode(hm.dataset.home); return; }
   const c = e.target.closest("[data-cal]");
   if (c) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (+c.dataset.cal), 1); renderProjectsList(); return; }
   const d = e.target.closest("[data-day]");
@@ -5852,7 +5887,6 @@ function openNewModal(artistName, date) {
   document.querySelector("#newModal h3").textContent = "New project";
   document.querySelector("#newModal .modal-hint").classList.add("hidden");
   $("newShootDate").value = date || ""; fillNewArtist(artistName || ""); $("newModal").classList.remove("hidden"); }
-$("editrrBtn").addEventListener("click", openEditrr);
 $("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal("home"); return; } openNewModal(artistFilter || "", calSel || ""); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
 $("newModal").addEventListener("click", async e => {
@@ -8010,7 +8044,7 @@ var TOUR = (function () {
   ];
   /* creatrr Artist has no projects: meet the artist page, set up a song, then go edit */
   const ARTIST_STEPS = APP_STEPS.slice(1, 8).map((st, i) => i === 1 ? Object.assign({}, st, { body: "This is your artist page. Add a photo, upload your songs, and mark sections like intro, verse and chorus. For now, use our two demo songs." }) : st)
-    .concat([{ ctx: "any", target: null, title: "You're ready", body: isNativeApp() ? "Now make your video: swipe in from the right edge, or tap Edit videos on home. Your songs and their sections are waiting there. You can replay this tour any time from the menu at the top right, under Help." : "That's your artist page. You can replay this tour any time from the menu at the top right, under Help.", buttons: "end" }]);
+    .concat([{ ctx: "any", target: null, title: "You're ready", body: isNativeApp() ? "Now make your video: swipe in from the right edge, or tap Edits on home. Your songs and their sections are waiting there. You can replay this tour any time from the menu at the top right, under Help." : "That's your artist page. You can replay this tour any time from the menu at the top right, under Help.", buttons: "end" }]);
   const STEPS = BAND_CODE ? BAND_STEPS : isArtistTier() ? ARTIST_STEPS : APP_STEPS;
   const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
   function readDemo() { try { return JSON.parse(localStorage.getItem(DKEY) || "null"); } catch (e) { return null; } }

@@ -15,6 +15,20 @@ const LEGAL_BASE = "https://gavinghurlburt-sketch.github.io/Shotlistr/docs/";
 const TIER_CACHE_KEY = "creatrr_plan_cache_v1";
 let subs = { tier: null, trial: false, loaded: false }, rcOfferings = null, pwBlocking = false, pwBusy = false, rcLoggedIn = false;
 const rcApi = () => window.__RC_MOCK || window.RC;
+/* Your own Xcode runs (Debug builds) can try the app as each plan without buying it.
+   App Store and TestFlight builds are Release builds, so they never see this. */
+const PLAN_TESTER = !!window.__creatrrTester;
+const PREVIEW_KEY = "creatrr_preview_plan_v1";
+function previewPlan() {
+  if (!PLAN_TESTER) return null;
+  try { const t = localStorage.getItem(PREVIEW_KEY); return TIER_RANK[t] ? t : null; } catch (e) { return null; }
+}
+function setPreviewPlan(t) {
+  try { if (t && t !== subs.tier) localStorage.setItem(PREVIEW_KEY, t); else localStorage.removeItem(PREVIEW_KEY); } catch (e) {}
+  setTier(t || subs.tier || "plus");
+  if (t) closePaywall(true);
+  paintPlanRow();
+}
 
 function tierFromInfo(info) {
   const act = (info && info.entitlements && info.entitlements.active) || {};
@@ -31,7 +45,9 @@ function handleCustomerInfo(info) {
   const r = tierFromInfo(info);
   subs = { tier: r.tier, trial: r.trial, loaded: true };
   cachePlan(r.tier);
-  if (r.tier) { setTier(r.tier); closePaywall(true); } else openPaywall(true);
+  const pv = previewPlan();
+  if (pv) { setTier(pv); closePaywall(true); }
+  else if (r.tier) { setTier(r.tier); closePaywall(true); } else openPaywall(true);
   paintPlanRow();
 }
 
@@ -140,6 +156,10 @@ function paintPlanRow() {
   const row = $("acctPlanRow"); if (!row) return;
   row.innerHTML = `<div class="muted small" style="margin-bottom:6px">Plan</div><div style="display:flex;align-items:center;gap:10px"><b>${subs.tier ? TIERS[subs.tier].name + (subs.trial ? " · trial" : "") : "No plan"}</b><span class="spacer" style="flex:1"></span><button type="button" class="btn small" id="acctPlanBtn">${subs.tier ? "Change plan" : "Choose a plan"}</button></div>`;
   $("acctPlanBtn").addEventListener("click", () => { acctCloseModal(); openPaywall(false); });
+  if (!PLAN_TESTER) return;
+  const cur = previewPlan() || subs.tier;
+  row.insertAdjacentHTML("beforeend", `<div class="muted small" style="margin:14px 0 6px">Try the app as (your Xcode builds only, nothing is bought)</div><div class="theme-seg">${["artist", "plus", "pro"].map(t => `<button type="button" class="btn small${t === cur ? " primary" : ""}" data-preview-plan="${t}">${TIERS[t].name.replace("creatrr ", "")}</button>`).join("")}</div>`);
+  row.querySelectorAll("[data-preview-plan]").forEach(b => b.addEventListener("click", () => setPreviewPlan(b.dataset.previewPlan)));
 }
 
 /* ---- startup ---- */
@@ -149,7 +169,8 @@ async function subsInit() {
   const rs = $("acctReset");     // plan row sits below every account view (signed in or out), hidden on the code/reset steps
   if (rs && !$("acctPlanRow")) { rs.insertAdjacentHTML("afterend", '<div id="acctPlanRow" style="margin-top:16px"></div><style>#acctCode:not(.hidden) ~ #acctPlanRow, #acctReset:not(.hidden) ~ #acctPlanRow { display: none; }</style>'); }
   ensurePaywall();
-  const cached = cachedPlan(); if (cached) setTier(cached);
+  paintPlanRow();
+  const cached = previewPlan() || cachedPlan(); if (cached) setTier(cached);
   try {
     const api = rcApi();
     await api.configure({ apiKey: RC_API_KEY });

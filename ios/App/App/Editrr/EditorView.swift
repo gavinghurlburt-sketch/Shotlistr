@@ -50,6 +50,7 @@ struct SetupView: View {
     /// The new video pop-up: short for the first choice, full height once the steps show.
     @State private var newHeight: PresentationDetent = .medium
     @Environment(\.creatrrBack) private var back
+    @Environment(\.creatrrBackTitle) private var backTitle
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -58,7 +59,7 @@ struct SetupView: View {
                     if let back {
                         // Inside creatrr: back to your artist page (or swipe in from the left edge).
                         Button(action: back) {
-                            Label("Artist", systemImage: "chevron.left")
+                            Label(backTitle, systemImage: "chevron.left")
                         }
                         .buttonStyle(GlassButtonStyle())
                         .padding(.top, 8)

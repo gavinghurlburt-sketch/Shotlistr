@@ -17,6 +17,8 @@ enum EditrrStage {
 extension EnvironmentValues {
     /// Back to your artist page, when editrr is part of creatrr.
     @Entry var creatrrBack: (() -> Void)? = nil
+    /// What the way back is called: Artist, or Artists on Plus and Pro.
+    @Entry var creatrrBackTitle: String = "Artist"
 }
 
 /// A part of a creatrr song (Verse 1, Chorus...): its name, where it starts and its color.

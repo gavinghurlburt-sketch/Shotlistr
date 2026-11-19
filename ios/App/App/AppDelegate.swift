@@ -3,6 +3,7 @@ import AVFoundation
 import ActivityKit
 import AppIntents
 import Capacitor
+import WebKit
 import MediaPlayer
 
 @UIApplicationMain
@@ -590,6 +591,12 @@ class ViewController: CAPBridgeViewController {
         for w in wanted where bridge?.plugin(withName: w.js) == nil {
             if let t = NSClassFromString(w.cls) as? CAPPlugin.Type { bridge?.registerPluginInstance(t.init()) }
         }
+        #if DEBUG
+        // Your own Xcode runs can try creatrr as Artist, Plus or Pro without buying (Account & settings).
+        // TestFlight and the App Store use Release builds, which never get this.
+        webView?.configuration.userContentController.addUserScript(
+            WKUserScript(source: "window.__creatrrTester = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        #endif
     }
 
     override func viewDidLoad() {
