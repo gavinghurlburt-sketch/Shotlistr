@@ -9,7 +9,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = ViewController()
+        window?.rootViewController = CreatrrHome()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
@@ -38,19 +38,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func shareSoon() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
-            EditrrShare.run((self?.window?.rootViewController as? CAPBridgeViewController)?.webView)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            EditrrShare.run(CreatrrHome.current?.webView)
         }
     }
 
     // editrr (same team) records takes to creatrr's songs and parts: share them on the way out,
     // and again a moment after coming back.
     func sceneWillResignActive(_ scene: UIScene) {
-        EditrrShare.run((window?.rootViewController as? CAPBridgeViewController)?.webView)
+        EditrrShare.run(CreatrrHome.current?.webView)
+        // editrr inside creatrr: save your edit on the way out.
+        NotificationCenter.default.post(name: .editrrSave, object: nil)
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
-        EditrrShare.run((window?.rootViewController as? CAPBridgeViewController)?.webView)
+        EditrrShare.run(CreatrrHome.current?.webView)
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
@@ -133,9 +136,10 @@ enum EditrrShare {
       f.onload = () => res(String(f.result)); f.onerror = () => rej(f.error); f.readAsDataURL(t.blob); });
     """
 
+    /// `now` skips the 15 second wait between runs (used when you open editrr).
     @MainActor
-    static func run(_ webView: WKWebView?) {
-        guard let webView, !running, Date().timeIntervalSince(lastRun) > 15 else { return }
+    static func run(_ webView: WKWebView?, now: Bool = false) {
+        guard let webView, !running, now || Date().timeIntervalSince(lastRun) > 15 else { return }
         running = true
         let app = UIApplication.shared
         var task = UIBackgroundTaskIdentifier.invalid

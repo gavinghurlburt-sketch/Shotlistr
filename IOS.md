@@ -9,7 +9,12 @@ cd Shotlistr
 npm install && npm run sync
 npx cap open ios
 ```
-Xcode: App target > Signing & Capabilities > pick your team. Run on a device or simulator first. Later updates: `git pull && npm run sync` (add `npm install` only when a plugin was added).
+Xcode: App target > Signing & Capabilities > pick your team. Run on a device or simulator first.
+
+Later updates: just pull in Xcode (Integrate > Pull), branch `main`. The built web app is checked in at `ios/App/App/web` (the Xcode project reads it from there), so no Terminal step is needed. Whoever changes `index.html` runs `npm run ios-web` and commits `ios/App/App/web` with it (`npm run sync` does the same, plus plugin updates). `npm install` is only needed when a plugin is added.
+
+## editrr inside creatrr
+editrr (the video editor) is native Swift in `ios/App/App/Editrr`, a synced folder in the App target. On the Artist plan, `CreatrrHome` shows the artist page (web) and editrr side by side: swipe in from the right edge, or tap Edit videos, to open editrr; swipe in from the left edge on editrr's home, or tap Artist, to go back. The web app tells the native side its plan through the `creatrrTier` message. Plus and Pro don't show editrr yet. The app needs iOS 26.
 
 ## App Store (needs the $99/yr Apple Developer Program)
 1. In Xcode set the version and build number, then Product > Archive > Distribute App > App Store Connect.

@@ -1270,6 +1270,11 @@ details.more > :not(summary) { margin-top: 8px; }
 #homeSlider { display: flex; width: 100%; }
 .home-pane { flex: 0 0 100%; min-width: 0; }
 .home-pane.off { display: none; }
+/* creatrr Artist: home is just your artist (no Projects, calendar or shoots); editrr is one swipe away in the iPhone app */
+body.tier-artist .home-tabs .ht[data-home="projects"], body.tier-artist #paneProjects, body.tier-artist #artistShoots, body.tier-artist #artistChips { display: none !important; }
+body.tier-artist .home-tabs .ht + .ht { margin-left: 0; }
+#editrrBtn { display: none; }
+body.tier-artist.native-app #editrrBtn { display: inline-flex; }
 .cover.init { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 26px; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
 .loose-row { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 10px; border-radius: 20px; background-color: var(--surface); margin-bottom: 8px; }
 .loose-name { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1549,6 +1554,7 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
       <h1 class="projects-title home-tabs"><button type="button" class="ht on" data-home="projects">Projects</button><button type="button" class="ht" data-home="artists">Artists</button></h1>
       <div class="row-flex">
         <button id="newBtn" class="btn primary">New…</button>
+        <button type="button" id="editrrBtn" class="btn">Edit videos ›</button>
       </div>
       <input type="file" id="importProjectInput" accept=".json,application/json" hidden>
       <div id="homeClip"><div id="homeSlider">
@@ -4720,6 +4726,10 @@ const byArtistName = (a, b) => (a.docTitle || "").localeCompare(b.docTitle || ""
 var TIERS = { artist: { name: "creatrr Artist", limit: 1 }, plus: { name: "creatrr Plus", limit: 10 }, pro: { name: "creatrr Pro", limit: 50 } };
 var TIER = (function () { try { const t = localStorage.getItem("producrr_tier"); return TIERS[t] ? t : "plus"; } catch (e) { return "plus"; } })();
 function isArtistTier() { return TIER === "artist"; }
+function isNativeApp() { try { return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()); } catch (e) { return false; } }
+/* the iPhone app shows editrr beside the artist page on the Artist plan */
+function tellNativeTier() { try { window.webkit.messageHandlers.creatrrTier.postMessage(TIER); } catch (e) {} }
+function openEditrr() { try { window.webkit.messageHandlers.creatrrEditrr.postMessage("open"); } catch (e) {} }
 function setTier(t) {
   if (!TIERS[t]) return;
   TIER = t; try { localStorage.setItem("producrr_tier", t); } catch (e) {}
@@ -4816,10 +4826,14 @@ function renderArtists(recs, projects) {
 }
 var homeMode = "projects", artistTotal = 0;
 function paintHomeMode() {
+  document.body.classList.toggle("tier-artist", isArtistTier());
+  document.body.classList.toggle("native-app", isNativeApp());
+  if (isArtistTier() && homeMode !== "artists") { homeMode = "artists"; $("paneProjects").classList.add("off"); $("paneArtists").classList.remove("off"); $("homeSlider").style.transform = ""; }
+  tellNativeTier();
   document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === homeMode));
   $("brandTier").textContent = " " + TIER;
   document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Artist" : "Artists";
-  $("artistsHint").textContent = isArtistTier() ? "Your photo, songs and sections. Tap to open your artist page." : "Everyone you shoot for. Tap an artist to see their projects.";
+  $("artistsHint").textContent = isArtistTier() ? (isNativeApp() ? "Your photo, songs and sections. Tap to open your artist page. Swipe in from the right edge to edit videos." : "Your photo, songs and sections. Tap to open your artist page.") : "Everyone you shoot for. Tap an artist to see their projects.";
   $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
   $("newBtn").classList.toggle("hidden", homeMode === "artists" && isArtistTier() && artistTotal >= 1);
 }
@@ -4848,7 +4862,7 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false;
     const card = e.target.closest && e.target.closest(".project-card, .sr-card");
     onCard = !!card;
-    ok = e.touches.length === 1 && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
+    ok = e.touches.length === 1 && !isArtistTier() && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
     if (ok && onCard && homeMode === "projects") ok = false; /* on a project card, swipe-left is Delete */
   }, { passive: true });
   document.addEventListener("touchmove", e => {
@@ -5081,6 +5095,7 @@ function openNewModal(artistName, date) {
   document.querySelector("#newModal h3").textContent = "New project";
   document.querySelector("#newModal .modal-hint").classList.add("hidden");
   $("newShootDate").value = date || ""; fillNewArtist(artistName || ""); $("newModal").classList.remove("hidden"); }
+$("editrrBtn").addEventListener("click", openEditrr);
 $("newBtn").addEventListener("click", () => { if (homeMode === "artists") { openArtistModal("home"); return; } openNewModal(artistFilter || "", calSel || ""); });
 $("closeNewBtn").addEventListener("click", () => $("newModal").classList.add("hidden"));
 $("newModal").addEventListener("click", async e => {
@@ -5639,7 +5654,7 @@ function renderDraftContent() {
   requestAnimationFrame(drawWaveform);
 }
 async function renderArtistShoots() {
-  const el = $("artistShoots"), show = !!project && project.type === "artist" && !songOpen;
+  const el = $("artistShoots"), show = !!project && project.type === "artist" && !songOpen && !isArtistTier();
   el.classList.toggle("hidden", !show);
   if (!show) return;
   const id = project.id, name = project.docTitle;
@@ -7236,7 +7251,10 @@ var TOUR = (function () {
     { ctx: "artist", song: true, target: () => $("songGrab"), title: "Back to your songs", body: "That's a song set up: tempo, downbeat and a section. Swipe down (or tap outside) to go back to your song list.", done: () => !songOpen },
     { ctx: "artist", target: () => $("bandSendBtn"), title: "That's it", body: "Add more songs if you like, plus photos, links or notes. Everything syncs automatically, so when you're done, tap Finish & notify to let your photographer know. You can keep editing until the link expires.", buttons: "bandend" }
   ];
-  const STEPS = BAND_CODE ? BAND_STEPS : APP_STEPS;
+  /* creatrr Artist has no projects: meet the artist page, set up a song, then go edit */
+  const ARTIST_STEPS = APP_STEPS.slice(1, 8).map((st, i) => i === 1 ? Object.assign({}, st, { body: "This is your artist page. Add a photo, upload your songs, and mark sections like intro, verse and chorus. For now, use our two demo songs." }) : st)
+    .concat([{ ctx: "any", target: null, title: "You're ready", body: isNativeApp() ? "Now make your video: swipe in from the right edge, or tap Edit videos on home. Your songs and their sections are waiting there. You can replay this tour any time from the menu at the top right, under Help." : "That's your artist page. You can replay this tour any time from the menu at the top right, under Help.", buttons: "end" }]);
+  const STEPS = BAND_CODE ? BAND_STEPS : isArtistTier() ? ARTIST_STEPS : APP_STEPS;
   const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
   function readDemo() { try { return JSON.parse(localStorage.getItem(DKEY) || "null"); } catch (e) { return null; } }
   async function ensureDemo() {

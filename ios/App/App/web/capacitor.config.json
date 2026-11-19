@@ -1,0 +1,17 @@
+{
+	"appId": "art.gavingeddes.producrr",
+	"appName": "creatrr",
+	"webDir": "www",
+	"ios": {
+		"contentInset": "never"
+	},
+	"packageClassList": [
+		"AppPlugin",
+		"FilesystemPlugin",
+		"HapticsPlugin",
+		"PushNotificationsPlugin",
+		"SharePlugin",
+		"PrinterPlugin",
+		"PurchasesPlugin"
+	]
+}

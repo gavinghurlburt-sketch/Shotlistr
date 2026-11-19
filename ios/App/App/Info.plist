@@ -38,9 +38,15 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>creatrr uses the camera when you choose to take a reference photo for a shot.</string>
+	<string>creatrr uses the camera for reference photos, and to film your takes while the song plays so they line up on their own.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>creatrr records sound with your takes, which fine-tunes how they line up to the song.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>creatrr lets you pick reference images from your photo library for shots and vision boards.</string>
+	<string>creatrr opens your photos and videos for shots, vision boards and your edits.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>creatrr saves your finished videos and takes to Photos.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>creatrr listens to your song on your phone to write down the lyrics.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
