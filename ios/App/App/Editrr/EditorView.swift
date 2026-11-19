@@ -86,11 +86,14 @@ struct SetupView: View {
                         projectsGrid
                     }
                 }
+                // Full width even with no projects yet, so nothing shrinks toward the middle.
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 110)
             }
             .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // New: a round + in the corner.
             Button {
