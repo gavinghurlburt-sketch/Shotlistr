@@ -1509,6 +1509,9 @@ body.band-mode #bellBtn, body.band-mode #backToProjectsBtn, body.band-mode #sett
 #artistScrim { position: fixed; inset: 0; z-index: 155; background: rgba(0,0,0,.35); touch-action: none; }
 #artistSheet { position: fixed; left: 0; right: 0; bottom: 0; top: calc(env(safe-area-inset-top) + 20px); z-index: 160; max-width: 760px; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border-radius: 28px 28px 0 0; padding: 10px 16px max(28px, env(safe-area-inset-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,.4), inset 0 1px 0 var(--bar-edge); }
 #artistSheet.hidden, #artistScrim.hidden { display: none; }
+/* creatrr Artist: the artist page sits right on home, under the header and the Songs / Edits tabs */
+body.art-inline #artistSheet { position: static; inset: auto; z-index: auto; max-width: none; margin: 0; overflow: visible; border-radius: 0; padding: 0 0 max(28px, env(safe-area-inset-bottom)); box-shadow: none; background: none; transform: none !important; }
+body.art-inline #artistSheet .grab, body.art-inline #artistScrim, body.art-inline #artistsList, body.art-inline #artistsHint, body.art-inline #backToProjectsBtn, body.art-inline #docTitleInput, body.art-inline #saveStatus { display: none !important; }
 #artistSheet #projectBanner { margin-top: 6px; }
 #artistSheet.sheet-frost { background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 8%, transparent), color-mix(in srgb, var(--surface) 62%, transparent) 55%); }   /* mostly blur at the top, hazier lower down */
 #artistSheet .pc-wrap .sr-card { background-color: transparent; }
@@ -5517,7 +5520,7 @@ function openEditrr() { tellNativeHome(); editsOpen = true; paintHomeTabs(); try
    "projects" or "artists" on home, "away" inside a project or an artist page */
 function tellNativeHome() {
   try {
-    const pv = $("projectsView"), s = !pv || pv.classList.contains("hidden") || document.body.classList.contains("art-sheet") ? "away" : homeMode;
+    const bc = document.body.classList, pv = $("projectsView"), s = !pv || pv.classList.contains("hidden") || (bc.contains("art-sheet") && !bc.contains("art-inline")) ? "away" : homeMode;
     /* Edits (editrr) slides in just under the home tabs, so creatrr's header and tabs stay on top */
     const tabs = pv && pv.querySelector(".home-tabs");
     const top = s === "away" || !tabs ? 0 : Math.round(tabs.getBoundingClientRect().bottom + (window.scrollY || 0) + 6);
@@ -5640,7 +5643,8 @@ function paintHomeMode() {
   tellNativeTier(); tellNativeHome();
   paintHomeTabs();
   $("brandTier").textContent = " " + TIER;
-  document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Artist" : "Artists";
+  document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Songs" : "Artists";
+  if (!isArtistTier() && document.body.classList.contains("art-inline")) goToProjects();   /* left the Artist plan: back to the usual home */
   $("artistsHint").textContent = isArtistTier() ? (isNativeApp() ? "Your photo, songs and sections. Tap to open your artist page. Swipe in from the right edge, or tap Edits, to edit videos." : "Your photo, songs and sections. Tap to open your artist page.") : "Everyone you shoot for. Tap an artist to see their projects.";
   $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
   $("newBtn").classList.toggle("hidden", homeMode === "artists" && isArtistTier() && artistTotal >= 1);
@@ -5681,7 +5685,7 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         if (onCard && dx < 0) { ok = false; return; } /* artist card: swipe-left is Remove */
         /* past Artists comes Edits (iPhone app only) */
-        if (homeMode === "artists" && dx < 0) { ok = false; if (isNativeApp() && !document.body.classList.contains("art-sheet")) openEditrr(); return; }
+        if (homeMode === "artists" && dx < 0) { ok = false; if (isNativeApp() && (!document.body.classList.contains("art-sheet") || document.body.classList.contains("art-inline"))) openEditrr(); return; }
         if (isArtistTier() || (homeMode === "projects" && dx > 0)) { ok = false; return; }
         locked = true; W = clip.clientWidth; pp.classList.remove("off"); pa.classList.remove("off"); slider.style.willChange = "transform";
       } else return;
@@ -5718,6 +5722,7 @@ async function renderProjectsList() {
   all.forEach(p => { p.shownCover = p.cover || ""; if (!p.shownCover && p.type === "content") { const a = artistRecs.find(x => x.id === p.artistId) || artistRecs.find(x => artistKey(x.docTitle) === artistKey(p.artist)); if (a && a.cover) p.shownCover = a.cover; } });
   const artists = artistRecs.map(a => a.docTitle);
   renderArtists(artistRecs, all);
+  openArtistInline(artistRecs[0]);
   if (artistFilter && !artists.includes(artistFilter)) artistFilter = null;
   if (isArtistTier()) artistFilter = null;
   $("artistChips").innerHTML = (artists.length && !isArtistTier()) ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
@@ -6004,7 +6009,14 @@ async function openProject(id, opts) {
   await loadActiveTrack();
   if (project && project.type === "artist" && !BAND_CODE && !(opts && opts.fromCard)) revealArtistSheet(null);
 }
-/* the artist page is a pull-down sheet over the Artists list */
+/* creatrr Artist has one artist, so home is their page: open it in place under the tabs */
+var inlineOpening = false;
+async function openArtistInline(rec) {
+  if (!rec || !isArtistTier() || BAND_CODE || project || inlineOpening || $("projectsView").classList.contains("hidden")) return;
+  inlineOpening = true;
+  try { await openProject(rec.id, { fromCard: true }); } finally { inlineOpening = false; }
+}
+/* the artist page is a pull-down sheet over the Artists list (on creatrr Artist it sits right on home) */
 var artSheet = { open: false, ph: {} }, artistBackDone = false;
 function enterArtistSheet() {
   const sh = $("artistSheet"), pv = $("projectsView"), wasHidden = pv.classList.contains("hidden");
@@ -6013,22 +6025,29 @@ function enterArtistSheet() {
     ["songScrim", "songPage"].forEach(id => { const el = $(id), c = document.createComment(id); el.parentNode.insertBefore(c, el); artSheet.ph[id] = c; document.body.appendChild(el); });   // fixed layers can't live inside a frosted sheet
     artSheet.open = true;
   }
+  const inline = isArtistTier();
   document.body.classList.add("art-sheet");
+  document.body.classList.toggle("art-inline", inline);
+  if (inline) { if (sh.parentNode !== $("paneArtists")) $("paneArtists").appendChild(sh); }
+  else if (sh.parentNode !== document.body) $("artistScrim").after(sh);
   $("artistTitle").value = project.docTitle || ""; $("artistTitle").style.opacity = "";
   pv.classList.remove("hidden");
   if (wasHidden) { setHomeMode("artists", true); renderProjectsList(); }
-  sh.style.visibility = "hidden"; sh.classList.remove("hidden"); $("artistScrim").classList.remove("hidden"); sh.scrollTop = 0;
+  sh.classList.remove("hidden"); sh.scrollTop = 0;
+  if (inline) { sh.style.visibility = ""; $("artistScrim").classList.add("hidden"); }
+  else { sh.style.visibility = "hidden"; $("artistScrim").classList.remove("hidden"); }
 }
 function exitArtistSheet() {
   if (!artSheet.open) return;
   ["projectBanner", "draftCView", "songScrim", "songPage"].forEach(id => { const c = artSheet.ph[id], el = $(id); if (c && c.parentNode) { c.parentNode.insertBefore(el, c); c.remove(); } });
   artSheet.open = false; artSheet.ph = {};
   const sh = $("artistSheet"); [sh, $("draftCView"), $("artistTitle")].forEach(el => el.getAnimations && el.getAnimations().forEach(x => x.cancel())); sh.classList.add("hidden"); sh.style.transform = ""; sh.style.visibility = "";
-  $("artistScrim").classList.add("hidden"); document.body.classList.remove("art-sheet"); $("projectBanner").style.visibility = "";
+  $("artistScrim").classList.add("hidden"); document.body.classList.remove("art-sheet", "art-inline"); $("projectBanner").style.visibility = "";
+  if (sh.parentNode !== document.body) $("artistScrim").after(sh);
 }
 /* the sheet slides up; if it came from a card, that card's photo flies to the top of the sheet and un-blurs */
 function revealArtistSheet(from) {
-  const sh = $("artistSheet"); if (!sh || sh.classList.contains("hidden")) return;
+  const sh = $("artistSheet"); if (!sh || sh.classList.contains("hidden") || document.body.classList.contains("art-inline")) return;
   const ban = $("projectBanner"), r1 = ban.getBoundingClientRect(), o = { duration: 440, easing: "cubic-bezier(.2,.9,.25,1)" };
   const S = sh.getBoundingClientRect(), C = from && from.card;
   if (sh.animate) {
@@ -8698,6 +8717,7 @@ document.addEventListener("change", e => { if (e.target.id === "inboxArtist") in
     if (dx < 90 || Math.abs(dy) > 50 || Math.abs(dx) < Math.abs(dy) * 2.2 || Date.now() - t0 > 700) return;
     const tabs = [...document.querySelectorAll(".ws-tab")].filter(x => !x.classList.contains("hidden")), first = tabs[0] && tabs[0].dataset.ws;
     const atFirst = project.type === "artist" || !first || currentWs === first;
+    if (project.type === "artist" && document.body.classList.contains("art-inline")) return;
     if (atFirst) { if (project.type === "artist" && artSheet.open && !songOpen) artistSheetCtl.close(); else goToProjects(); }
   }, { passive: true });
 })();
@@ -8715,7 +8735,7 @@ function makeSheet(root, box, onClose, scrim, opts) {
   if (scrim) scrim.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
   const skip = t => !!(t && t.closest && (t.closest("canvas,input,textarea,select,[data-nodrag]") || (opts.ignore && t.closest(opts.ignore))));
   let held = false, heldY = 0;       // a touch that began on a waveform or field: it never drags the sheet, but a pull-down must not drag the page behind either
-  root.addEventListener("touchstart", e => { held = false; if (e.touches.length === 1 && skip(e.target) && !(opts.ignore && e.target.closest && e.target.closest(opts.ignore))) { held = true; heldY = e.touches[0].clientY; } if (e.touches.length !== 1 || skip(e.target)) { active = false; return; } active = true; lastY = e.touches[0].clientY; offset = 0; t0 = Date.now(); box.style.transition = "none"; }, { passive: true });
+  root.addEventListener("touchstart", e => { held = false; if (opts.off && opts.off()) { active = false; return; } if (e.touches.length === 1 && skip(e.target) && !(opts.ignore && e.target.closest && e.target.closest(opts.ignore))) { held = true; heldY = e.touches[0].clientY; } if (e.touches.length !== 1 || skip(e.target)) { active = false; return; } active = true; lastY = e.touches[0].clientY; offset = 0; t0 = Date.now(); box.style.transition = "none"; }, { passive: true });
   root.addEventListener("touchmove", e => {
     if (!active) { if (held) { const y = e.touches[0].clientY, d = y - heldY; heldY = y; if (d > 0 && box.scrollTop <= 0) e.preventDefault(); } return; }
     const y = e.touches[0].clientY, d = y - lastY; lastY = y;
@@ -8739,7 +8759,7 @@ var hookSheet = makeSheet($("hookModal"), $("hookInner"), () => closeHooks());
 var hookImportSheet = makeSheet($("hookImportModal"), $("hookImportInner"), () => $("hookImportModal").classList.add("hidden"));
 var tempoSheet = makeSheet($("tempoModal"), $("tempoModal").querySelector(".modal-inner"), () => tapClose());
 var songSheet = makeSheet($("songPage"), $("songPage"), () => closeSongPage(), $("songScrim"));
-var artistSheetCtl = makeSheet($("artistSheet"), $("artistSheet"), () => { $("artistSheet").style.visibility = "hidden"; $("artistScrim").classList.add("hidden"); goToProjects(); }, $("artistScrim"), { ignore: "#songPage, #songScrim, .modal", onStart: () => artistCloseStart() });
+var artistSheetCtl = makeSheet($("artistSheet"), $("artistSheet"), () => { $("artistSheet").style.visibility = "hidden"; $("artistScrim").classList.add("hidden"); goToProjects(); }, $("artistScrim"), { ignore: "#songPage, #songScrim, .modal", onStart: () => artistCloseStart(), off: () => document.body.classList.contains("art-inline") });
 /* notification preferences + shoot reminders (server sends them, so they arrive even when the app is closed) */
 var notifPrefs = (function () { let o = {}; try { o = JSON.parse(localStorage.getItem("creatrr_notif_prefs") || "{}"); } catch (e) {} return { finished: o.finished !== false, shootday: o.shootday !== false, calltime: o.calltime !== false }; })();
 function paintNotifPrefs() { document.querySelectorAll("[data-notif]").forEach(el => { el.checked = !!notifPrefs[el.dataset.notif]; }); }
