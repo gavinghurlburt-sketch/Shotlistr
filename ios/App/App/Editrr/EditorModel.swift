@@ -267,7 +267,7 @@ final class EditorModel {
     @ObservationIgnored var shootChoice: (song: CreatrrSong, part: CreatrrPart?)?
 
     /// Shoot: gets the song ready, then opens the camera at the part.
-    func shoot(_ song: CreatrrSong, part: CreatrrPart?, end: Double? = nil) async {
+    func shoot(_ song: CreatrrSong, part: CreatrrPart?, end: Double? = nil, fromCreatrr: Bool = false) async {
         guard busy == nil else { return }
         resetNewVideos()
         projectName = ""
@@ -282,7 +282,7 @@ final class EditorModel {
         let partEnd = end ?? known.flatMap { song.partEnd($0) }
         shootPlan = ShootPlan(song: ready.asset, length: ready.length, songName: song.name, partName: part?.name,
                               parts: song.parts, part: part?.id, start: part?.time ?? 0,
-                              end: part == nil ? nil : partEnd, tempo: song.tempo)
+                              end: part == nil ? nil : partEnd, tempo: song.tempo, fromCreatrr: fromCreatrr)
     }
 
     /// Shoot of one part: the new project's In and Out go there (its start, and 30 seconds on).
@@ -338,7 +338,7 @@ final class EditorModel {
                 part = CreatrrPart(name: request.name ?? "Section", time: time, color: "")
             }
         }
-        await shoot(song, part: part, end: request.end)
+        await shoot(song, part: part, end: request.end, fromCreatrr: true)
     }
 
     /// Uses a song from creatrr, with its parts.

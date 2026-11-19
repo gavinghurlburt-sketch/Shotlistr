@@ -7,6 +7,8 @@ import UIKit
 struct EditorView: View {
     @State private var model = EditorModel()
     @Environment(\.scenePhase) private var scenePhase
+    /// Back to creatrr (nil when editrr runs on its own).
+    @Environment(\.creatrrBack) private var creatrrBack
 
     var body: some View {
         ZStack {
@@ -44,6 +46,12 @@ struct EditorView: View {
             CaptureView(song: plan.song, length: plan.length, songName: plan.songName, parts: plan.parts,
                         start: plan.start, end: plan.end, partName: plan.partName, tempo: plan.tempo, maxTakes: 10,
                         draft: { takes in Task { await model.finishShoot(plan, takes: takes, draft: true) } }) { takes in
+                // Closed with nothing filmed from a section's record button: straight back to that section.
+                if takes.isEmpty, plan.fromCreatrr, let creatrrBack {
+                    Task { await model.finishShoot(plan, takes: takes) }
+                    creatrrBack()
+                    return
+                }
                 Task { await model.finishShoot(plan, takes: takes) }
             }
         }

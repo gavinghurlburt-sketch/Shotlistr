@@ -314,4 +314,6 @@ struct ShootPlan: Identifiable {
     /// Where the part ends (takes stop a second after), nil for the whole song or the last part.
     let end: Double?
     let tempo: CaptureTempo?
+    /// Started from a section's red record button in creatrr: closing with no takes goes back there.
+    var fromCreatrr = false
 }

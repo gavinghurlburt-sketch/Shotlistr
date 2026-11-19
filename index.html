@@ -4750,7 +4750,9 @@ function openEditrr() { tellNativeHome(); editsOpen = true; paintHomeTabs(); try
    "projects" or "artists" on home, "away" inside a project or an artist page */
 function tellNativeHome() {
   try {
-    const bc = document.body.classList, pv = $("projectsView"), s = !pv || pv.classList.contains("hidden") || (bc.contains("art-sheet") && !bc.contains("art-inline")) ? "away" : homeMode;
+    const bc = document.body.classList, pv = $("projectsView"), sp = $("songPage");
+    /* the inline artist page counts as home, but not while a song's page is open over it */
+    const s = !pv || pv.classList.contains("hidden") || (bc.contains("art-sheet") && !bc.contains("art-inline")) || (sp && !sp.classList.contains("hidden")) ? "away" : homeMode;
     /* Edits (editrr) slides in just under the home tabs, so creatrr's header and tabs stay on top */
     const tabs = pv && pv.querySelector(".home-tabs");
     const top = s === "away" || !tabs ? 0 : Math.round(tabs.getBoundingClientRect().bottom + (window.scrollY || 0) + 6);
@@ -4865,7 +4867,7 @@ function renderArtists(recs, projects) {
   }).join("");
 }
 var homeMode = "projects", artistTotal = 0;
-if (window.MutationObserver) { const mo = new MutationObserver(() => tellNativeHome()); mo.observe(document.body, { attributes: true, attributeFilter: ["class"] }); if ($("projectsView")) mo.observe($("projectsView"), { attributes: true, attributeFilter: ["class"] }); }
+if (window.MutationObserver) { const mo = new MutationObserver(() => tellNativeHome()); mo.observe(document.body, { attributes: true, attributeFilter: ["class"] }); if ($("projectsView")) mo.observe($("projectsView"), { attributes: true, attributeFilter: ["class"] }); if ($("songPage")) mo.observe($("songPage"), { attributes: true, attributeFilter: ["class"] }); }
 function paintHomeMode() {
   document.body.classList.toggle("tier-artist", isArtistTier());
   document.body.classList.toggle("native-app", isNativeApp());
