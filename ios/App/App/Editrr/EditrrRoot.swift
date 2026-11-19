@@ -7,6 +7,8 @@ import SwiftUI
 @MainActor @Observable
 final class CreatrrNav {
     var backTitle = "Artist"
+    /// creatrr's header isn't above editrr (it opened from inside a page), so editrr shows its own Back.
+    var bare = false
 }
 
 /// editrr inside creatrr: dark, creatrr's yellow, with a way back to the artist page.
@@ -17,7 +19,8 @@ struct EditrrRoot: View {
     var body: some View {
         EditorView()
             .environment(\.creatrrBack, back)
-            .environment(\.creatrrBackTitle, nav.backTitle).environment(\.creatrrBare, nav.bare)
+            .environment(\.creatrrBackTitle, nav.backTitle)
+            .environment(\.creatrrBare, nav.bare)
             .environment(\.colorScheme, .dark)
             .tint(Tint.accent)
     }
