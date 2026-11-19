@@ -5508,17 +5508,31 @@ function isArtistTier() { return TIER === "artist"; }
 function isNativeApp() { try { return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()); } catch (e) { return false; } }
 /* the iPhone app shows editrr beside the artist page on the Artist plan */
 function tellNativeTier() { try { window.webkit.messageHandlers.creatrrTier.postMessage(TIER); } catch (e) {} }
-function openEditrr() { try { window.webkit.messageHandlers.creatrrEditrr.postMessage("open"); } catch (e) {} }
+function openEditrr() { tellNativeHome(); editsOpen = true; paintHomeTabs(); try { window.webkit.messageHandlers.creatrrEditrr.postMessage("open"); } catch (e) {} }
 /* where you are, so the iPhone app knows when a swipe in from the right edge should open Edits:
    "projects" or "artists" on home, "away" inside a project or an artist page */
 function tellNativeHome() {
   try {
     const pv = $("projectsView"), s = !pv || pv.classList.contains("hidden") || document.body.classList.contains("art-sheet") ? "away" : homeMode;
-    if (s === tellNativeHome.last) return;
-    tellNativeHome.last = s;
-    window.webkit.messageHandlers.creatrrHome.postMessage(s);
+    /* Edits (editrr) slides in just under the home tabs, so creatrr's header and tabs stay on top */
+    const tabs = pv && pv.querySelector(".home-tabs");
+    const top = s === "away" || !tabs ? 0 : Math.round(tabs.getBoundingClientRect().bottom + (window.scrollY || 0) + 6);
+    const key = s + ":" + top;
+    if (key === tellNativeHome.last) return;
+    tellNativeHome.last = key;
+    window.webkit.messageHandlers.creatrrHome.postMessage({ place: s, top: top });
   } catch (e) {}
 }
+/* is Edits (editrr) showing? It lights the Edits tab; tapping anything else in the header closes it first */
+var editsOpen = false;
+window.creatrrEditsShown = function (on) { editsOpen = !!on; paintHomeTabs(); };
+function paintHomeTabs() { document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === (editsOpen ? "edits" : homeMode))); }
+document.addEventListener("click", e => {
+  if (!editsOpen) return;
+  if (e.target.closest && e.target.closest('.ht[data-home="edits"]')) return;
+  editsOpen = false; paintHomeTabs();
+  try { window.webkit.messageHandlers.creatrrEditrr.postMessage("close"); } catch (x) {}
+}, true);
 function setTier(t) {
   if (!TIERS[t]) return;
   TIER = t; try { localStorage.setItem("producrr_tier", t); } catch (e) {}
@@ -5620,7 +5634,7 @@ function paintHomeMode() {
   document.body.classList.toggle("native-app", isNativeApp());
   if (isArtistTier() && homeMode !== "artists") { homeMode = "artists"; $("paneProjects").classList.add("off"); $("paneArtists").classList.remove("off"); $("homeSlider").style.transform = ""; }
   tellNativeTier(); tellNativeHome();
-  document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === homeMode));
+  paintHomeTabs();
   $("brandTier").textContent = " " + TIER;
   document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Artist" : "Artists";
   $("artistsHint").textContent = isArtistTier() ? (isNativeApp() ? "Your photo, songs and sections. Tap to open your artist page. Swipe in from the right edge, or tap Edits, to edit videos." : "Your photo, songs and sections. Tap to open your artist page.") : "Everyone you shoot for. Tap an artist to see their projects.";

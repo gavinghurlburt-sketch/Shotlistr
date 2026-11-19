@@ -53,22 +53,19 @@ struct SetupView: View {
     @Environment(\.creatrrBackTitle) private var backTitle
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let back {
-                        // Inside creatrr: back to your artist page (or swipe in from the left edge).
-                        Button(action: back) {
-                            Label(backTitle, systemImage: "chevron.left")
-                        }
-                        .buttonStyle(GlassButtonStyle())
-                        .padding(.top, 8)
+                    if back == nil {
+                        Text("Edits")
+                            .font(.system(size: 32, weight: .bold))
+                            .tracking(-0.8)
+                            .padding(.top, 16)
+                            .padding(.bottom, 18)
+                    } else {
+                        // Inside creatrr, creatrr's own header and tabs (Projects, Artists, Edits) sit above.
+                        Color.clear.frame(height: 6)
                     }
-                    Text("Edits")
-                        .font(.system(size: 32, weight: .bold))
-                        .tracking(-0.8)
-                        .padding(.top, back == nil ? 16 : 10)
-                        .padding(.bottom, 18)
 
                     if let problem = model.problem, !showNew {
                         Text(problem)
@@ -95,7 +92,7 @@ struct SetupView: View {
             .scrollIndicators(.hidden)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // New: a round + in the corner.
+            // New: a frosted "+ New…" pill at the bottom, like creatrr's.
             Button {
                 model.problem = nil
                 model.pendingKind = nil
@@ -103,17 +100,11 @@ struct SetupView: View {
                 newHeight = .medium
                 showNew = true
             } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(width: 64, height: 64)
-                    .background(Circle().fill(.white))
-                    .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+                FrostedNewLabel()
             }
             .buttonStyle(.plain)
             .accessibilityLabel("New video")
-            .padding(.trailing, 22)
-            .padding(.bottom, 24)
+            .padding(.bottom, 18)
         }
         .background(Tint.backdrop.ignoresSafeArea())
         .sheet(isPresented: $showNew) {
@@ -122,7 +113,7 @@ struct SetupView: View {
                 .presentationDetents([.medium, .large], selection: $newHeight)
                 .presentationDragIndicator(.visible)
                 .presentationContentInteraction(.scrolls)
-                .presentationBackground(.ultraThinMaterial)
+                .frostedSheet()
         }
         .onChange(of: model.pendingKind) { _, kind in
             withAnimation(.snappy) { newHeight = kind == nil ? .medium : .large }
@@ -332,7 +323,7 @@ struct NewVideoSheet: View {
                 Task { await model.chooseCreatrrSong(song) }
             }
             .presentationDetents([.medium, .large])
-            .presentationBackground(.ultraThinMaterial)
+            .frostedSheet()
         }
         .photosPicker(isPresented: $showSongVideo, selection: $songPick, maxSelectionCount: 1,
                       selectionBehavior: .ordered, matching: .videos,
@@ -2363,5 +2354,27 @@ struct MaskSheet: View {
                    })
             .tint(Tint.accent)
         }
+    }
+}
+
+/// creatrr's floating "+ New…" pill: frosted glass with a thin light edge.
+struct FrostedNewLabel: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("+").font(.system(size: 24, weight: .regular)).offset(y: -1)
+            Text("New\u{2026}").font(.system(size: 16, weight: .bold))
+        }
+        .foregroundStyle(Tint.text)
+        .padding(.horizontal, 28)
+        .frame(height: 54)
+        .background {
+            Capsule().fill(.ultraThinMaterial)
+            Capsule().fill(Color(red: 50 / 255, green: 50 / 255, blue: 54 / 255).opacity(0.2))
+        }
+        .overlay { FrostEdge() }
+        .environment(\.colorScheme, .dark)
+        .shadow(color: .black.opacity(0.38), radius: 20, y: 14)
+        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+        .contentShape(Capsule())
     }
 }

@@ -4,26 +4,29 @@ import WebKit
 import AVFoundation
 import Capacitor
 
-/// creatrr on iPhone: the web app (Projects, Artists) with editrr (Edits) beside it. Tap Edits, or
-/// swipe in from the right edge, to open editrr: anywhere on creatrr Artist, and from the Artists
-/// tab on Plus and Pro. Swipe in from the left edge on editrr's home (or tap its back button) to
-/// come back.
+/// creatrr on iPhone: the web app (Projects, Artists) with editrr (Edits) beside it.
+/// On Edits home, creatrr's own header and tabs stay at the top (the web app keeps drawing them) and
+/// editrr's home slides in underneath, like a third tab. Opening an edit takes the whole screen.
+/// Tap Edits, or swipe in from the right edge (anywhere on creatrr Artist, from the Artists tab on
+/// Plus and Pro), to open it. Tap Projects or Artists, or swipe in from the left edge, to go back.
 final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     static let tierKey = "creatrr.tier"
     static weak var current: CreatrrHome?
 
-    /// The web app (artist page, songs, parts).
+    /// The web app (header, tabs, artist pages, songs, parts).
     let artist = ViewController()
     /// editrr, made the first time you open it and kept so it remembers where you were.
     private var editor: UIViewController?
     private(set) var showingEditor = false
     private var artistTier = UserDefaults.standard.string(forKey: CreatrrHome.tierKey) == "artist"
-    /// Holds both pages side by side; sliding its bounds moves between them.
-    private let track = UIView()
     private var panning = false
+    /// 0: editrr is off to the right. 1: editrr is in place.
+    private var reveal: CGFloat = 0
     private let messages = WebMessages()
     /// Where the web app is: "projects" or "artists" on home, "away" inside a project or artist page.
     private var webHome = "away"
+    /// The bottom of creatrr's header and tabs (with the page scrolled to the top). editrr's home starts here.
+    private var headerBottom: CGFloat = 170
     /// What editrr's back button says.
     let nav = CreatrrNav()
 
@@ -46,12 +49,10 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         super.viewDidLoad()
         CreatrrHome.current = self
         view.backgroundColor = UIColor(red: 0x12 / 255.0, green: 0x12 / 255.0, blue: 0x12 / 255.0, alpha: 1)
-        track.clipsToBounds = false
-        view.addSubview(track)
         addChild(artist)
-        track.addSubview(artist.view)
+        view.addSubview(artist.view)
         artist.didMove(toParent: self)
-        // The web app tells us its plan (Artist, Plus, Pro) and when you tap Edit videos.
+        // The web app tells us its plan, where you are, and when you tap Edits.
         messages.home = self
         let content = artist.webView?.configuration.userContentController
         content?.add(messages, name: "creatrrTier")
@@ -60,6 +61,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         nav.backTitle = artistTier ? "Artist" : "Artists"
         view.addGestureRecognizer(toEditor)
         view.addGestureRecognizer(toArtist)
+        NotificationCenter.default.addObserver(self, selector: #selector(stageChanged), name: .editrrStage, object: nil)
         refreshSwipes()
     }
 
@@ -69,23 +71,28 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         toArtist.isEnabled = showingEditor
     }
 
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        let size = view.bounds.size
-        track.center = CGPoint(x: size.width / 2, y: size.height / 2)
-        let origin = panning ? track.bounds.origin.x : (showingEditor ? size.width : 0)
-        track.bounds = CGRect(x: origin, y: 0, width: size.width, height: size.height)
-        artist.view.frame = CGRect(x: 0, y: 0, width: size.width, height: size.height)
-        editor?.view.frame = CGRect(x: size.width, y: 0, width: size.width, height: size.height)
-    }
-
-    // MARK: Plan
-
     /// creatrr Artist: from anywhere in the web app. Plus and Pro: from the Artists tab, since Edits
     /// sits after it (inside a project the edges belong to Draft, Plan, Shoot and Cut).
     private var canSwipeToEditor: Bool {
         !showingEditor && (artistTier || webHome == "artists")
     }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        artist.view.frame = view.bounds
+        if !panning { reveal = showingEditor ? 1 : 0 }
+        layoutEditor()
+    }
+
+    /// editrr's home sits under creatrr's header and tabs; the editor itself takes the whole screen.
+    private func layoutEditor() {
+        guard let editor else { return }
+        let size = view.bounds.size
+        let top = EditrrStage.editing ? 0 : min(max(0, headerBottom), size.height * 0.5)
+        editor.view.frame = CGRect(x: (1 - reveal) * size.width, y: top, width: size.width, height: size.height - top)
+    }
+
+    // MARK: What the web app tells us
 
     func setTier(_ tier: String) {
         UserDefaults.standard.set(tier, forKey: Self.tierKey)
@@ -94,8 +101,12 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         refreshSwipes()
     }
 
-    func setWebHome(_ place: String) {
+    func setWebHome(_ place: String, headerBottom bottom: CGFloat?) {
         webHome = place
+        if let bottom, bottom > 0, bottom != headerBottom {
+            headerBottom = bottom
+            if !panning { layoutEditor() }
+        }
         refreshSwipes()
     }
 
@@ -105,11 +116,17 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         show(editor: true)
     }
 
-    // MARK: Moving between the pages
+    /// Projects, Artists, the bell or your account was tapped in the header while Edits was open.
+    func closeFromWeb() {
+        guard !panning else { return }
+        show(editor: false)
+    }
 
-    /// 0 shows the artist page, 1 shows editrr.
+    // MARK: Moving between them
+
     private func place(_ progress: CGFloat) {
-        track.bounds.origin.x = max(0, min(1, progress)) * view.bounds.width
+        reveal = max(0, min(1, progress))
+        layoutEditor()
     }
 
     private func prepareEditor() {
@@ -119,12 +136,16 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
             host.overrideUserInterfaceStyle = .dark
             host.view.backgroundColor = UIColor(red: 0x12 / 255.0, green: 0x12 / 255.0, blue: 0x12 / 255.0, alpha: 1)
             addChild(host)
-            host.view.frame = CGRect(x: view.bounds.width, y: 0, width: view.bounds.width, height: view.bounds.height)
-            track.addSubview(host.view)
+            view.addSubview(host.view)
             host.didMove(toParent: self)
             editor = host
+            layoutEditor()
         }
         editor?.view.isHidden = false
+        // The header only lines up with editrr's home when the page is at the top.
+        if let scroll = webView?.scrollView {
+            scroll.setContentOffset(CGPoint(x: 0, y: -scroll.adjustedContentInset.top), animated: false)
+        }
     }
 
     func show(editor on: Bool, animated: Bool = true) {
@@ -135,12 +156,16 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         } else {
             NotificationCenter.default.post(name: .editrrPause, object: nil)
         }
+        tellWeb(editsShown: on)
+        // While Edits shows, the header stays put (no scrolling the page behind it).
+        if on { webView?.scrollView.isScrollEnabled = false }
         let done = { [weak self] in
             guard let self else { return }
             self.showingEditor = on
             self.panning = false
             self.place(on ? 1 : 0)
             self.editor?.view.isHidden = !on
+            self.webView?.scrollView.isScrollEnabled = !on
             self.refreshSwipes()
             if on { self.enteredEditor() }
             self.setNeedsStatusBarAppearanceUpdate()
@@ -148,10 +173,27 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
             self.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
         guard animated else { done(); return }
-        UIView.animate(withDuration: 0.38, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
+        UIView.animate(withDuration: 0.34, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
                        options: [.allowUserInteraction, .beginFromCurrentState]) {
             self.place(on ? 1 : 0)
         } completion: { _ in done() }
+    }
+
+    /// The Edits tab lights up while editrr shows.
+    private func tellWeb(editsShown: Bool) {
+        webView?.evaluateJavaScript("try { window.creatrrEditsShown && window.creatrrEditsShown(\(editsShown)); } catch (e) {}")
+    }
+
+    @objc private func stageChanged() {
+        // Opening an edit: editrr grows over the header to the whole screen. Back on its home: the header returns.
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
+                       options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.layoutEditor()
+            self.editor?.view.layoutIfNeeded()
+        }
+        refreshSwipes()
+        setNeedsStatusBarAppearanceUpdate()
+        setNeedsUpdateOfHomeIndicatorAutoHidden()
     }
 
     private func enteredEditor() {
@@ -190,6 +232,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
                 } completion: { _ in
                     self.panning = false
                     self.editor?.view.isHidden = !self.showingEditor
+                    self.webView?.scrollView.isScrollEnabled = !self.showingEditor
                 }
             } else {
                 show(editor: target)
@@ -213,8 +256,10 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
 
     // MARK: Status bar, rotation
 
-    override var childForStatusBarStyle: UIViewController? { showingEditor ? editor : artist }
-    override var childForStatusBarHidden: UIViewController? { showingEditor ? editor : artist }
+    /// The status bar sits over creatrr's header unless an edit is open.
+    private var statusOwner: UIViewController? { showingEditor && EditrrStage.editing ? editor : artist }
+    override var childForStatusBarStyle: UIViewController? { statusOwner }
+    override var childForStatusBarHidden: UIViewController? { statusOwner }
     override var childForHomeIndicatorAutoHidden: UIViewController? { showingEditor ? editor : artist }
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         if showingEditor { return .portrait }
@@ -222,7 +267,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     }
 }
 
-/// What the web app sends: its plan, and taps on Edit videos.
+/// What the web app sends: its plan, where you are, and taps on Edits.
 private final class WebMessages: NSObject, WKScriptMessageHandler {
     weak var home: CreatrrHome?
 
@@ -233,9 +278,14 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
             case "creatrrTier":
                 if let tier = message.body as? String { home?.setTier(tier) }
             case "creatrrEditrr":
-                home?.openFromWeb()
+                if (message.body as? String) == "close" { home?.closeFromWeb() } else { home?.openFromWeb() }
             case "creatrrHome":
-                if let place = message.body as? String { home?.setWebHome(place) }
+                if let info = message.body as? [String: Any], let place = info["place"] as? String {
+                    let bottom = (info["top"] as? NSNumber).map { CGFloat(truncating: $0) }
+                    home?.setWebHome(place, headerBottom: bottom)
+                } else if let place = message.body as? String {
+                    home?.setWebHome(place, headerBottom: nil)
+                }
             default:
                 break
             }

@@ -74,6 +74,7 @@ struct GlassButtonStyle: ButtonStyle {
         let selected: Bool
         let big: Bool
         @Environment(\.isEnabled) private var enabled
+        @Environment(\.frostedPills) private var frosted
 
         var body: some View {
             let neutral = tint == Tint.accent || tint == Tint.calm
@@ -85,7 +86,18 @@ struct GlassButtonStyle: ButtonStyle {
                 .padding(.horizontal, big ? 22 : 12)
                 .padding(.vertical, big ? 13 : 8)
                 .frame(minWidth: 38, minHeight: big ? 48 : 38)
-                .background(configuration.isPressed && !selected ? Tint.surface3 : fill, in: Capsule())
+                .background {
+                    if frosted && !selected {
+                        // Frosted glass, like creatrr's floating pills.
+                        Capsule().fill(.ultraThinMaterial)
+                        Capsule().fill(.white.opacity(configuration.isPressed ? 0.16 : 0.07))
+                    } else {
+                        Capsule().fill(configuration.isPressed && !selected ? Tint.surface3 : fill)
+                    }
+                }
+                .overlay {
+                    if frosted && !selected { FrostEdge() }
+                }
                 .contentShape(Capsule())
                 .opacity(enabled ? (configuration.isPressed && selected ? 0.88 : 1) : 0.4)
                 .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
@@ -185,5 +197,45 @@ struct ToolItem: View {
         .opacity(enabled ? 1 : 0.35)
         .accessibilityLabel(spoken ?? text)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+extension EnvironmentValues {
+    /// Pills turn to frosted glass inside creatrr-style glass sheets (the New pop-up).
+    @Entry var frostedPills = false
+}
+
+/// The thin light edge on frosted glass: brighter along the top, like creatrr's.
+struct FrostEdge: View {
+    var body: some View {
+        ZStack {
+            Capsule().strokeBorder(.white.opacity(0.07), lineWidth: 1)
+            Capsule().strokeBorder(LinearGradient(colors: [.white.opacity(0.32), .clear], startPoint: .top, endPoint: .center),
+                                   lineWidth: 1)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// creatrr's glass sheet: blurred, with its dark surface showing through.
+struct FrostSheet: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            Tint.surface.opacity(0.5)
+        }
+        .overlay(alignment: .top) {
+            Rectangle().fill(.white.opacity(0.14)).frame(height: 1)
+        }
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+extension View {
+    /// A pop-up in creatrr's frosted glass, with frosted buttons.
+    func frostedSheet() -> some View {
+        environment(\.frostedPills, true)
+            .presentationBackground { FrostSheet() }
+            .presentationCornerRadius(28)
     }
 }

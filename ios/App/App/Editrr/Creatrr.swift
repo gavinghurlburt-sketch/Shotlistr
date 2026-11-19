@@ -7,11 +7,16 @@ extension Notification.Name {
     static let editrrPause = Notification.Name("editrr.pause")
     /// creatrr is going to the background: write any change that's still waiting.
     static let editrrSave = Notification.Name("editrr.save")
+    /// editrr moved between its home and the editor.
+    static let editrrStage = Notification.Name("editrr.stage")
 }
 
 /// Whether editrr is in the editor (not its home), for creatrr's swipe.
 enum EditrrStage {
-    @MainActor static var editing = false
+    /// creatrr shows its header and tabs over editrr's home, and goes full screen for the editor.
+    @MainActor static var editing = false {
+        didSet { if editing != oldValue { NotificationCenter.default.post(name: .editrrStage, object: nil) } }
+    }
 }
 
 extension EnvironmentValues {
