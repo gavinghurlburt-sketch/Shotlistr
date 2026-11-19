@@ -311,8 +311,16 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
             device.activeVideoMinFrameDuration = frame
             device.activeVideoMaxFrameDuration = frame
             device.unlockForConfiguration()
+            // Say so when this camera can't film slow-mo faster than normal.
+            if rate < want {
+                problem = Self.slowMoNote
+            } else if problem == Self.slowMoNote {
+                problem = nil
+            }
         } catch {}
     }
+
+    private static let slowMoNote = "This camera can only film 30 frames a second, so slow-mo will look choppy. Try the back camera."
 
     // MARK: Recording
 
