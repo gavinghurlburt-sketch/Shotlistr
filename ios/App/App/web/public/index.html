@@ -2931,7 +2931,7 @@ const TIER_BLURB = {
   pro: "Up to 50 artists, plus Video production with call sheets and an on-set tracker."
 };
 const TIER_PRICE_FALLBACK = { artist: "$1.99", plus: "$9.99", pro: "$29.99" };
-const LEGAL_BASE = "https://gavinghurlburt-sketch.github.io/Shotlistr/docs/";
+const LEGAL_BASE = "https://www.creatrr.co/docs/";
 const TIER_CACHE_KEY = "creatrr_plan_cache_v1";
 let subs = { tier: null, trial: false, loaded: false }, rcOfferings = null, pwBlocking = false, pwBusy = false, rcLoggedIn = false;
 const rcApi = () => window.__RC_MOCK || window.RC;
@@ -6818,14 +6818,19 @@ function paintHookImport() {
   } else if (st === "preview" && I.hook) {
     const h = I.hook, meta = [h.size, h.angle, h.movement].filter(Boolean);
     el.innerHTML = head + `<div class="hook-card hi-card">${hookDiagram("preview", h.diagram)}<input type="text" id="hiName" class="field" maxlength="40" value="${esc(h.name)}" aria-label="Hook name"><span class="hook-gist">${esc(h.gist)}</span><ol>${h.how.map(x => `<li>${esc(x)}</li>`).join("")}</ol>${h.tip ? `<span class="muted small">Tip: ${esc(h.tip)}</span>` : ""}${meta.length ? `<span class="muted small">${esc(meta.join(" \u00b7 "))}</span>` : ""}</div>${hookUsageLine(I.usage)}<div class="hook-actions" style="margin-top:12px"><button type="button" class="btn primary" data-hi-save>Save to my hooks</button><button type="button" class="btn" data-hi-again>Try another</button><button type="button" class="btn" data-hi-close>Discard</button></div>`;
+  } else if (!hookAiOk()) {
+    el.innerHTML = head + `<p style="margin:0 0 8px">To read the technique, creatrr sends a few still frames from the recording or screenshots you pick to <b>Anthropic's Claude</b>, an AI service.</p><p class="muted small" style="margin:0 0 8px">They're used only to make your hook card. They aren't kept afterwards or used to train AI. Nothing else from your projects is sent. <a href="https://www.creatrr.co/privacy" target="_blank" rel="noopener">Privacy Policy</a></p>
+      <div class="hook-actions" style="margin-top:12px"><button type="button" class="btn primary" data-hi-allow>Allow and continue</button><button type="button" class="btn" data-hi-close>Not now</button></div>`;
   } else {
     const blocked = I.usage && I.usage.blocked;
-    el.innerHTML = head + `<p class="muted small" style="margin:0 0 8px">Pick a screen recording, or 2 to 6 screenshots, of the first few seconds of a video you like. creatrr works out the technique and turns it into your own hook card with a diagram, in its own words.</p>${hookUsageLine(I.usage)}
+    el.innerHTML = head + `<p class="muted small" style="margin:0 0 8px">Pick a screen recording, or 2 to 6 screenshots, of the first few seconds of a video you like. creatrr works out the technique and turns it into your own hook card with a diagram, in its own words. Frames go to Anthropic's Claude to read it.</p>${hookUsageLine(I.usage)}
       <div class="hi-btns"><button type="button" class="btn primary" data-hi-video${blocked ? " disabled" : ""}>Choose a screen recording</button><button type="button" class="btn" data-hi-shots${blocked ? " disabled" : ""}>Choose screenshots</button></div>
       <label class="band-lab" for="hiLink">Where's it from? (optional)</label><input type="text" id="hiLink" class="field" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="Paste the link to remember it" value="${esc(I.link)}">
       ${I.err ? `<p class="hi-err" role="alert">${esc(I.err)}</p>` : ""}<div class="suggest-row" style="margin-top:12px"><button type="button" class="btn" data-hi-close>Cancel</button></div>`;
   }
 }
+/* Apple 5.1.2(i): ask once before frames go to a third-party AI */
+function hookAiOk() { try { return localStorage.getItem("creatrr_hook_ai_ok_v1") === "1"; } catch (e) { return false; } }
 async function openHookImport() {
   hookImp = { stage: "pick", usage: null, frames: [], hook: null, link: "", err: "" };
   paintHookImport(); $("hookImportModal").classList.remove("hidden");
@@ -6891,8 +6896,9 @@ function saveImportedHook() {
 }
 document.addEventListener("click", e => { if (e.target.closest("[data-hook-import]")) openHookImport(); });
 $("hookImportModal").addEventListener("click", e => {
-  if (e.target.closest("[data-hi-video]")) { $("hookVideoInput").click(); return; }
-  if (e.target.closest("[data-hi-shots]")) { $("hookShotsInput").click(); return; }
+  if (e.target.closest("[data-hi-allow]")) { try { localStorage.setItem("creatrr_hook_ai_ok_v1", "1"); } catch (x) {} paintHookImport(); return; }
+  if (e.target.closest("[data-hi-video]")) { if (!hookAiOk()) { paintHookImport(); return; } $("hookVideoInput").click(); return; }
+  if (e.target.closest("[data-hi-shots]")) { if (!hookAiOk()) { paintHookImport(); return; } $("hookShotsInput").click(); return; }
   if (e.target.closest("[data-hi-save]")) { saveImportedHook(); return; }
   if (e.target.closest("[data-hi-again]")) { hookImp.stage = "pick"; hookImp.hook = null; paintHookImport(); return; }
   if (e.target.closest("[data-hi-close]")) hookImportSheet.close();
