@@ -1557,7 +1557,7 @@ struct LyricTapPanel: View {
                 Button("Cancel") { model.finishTapTiming(keep: false) }
                     .foregroundStyle(.white.opacity(0.75))
                 Spacer()
-                Text(count == 0 ? "Tap as each word starts" : (count == 1 ? "1 word timed" : "\(count) words timed"))
+                Text(Self.timedText(count))
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                 Spacer()
                 Button("Done") { model.finishTapTiming(keep: true) }
@@ -1581,12 +1581,36 @@ struct LyricTapPanel: View {
 }
 
 extension LyricTapPanel {
+    /// Words further down the queue fade: 0.75 for the one after next, then less, 0.2 at least.
+    static func fade(_ ahead: Int) -> Double {
+        let step: Double = Double(ahead - 1) * 0.18
+        return max(0.2, 0.75 - step)
+    }
+
+    /// The word just tapped pops in from the big one and slides off left.
+    static let tappedGoes: AnyTransition = AnyTransition.asymmetric(
+        insertion: AnyTransition.scale(scale: 1.4).combined(with: .opacity),
+        removal: AnyTransition.move(edge: .leading).combined(with: .opacity))
+    /// The next word slides in from the right and pops as it's tapped.
+    static let nextComes: AnyTransition = AnyTransition.asymmetric(
+        insertion: AnyTransition.move(edge: .trailing).combined(with: .opacity),
+        removal: AnyTransition.scale(scale: 1.4).combined(with: .opacity))
+    static let slideIn: AnyTransition = AnyTransition.move(edge: .trailing).combined(with: .opacity)
+
+    static func timedText(_ count: Int) -> String {
+        if count == 0 { return "Tap as each word starts" }
+        return count == 1 ? "1 word timed" : "\(count) words timed"
+    }
+
     /// The words lined up: the one just tapped (fading off to the left), the next one big in
     /// yellow, then the ones after it, so you can see each word coming. Each tap slides them along.
     var queue: some View {
         let words = model.lyrics
         let next = model.tapNext
         let count = model.lyricTapCount
+        let upTo: Int = min(words.count, next + 5)
+        let ahead: [Int] = next + 1 < upTo ? Array((next + 1)..<upTo) : []
+        let spoken: String = words.indices.contains(next) ? "Next word: " + words[next].text : "All words timed"
         return HStack(spacing: 10) {
             Button { model.lyricTapBack() } label: {
                 Image(systemName: "arrow.uturn.backward")
@@ -1606,27 +1630,25 @@ extension LyricTapPanel {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Tint.good.opacity(0.7))
                         .id("w\(next - 1)")
-                        .transition(.asymmetric(insertion: .scale(scale: 1.4).combined(with: .opacity),
-                                                removal: .move(edge: .leading).combined(with: .opacity)))
+                        .transition(Self.tappedGoes)
                 }
                 if words.indices.contains(next) {
                     Text(words[next].text)
                         .font(.title2.weight(.heavy))
                         .foregroundStyle(Tint.accent)
                         .id("w\(next)")
-                        .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                removal: .scale(scale: 1.4).combined(with: .opacity)))
+                        .transition(Self.nextComes)
                 } else {
                     Text("All done")
                         .font(.title3.weight(.heavy))
                         .foregroundStyle(Tint.good)
                 }
-                ForEach(Array(stride(from: next + 1, to: min(words.count, next + 5), by: 1)), id: \.self) { i in
+                ForEach(ahead, id: \.self) { i in
                     Text(words[i].text)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(max(0.2, 0.75 - Double(i - next - 1) * 0.18)))
+                        .foregroundStyle(Color.white.opacity(Self.fade(i - next)))
                         .id("w\(i)")
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .transition(Self.slideIn)
                 }
                 Spacer(minLength: 0)
             }
@@ -1635,7 +1657,7 @@ extension LyricTapPanel {
             .clipped()
             .animation(.spring(duration: 0.28, bounce: 0.35), value: next)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(words.indices.contains(next) ? "Next word: \(words[next].text)" : "All words timed")
+            .accessibilityLabel(spoken)
         }
     }
 }
@@ -2149,8 +2171,10 @@ struct ZoomFrames: View {
     }
 
     private func rect(_ b: ZoomBox, _ size: CGSize) -> CGRect {
-        CGRect(x: CGFloat(b.x - b.size / 2) * size.width, y: CGFloat(b.y - b.size / 2) * size.height,
-               width: CGFloat(b.size) * size.width, height: CGFloat(b.size) * size.height)
+        let side: CGFloat = CGFloat(b.size)
+        let left: CGFloat = CGFloat(b.x) - side / 2
+        let top: CGFloat = CGFloat(b.y) - side / 2
+        return CGRect(x: left * size.width, y: top * size.height, width: side * size.width, height: side * size.height)
     }
 
     private func box(_ b: ZoomBox, color: Color, label: String, size: CGSize) -> some View {
@@ -2170,11 +2194,29 @@ struct ZoomFrames: View {
                     .fill(.white)
                     .frame(width: 12, height: 12)
                     .overlay(Rectangle().strokeBorder(color, lineWidth: 2))
-                    .position(x: corner % 2 == 0 ? 0 : r.width, y: corner < 2 ? 0 : r.height)
+                    .position(cornerPoint(corner, r))
             }
         }
         .frame(width: r.width, height: r.height)
         .position(x: r.midX, y: r.midY)
+    }
+
+    /// A box's corner, 0 to 3 (top left, top right, bottom left, bottom right), in the box's own space.
+    private func cornerPoint(_ corner: Int, _ r: CGRect) -> CGPoint {
+        let x: CGFloat = corner % 2 == 0 ? 0 : r.width
+        let y: CGFloat = corner < 2 ? 0 : r.height
+        return CGPoint(x: x, y: y)
+    }
+
+    /// The corner grab for one corner of a box: the opposite corner stays put.
+    private func cornerGrab(isStart: Bool, corner: CGPoint, r: CGRect, w: Double, h: Double) -> Grab {
+        let left: Bool = corner.x == r.minX
+        let top: Bool = corner.y == r.minY
+        let fixedX: Double = Double(left ? r.maxX : r.minX) / w
+        let fixedY: Double = Double(top ? r.maxY : r.minY) / h
+        let dx: Double = left ? -1 : 1
+        let dy: Double = top ? -1 : 1
+        return .corner(start: isStart, fixed: CGPoint(x: fixedX, y: fixedY), dx: dx, dy: dy)
     }
 
     private func changed(_ value: DragGesture.Value, size: CGSize, start: ZoomBox, end: ZoomBox) {
@@ -2183,24 +2225,25 @@ struct ZoomFrames: View {
             model.pause()
             let at = value.startLocation
             // A corner first (the nearest within reach), then inside the smaller box, then the bigger.
-            var best: (Grab, CGFloat)?
-            for (isStart, b) in [(true, start), (false, end)] {
-                let r = rect(b, size)
-                for corner in [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
-                               CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)] {
-                    let d = hypot(corner.x - at.x, corner.y - at.y)
-                    guard d <= Self.reach, d < (best?.1 ?? .infinity) else { continue }
-                    let fixed = CGPoint(x: Double(corner.x == r.minX ? r.maxX : r.minX) / w,
-                                        y: Double(corner.y == r.minY ? r.maxY : r.minY) / h)
-                    best = (.corner(start: isStart, fixed: fixed,
-                                    dx: corner.x == r.minX ? -1 : 1, dy: corner.y == r.minY ? -1 : 1), d)
+            var bestGrab: Grab?
+            var bestDistance: CGFloat = .infinity
+            let boxes: [(Bool, ZoomBox)] = [(true, start), (false, end)]
+            for (isStart, b) in boxes {
+                let r: CGRect = rect(b, size)
+                let corners: [CGPoint] = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
+                                          CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)]
+                for corner in corners {
+                    let d: CGFloat = hypot(corner.x - at.x, corner.y - at.y)
+                    guard d <= Self.reach, d < bestDistance else { continue }
+                    bestDistance = d
+                    bestGrab = cornerGrab(isStart: isStart, corner: corner, r: r, w: w, h: h)
                 }
             }
-            if let best {
-                grab = best.0
+            if let bestGrab {
+                grab = bestGrab
             } else {
-                let order = start.size <= end.size ? [(true, start), (false, end)] : [(false, end), (true, start)]
-                if let hit = order.first(where: { rect($0.1, size).insetBy(dx: -8, dy: -8).contains(at) }) {
+                let smallerFirst: [(Bool, ZoomBox)] = start.size <= end.size ? boxes : boxes.reversed()
+                if let hit = smallerFirst.first(where: { rect($0.1, size).insetBy(dx: -8, dy: -8).contains(at) }) {
                     grab = .move(start: hit.0, from: hit.1)
                 } else {
                     return
@@ -2211,18 +2254,24 @@ struct ZoomFrames: View {
         switch grab {
         case let .move(isStart, from):
             var next = from
-            next.x += Double(value.translation.width) / w
-            next.y += Double(value.translation.height) / h
+            let moveX: Double = Double(value.translation.width) / w
+            let moveY: Double = Double(value.translation.height) / h
+            next.x += moveX
+            next.y += moveY
             set(isStart, next.held())
         case let .corner(isStart, fixed, dx, dy):
-            let fx = Double(fixed.x), fy = Double(fixed.y)
-            let px = Double(value.location.x) / w, py = Double(value.location.y) / h
+            let fx: Double = Double(fixed.x)
+            let fy: Double = Double(fixed.y)
+            let px: Double = Double(value.location.x) / w
+            let py: Double = Double(value.location.y) / h
             var s: Double = max(abs(px - fx), abs(py - fy))
             // Room from the fixed corner to the frame's edges on the finger's side.
             let roomX: Double = dx > 0 ? 1 - fx : fx
             let roomY: Double = dy > 0 ? 1 - fy : fy
             s = min(max(s, ZoomBox.smallest), roomX, roomY)
-            set(isStart, ZoomBox(x: fx + dx * s / 2, y: fy + dy * s / 2, size: s).held())
+            let centerX: Double = fx + dx * s / 2
+            let centerY: Double = fy + dy * s / 2
+            set(isStart, ZoomBox(x: centerX, y: centerY, size: s).held())
         }
     }
 
