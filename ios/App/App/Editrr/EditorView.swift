@@ -1560,28 +1560,40 @@ struct TapBeatPanel: View {
 protocol LyricTapping: AnyObject {
     var lyrics: [LyricWord] { get }
     var tapNext: Int { get }
+    /// Taps so far on the word being recorded (one a syllable).
+    var tapSyllable: Int { get }
+    /// Playing back the taps to check them.
+    var tapChecking: Bool { get }
     var isPlaying: Bool { get }
+    var time: Double { get }
     var lyricTapCount: Int { get }
     func lyricTap()
     func lyricTapBack()
     func lyricTapRestart()
+    func lyricTapCheck(_ on: Bool)
+    func setSyllables(_ index: Int, _ count: Int)
     func finishTapTiming(keep: Bool)
 }
 
 extension EditorModel: LyricTapping {}
 
 /// Tap the lyrics' timing, full screen: the song's waveform and the word blocks on top (they
-/// move as you tap), the next word big in the middle with the ones after it lined up, and a tall
-/// pad for each thumb at the bottom. Back takes the last tap off; Start over takes them all off.
+/// move as you tap), then the words: the one before in green with a check, the one being recorded
+/// big in yellow, and the ones coming up in white. A word of more than one syllable takes a tap
+/// for each (its dots fill as you tap). Play back plays it all to check before Done; Back takes the
+/// last word off and Start over takes them all off. A tall pad for each thumb at the bottom.
 struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
     let model: Model
     /// The song's waveform and the word blocks.
     @ViewBuilder let top: Top
 
     var body: some View {
-        let playing = model.isPlaying
+        let checking = model.tapChecking
+        let playing = model.isPlaying && !checking
         let count = model.lyricTapCount
-        let spoken: String = playing ? "Next word starts now" : "Play"
+        let spoken: String = checking ? "Back to tapping" : (playing ? "Next word or syllable now" : "Play")
+        let idle: String = checking ? "Back to tapping" : "Play"
+        let trigger: Int = count * 8 + model.tapSyllable
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 12) {
@@ -1592,11 +1604,11 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
                 queue
                 Spacer(minLength: 8)
                 tryAgainRow(count: count)
-                // A pad for each thumb: either one starts the next word.
+                // A pad for each thumb: either one taps.
                 HStack(spacing: 10) {
-                    TapPad(playing: playing, idle: "Play", spoken: spoken, trigger: count,
+                    TapPad(playing: playing, idle: idle, spoken: spoken, trigger: trigger,
                            height: 170) { model.lyricTap() }
-                    TapPad(playing: playing, idle: "Play", spoken: spoken, trigger: count,
+                    TapPad(playing: playing, idle: idle, spoken: spoken, trigger: trigger,
                            height: 170) { model.lyricTap() }
                 }
             }
@@ -1611,7 +1623,7 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
             Button("Cancel") { model.finishTapTiming(keep: false) }
                 .foregroundStyle(.white.opacity(0.75))
             Spacer()
-            Text(TapQueueLook.timedText(count))
+            Text(model.tapChecking ? "Checking your timing" : TapQueueLook.timedText(count))
                 .font(.subheadline.weight(.semibold).monospacedDigit())
             Spacer()
             Button("Done") { model.finishTapTiming(keep: true) }
@@ -1623,26 +1635,37 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
         .frame(height: 44)
     }
 
-    /// Back (one tap off) on the left, Start over (all of them off) on the right.
+    /// Back (the last word off), Play back (check it with the music), Start over (all of them off).
     private func tryAgainRow(count: Int) -> some View {
         let dim: Color = Color.white.opacity(0.3)
+        let none: Bool = count == 0
+        let checking = model.tapChecking
         return HStack {
             Button { model.lyricTapBack() } label: {
                 Label("Back", systemImage: "arrow.uturn.backward")
                     .frame(height: 44)
                     .contentShape(Rectangle())
             }
-            .foregroundStyle(count == 0 ? dim : Color.white)
-            .disabled(count == 0)
-            .accessibilityHint("Takes the last tap off to do it again")
+            .foregroundStyle(none ? dim : Color.white)
+            .disabled(none)
+            .accessibilityHint("Takes the last word off to do it again")
+            Spacer()
+            Button { model.lyricTapCheck(!checking) } label: {
+                Label(checking ? "Stop" : "Play back", systemImage: checking ? "stop.fill" : "play.fill")
+                    .frame(height: 44)
+                    .contentShape(Rectangle())
+            }
+            .foregroundStyle(none ? dim : Tint.accent)
+            .disabled(none)
+            .accessibilityHint("Plays from the start with the words as you tapped them")
             Spacer()
             Button { model.lyricTapRestart() } label: {
                 Label("Start over", systemImage: "arrow.counterclockwise")
                     .frame(height: 44)
                     .contentShape(Rectangle())
             }
-            .foregroundStyle(count == 0 ? dim : Color.white)
-            .disabled(count == 0)
+            .foregroundStyle(none ? dim : Color.white)
+            .disabled(none)
             .accessibilityHint("Takes every tap off and goes back to the start")
         }
         .font(.body.weight(.semibold))
@@ -1655,82 +1678,164 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
 /// view can't hold stored statics).
 @MainActor
 enum TapQueueLook {
-    /// Words further down the queue fade: 0.8 for the one after next, then less, 0.25 at least.
+    /// Words further down the queue fade: 0.85 for the next one, then less, 0.25 at least.
     static func fade(_ ahead: Int) -> Double {
-        let step: Double = Double(ahead - 1) * 0.18
-        return max(0.25, 0.8 - step)
+        let step: Double = Double(ahead) * 0.18
+        return max(0.25, 0.85 - step)
     }
 
-    /// The word just tapped drops up and away.
-    static let tappedGoes: AnyTransition = AnyTransition.asymmetric(
-        insertion: AnyTransition.scale(scale: 1.6).combined(with: .opacity),
-        removal: AnyTransition.move(edge: .top).combined(with: .opacity))
-    /// The next word comes up from the line below and pops as it's tapped.
-    static let nextComes: AnyTransition = AnyTransition.asymmetric(
+    /// The word just done goes up to the green line.
+    static let doneGoes: AnyTransition = AnyTransition.asymmetric(
         insertion: AnyTransition.move(edge: .bottom).combined(with: .opacity),
-        removal: AnyTransition.scale(scale: 1.4).combined(with: .opacity))
-    static let slideIn: AnyTransition = AnyTransition.move(edge: .trailing).combined(with: .opacity)
+        removal: AnyTransition.move(edge: .top).combined(with: .opacity))
+    /// The word being recorded comes up from the line below.
+    static let nowComes: AnyTransition = AnyTransition.asymmetric(
+        insertion: AnyTransition.move(edge: .bottom).combined(with: .opacity),
+        removal: AnyTransition.move(edge: .top).combined(with: .opacity))
+    static let slideIn: AnyTransition = AnyTransition.asymmetric(
+        insertion: AnyTransition.move(edge: .trailing).combined(with: .opacity),
+        removal: AnyTransition.opacity)
 
     static func timedText(_ count: Int) -> String {
         if count == 0 { return "Tap as each word starts" }
         return count == 1 ? "1 word timed" : "\(count) words timed"
     }
+
+    /// A dot for each syllable, the tapped ones filled.
+    static func dots(total: Int, filled: Int, size: CGFloat) -> some View {
+        HStack(spacing: size * 0.6) {
+            ForEach(0..<total, id: \.self) { i in
+                Circle()
+                    .fill(i < filled ? Tint.good : Color.white.opacity(0.35))
+                    .frame(width: size, height: size)
+            }
+        }
+    }
 }
 
 extension LyricTapScreen {
+    /// The word being recorded (or, while checking, the word being sung). Before the first tap
+    /// there's none: the first word waits big and faint.
+    private var currentIndex: Int? {
+        let words = model.lyrics
+        if model.tapChecking {
+            let now = model.time + 0.01
+            return words.lastIndex(where: { $0.start <= now })
+        }
+        if model.lyricTapCount > 0 && words.indices.contains(model.tapNext - 1) { return model.tapNext - 1 }
+        return nil
+    }
 
-    /// The words lined up: the one just tapped (small, green), the next one big in yellow, and the
-    /// next few under it, so you can see each word coming. Each tap moves them up.
+    /// The words lined up: the one before in green with a check, the one being recorded big in
+    /// yellow (its syllable dots under it), and the next few in white.
     var queue: some View {
         let words = model.lyrics
-        let next = model.tapNext
-        let count = model.lyricTapCount
-        let upTo: Int = min(words.count, next + 5)
-        let ahead: [Int] = next + 1 < upTo ? Array((next + 1)..<upTo) : []
-        let spoken: String = words.indices.contains(next) ? "Next word: " + words[next].text : "All words timed"
+        let checking = model.tapChecking
+        let current: Int? = currentIndex
+        let firstTapped: Int = model.tapNext - model.lyricTapCount
+        // Checking, before the first word: the first word is next.
+        let next: Int = current.map { $0 + 1 } ?? (checking ? 0 : model.tapNext)
+        let upTo: Int = min(words.count, next + 4)
+        let ahead: [Int] = next < upTo ? Array(next..<upTo) : []
+        let big: Int? = current ?? (words.indices.contains(next) ? next : nil)
+        var prev: Int? = nil
+        if let current, current > 0, checking || current - 1 >= firstTapped { prev = current - 1 }
+        let spoken: String = big.map { "Now: " + words[$0].text } ?? "All words timed"
         return VStack(spacing: 10) {
+            // The word before: done.
             ZStack {
-                if next > 0, words.indices.contains(next - 1), count > 0 {
-                    Text(words[next - 1].text)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(Tint.good.opacity(0.8))
-                        .id("w\(next - 1)")
-                        .transition(TapQueueLook.tappedGoes)
+                if let prev {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text(words[prev].text)
+                    }
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Tint.good)
+                    .id("d\(prev)")
+                    .transition(TapQueueLook.doneGoes)
                 }
             }
             .frame(height: 30)
+            // The word being recorded, big in yellow (the first word waits faint before any tap).
             ZStack {
-                if words.indices.contains(next) {
-                    Text(words[next].text)
+                if let big {
+                    Text(words[big].text)
                         .font(.system(size: 56, weight: .heavy))
-                        .foregroundStyle(Tint.accent)
-                        .id("w\(next)")
-                        .transition(TapQueueLook.nextComes)
-                } else {
-                    Text("All done. Tap Done to keep it.")
-                        .font(.title2.weight(.heavy))
-                        .foregroundStyle(Tint.good)
+                        .foregroundStyle(current == nil ? Color.white.opacity(0.35) : Tint.accent)
+                        .id("w\(big)")
+                        .transition(TapQueueLook.nowComes)
                 }
             }
             .frame(height: 70)
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                ForEach(ahead, id: \.self) { i in
-                    Text(words[i].text)
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(Color.white.opacity(TapQueueLook.fade(i - next)))
-                        .id("w\(i)")
-                        .transition(TapQueueLook.slideIn)
+            syllables(big, recording: current != nil && !checking)
+                .frame(height: 24)
+            // Coming up.
+            ZStack {
+                if ahead.isEmpty && !checking && model.lyricTapCount > 0 {
+                    Text("That's every word. Play back to check it, then Done.")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Tint.good)
+                } else {
+                    HStack(alignment: .top, spacing: 14) {
+                        ForEach(ahead, id: \.self) { i in
+                            upcoming(i, ahead: i - next)
+                                .id("u\(i)")
+                                .transition(TapQueueLook.slideIn)
+                        }
+                    }
                 }
             }
-            .frame(height: 34)
+            .frame(height: 44)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.5)
         .frame(maxWidth: .infinity)
         .clipped()
-        .animation(.spring(duration: 0.28, bounce: 0.35), value: next)
+        .animation(.spring(duration: 0.28, bounce: 0.3), value: current)
+        .animation(.easeOut(duration: 0.12), value: model.tapSyllable)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(spoken)
+    }
+
+    /// The big word's syllable dots: tap them to change how many taps it takes.
+    @ViewBuilder
+    private func syllables(_ index: Int?, recording: Bool) -> some View {
+        if let index, model.lyrics.indices.contains(index) {
+            let total: Int = LyricSyllables.count(model.lyrics[index])
+            let filled: Int = recording ? min(model.tapSyllable, total) : 0
+            let label: String = total == 1 ? "1 tap" : "\(total) taps"
+            Button {
+                model.setSyllables(index, total % 4 + 1)
+            } label: {
+                HStack(spacing: 8) {
+                    TapQueueLook.dots(total: total, filled: filled, size: 10)
+                    Text(label)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(model.tapChecking)
+            .accessibilityLabel(label)
+            .accessibilityHint("Changes how many taps this word takes, one a syllable")
+        }
+    }
+
+    /// A word coming up, with its syllable dots when it takes more than one tap.
+    private func upcoming(_ i: Int, ahead: Int) -> some View {
+        let word = model.lyrics[i]
+        let total: Int = LyricSyllables.count(word)
+        return VStack(spacing: 4) {
+            Text(word.text)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(Color.white.opacity(TapQueueLook.fade(ahead)))
+            if total > 1 {
+                TapQueueLook.dots(total: total, filled: 0, size: 5)
+            }
+        }
     }
 }
 

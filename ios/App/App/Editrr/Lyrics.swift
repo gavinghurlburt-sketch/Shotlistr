@@ -22,6 +22,8 @@ struct LyricWord: Codable, Equatable, Sendable {
     var scale: Double? = nil
     var stroke: Double? = nil
     var strokeColor: String? = nil
+    /// How many taps it takes when tapping out the timing (one a syllable); nil: worked out from the word.
+    var syl: Int? = nil
 
     /// Has a style of its own beyond the look.
     var hasOwnStyle: Bool { color != nil || font != nil || scale != nil || stroke != nil || strokeColor != nil }
@@ -442,6 +444,37 @@ enum LyricTiming {
 }
 
 // MARK: - Cleaning up what was heard, lines, and "Re-time my words" (Lyric Sync's local.js)
+
+/// How many syllables a word has, roughly (vowel groups, less a silent e), for tapping out the
+/// timing one tap a syllable: "driving" 2, "guilty" 2, "pleasure" 2, "the" 1.
+enum LyricSyllables {
+    static func count(_ word: LyricWord) -> Int { min(6, max(1, word.syl ?? guess(word.text))) }
+
+    static func guess(_ text: String) -> Int {
+        let letters = Array(text.lowercased().filter { $0.isLetter })
+        guard !letters.isEmpty else { return 1 }
+        let vowels: Set<Character> = ["a", "e", "i", "o", "u", "y"]
+        var groups = 0
+        var inVowel = false
+        for (i, ch) in letters.enumerated() {
+            // A y at the start is a consonant ("you", "yeah").
+            let vowel = vowels.contains(ch) && !(ch == "y" && i == 0)
+            if vowel && !inVowel { groups += 1 }
+            inVowel = vowel
+        }
+        let n = letters.count
+        if n > 2, letters[n - 1] == "e", !vowels.contains(letters[n - 2]) {
+            // A silent e ("love", "smile"), but not "-le" after a consonant ("people", "little").
+            let le = letters[n - 2] == "l" && n > 3 && !vowels.contains(letters[n - 3])
+            if !le { groups -= 1 }
+        } else if n > 3, letters[n - 1] == "d", letters[n - 2] == "e", !"td".contains(letters[n - 3]),
+                  !vowels.contains(letters[n - 3]) {
+            // "-ed" is usually silent ("smiled", "loved"), but not after t or d ("wanted").
+            groups -= 1
+        }
+        return min(6, max(1, groups))
+    }
+}
 
 enum LyricText {
     /// Lower case letters, numbers and apostrophes only, for matching words.

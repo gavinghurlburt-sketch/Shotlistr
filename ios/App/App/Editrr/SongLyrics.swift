@@ -81,6 +81,10 @@ final class SongLyricsModel: LyricTapping {
     var listening: String?
     var tapTiming = false
     var tapNext = 0
+    /// Taps on the word being recorded (the one before `tapNext`): one a syllable.
+    var tapSyllable = 0
+    /// Playing back what was tapped to check it (taps don't record meanwhile).
+    var tapChecking = false
     var canUndo: Bool { !history.isEmpty }
     /// After each save: how many words the song now has (for creatrr's song page).
     @ObservationIgnored var saved: ((Int) -> Void)?
@@ -95,6 +99,7 @@ final class SongLyricsModel: LyricTapping {
     @ObservationIgnored private var tapBefore: [LyricWord]?
     @ObservationIgnored private var tapFirst = 0
     @ObservationIgnored private var tapFrom: Double = 0
+    @ObservationIgnored private var tapLastAt: Double = -1
 
     /// The longest a tapped word stays up before the next tap.
     static let tapLongest = 3.0
@@ -302,6 +307,9 @@ final class SongLyricsModel: LyricTapping {
         let from = lyrics.firstIndex(where: { $0.start >= time - 0.05 }) ?? 0
         tapNext = min(max(0, from), lyrics.count - 1)
         tapFirst = tapNext
+        tapSyllable = 0
+        tapLastAt = -1
+        tapChecking = false
         tapTiming = true
         let at: Double = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
         tapFrom = at
@@ -311,16 +319,31 @@ final class SongLyricsModel: LyricTapping {
 
     func lyricTap() {
         guard tapTiming, !lyrics.isEmpty else { return }
+        if tapChecking {
+            lyricTapCheck(false)
+            return
+        }
         guard isPlaying else {
             play()
             return
         }
         let now = player.currentTime().seconds
-        guard now.isFinite, lyrics.indices.contains(tapNext) else { return }
-        let i = tapNext
+        guard now.isFinite else { return }
         let at = min(max(0, now), duration)
         // Two taps closer than a couple of frames are one tap (both thumbs at once).
-        if i > tapFirst, at < lyrics[i - 1].start + 0.06 { return }
+        if tapLastAt >= 0, abs(at - tapLastAt) < 0.06 { return }
+        // A word of more than one syllable takes a tap for each: these stay on the same word.
+        let current = tapNext - 1
+        if current >= tapFirst, lyrics.indices.contains(current), tapSyllable < LyricSyllables.count(lyrics[current]) {
+            tapSyllable += 1
+            tapLastAt = at
+            lyrics[current].end = max(lyrics[current].end, at + 0.25)
+            return
+        }
+        guard lyrics.indices.contains(tapNext) else { return }
+        let i = tapNext
+        tapLastAt = at
+        tapSyllable = 1
         let length = lyrics[i].end - lyrics[i].start
         lyrics[i].start = at
         lyrics[i].end = at + min(max(0.3, length), Self.tapLongest)
@@ -337,11 +360,14 @@ final class SongLyricsModel: LyricTapping {
     func lyricTapBack() {
         guard tapTiming, tapNext > tapFirst, let before = tapBefore else { return }
         pause()
+        tapChecking = false
         tapNext -= 1
         let i = tapNext
         if before.indices.contains(i), lyrics.indices.contains(i) { lyrics[i] = before[i] }
         let from = i > tapFirst ? lyrics[i - 1].start : lyrics[i].start - 2
         seek(max(0, from - 1))
+        tapSyllable = 99
+        tapLastAt = -1
     }
 
     func lyricTapRestart() {
@@ -349,12 +375,43 @@ final class SongLyricsModel: LyricTapping {
         pause()
         lyrics = before
         tapNext = tapFirst
+        tapSyllable = 0
+        tapLastAt = -1
+        tapChecking = false
         seek(tapFrom)
+    }
+
+    /// Play back: plays from where this go of tapping started, to check the words before Done.
+    /// Off stops and goes back to just before the last tapped word, ready to tap on.
+    func lyricTapCheck(_ on: Bool) {
+        guard tapTiming else { return }
+        pause()
+        if on {
+            tapChecking = true
+            seek(tapFrom)
+            play()
+            return
+        }
+        tapChecking = false
+        let last = tapNext - 1
+        let from = last >= tapFirst && lyrics.indices.contains(last) ? lyrics[last].start - 1 : tapFrom
+        seek(max(0, from))
+        tapSyllable = 99
+        tapLastAt = -1
+    }
+
+    /// How many taps a word takes (one a syllable): changed on the tap screen, kept with the word.
+    func setSyllables(_ index: Int, _ count: Int) {
+        guard lyrics.indices.contains(index) else { return }
+        let value = min(6, max(1, count))
+        lyrics[index].syl = value == LyricSyllables.guess(lyrics[index].text) ? nil : value
+        if !tapTiming { save() }
     }
 
     /// Done keeps the tapped times (Undo takes them all back); Cancel puts the words back.
     func finishTapTiming(keep: Bool) {
         pause()
+        tapChecking = false
         guard tapTiming else { return }
         tapTiming = false
         guard let before = tapBefore else { return }
