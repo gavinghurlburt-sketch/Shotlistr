@@ -429,20 +429,15 @@ struct EditTimeline: View {
                         }
                     }
                     // A small label, so it reads as the performance.
-                    // The performance's mark (clips offset on their tracks), then its name.
-                    let label = context.resolve(Text("Performance")
+                    let label = context.resolve(Text("\(Image(systemName: PerformanceGlyph.name)) Performance")
                         .font(.caption2.weight(.bold)).foregroundStyle(.white))
                     let textSize = label.measure(in: CGSize(width: 200, height: 40))
-                    let mark = CGSize(width: 12, height: 9)
                     let spot = CGRect(x: max(rect.minX, 0) + (picked == clip.id ? 17 : 4),
                                       y: rect.maxY - band - textSize.height - 5,
-                                      width: mark.width + 3 + textSize.width + 8, height: textSize.height + 2)
+                                      width: textSize.width + 8, height: textSize.height + 2)
                     if spot.maxX < rect.maxX - 4 {
                         context.fill(Path(spot), with: .color(.black.opacity(0.6)))
-                        let markBox = CGRect(x: spot.minX + 4, y: spot.midY - mark.height / 2,
-                                             width: mark.width, height: mark.height)
-                        context.fill(PerformanceGlyph().path(in: markBox), with: .color(.white))
-                        context.draw(label, at: CGPoint(x: markBox.maxX + 3, y: spot.midY), anchor: .leading)
+                        context.draw(label, at: CGPoint(x: spot.midX, y: spot.midY))
                     }
                 }
             }

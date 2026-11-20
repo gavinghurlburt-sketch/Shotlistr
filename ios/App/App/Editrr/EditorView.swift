@@ -363,15 +363,10 @@ struct NewVideoSheet: View {
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 14) {
-                Group {
-                    if icon == PerformanceGlyph.name {
-                        PerformanceGlyph().frame(width: 26, height: 21).frame(height: 28)
-                    } else {
-                        Image(systemName: icon).font(.title2.weight(.semibold))
-                    }
-                }
-                .foregroundStyle(tint)
-                .frame(width: 34)
+                Image(systemName: icon)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 34)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline)
                     Text(detail)
@@ -2170,8 +2165,8 @@ struct ProjectTile: View {
                 .overlay(alignment: .topLeading) {
                     // A performance gets a small mark, so the two kinds are easy to tell apart.
                     if project.kind != "video" {
-                        PerformanceGlyph()
-                            .frame(width: 13, height: 10)
+                        Image(systemName: PerformanceGlyph.name)
+                            .font(.caption2.weight(.bold))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 6).padding(.vertical, 4)
                             .background(Tint.accent, in: Capsule())

@@ -180,20 +180,19 @@ struct ToolItem: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                if icon == PerformanceGlyph.name {
-                    PerformanceGlyph().frame(width: 22, height: 18).frame(height: 22)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 19, weight: .semibold))
-                        .frame(height: 22)
-                }
+                Image(systemName: icon)
+                    .font(.system(size: 19, weight: .semibold))
+                    .frame(height: 22)
+                // Full size, never squeezed: the row makes room for it.
                 Text(text)
                     .font(.caption2.weight(.medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .fixedSize()
             }
             .foregroundStyle(on ? tint : Color.white.opacity(0.9))
-            .frame(width: 64, height: 52)
+            .padding(.horizontal, 4)
+            .frame(minWidth: 48)
+            .frame(height: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -220,50 +219,41 @@ struct ToolStrip<Content: View>: View {
     }
 }
 
-/// Lays the tools out left to right, sharing the spare width between them as even gaps (at most
-/// `maxGap` each, so two or three tools don't end up far apart).
+/// Lays the tools out left to right with the same space between each pair (never less than
+/// `minGap`, at most `maxGap`), spreading them over the width when there's room.
 /// (SwiftUI's Layout: the editor has its own `Layout` enum.)
 struct SpreadRow: SwiftUI.Layout {
     var minWidth: CGFloat
-    var maxGap: CGFloat = 30
+    var minGap: CGFloat = 10
+    var maxGap: CGFloat = 34
+
+    private func widths(_ subviews: LayoutSubviews) -> [CGFloat] {
+        subviews.map { $0.sizeThatFits(ProposedViewSize.unspecified).width }
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: LayoutSubviews, cache: inout ()) -> CGSize {
-        let sizes: [CGSize] = subviews.map { $0.sizeThatFits(ProposedViewSize.unspecified) }
-        let total = sizes.reduce(0) { $0 + $1.width }
-        return CGSize(width: max(total, minWidth), height: sizes.map { $0.height }.max() ?? 0)
+        let total = widths(subviews).reduce(0, +) + minGap * CGFloat(subviews.count)
+        let height = subviews.map { $0.sizeThatFits(ProposedViewSize.unspecified).height }.max() ?? 0
+        return CGSize(width: max(total, minWidth), height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: LayoutSubviews, cache: inout ()) {
         guard !subviews.isEmpty else { return }
-        let sizes: [CGSize] = subviews.map { $0.sizeThatFits(ProposedViewSize.unspecified) }
-        let total = sizes.reduce(0) { $0 + $1.width }
-        let gap = min(maxGap, max(0, bounds.width - total) / CGFloat(subviews.count))
+        let sizes = widths(subviews)
+        let spare = bounds.width - sizes.reduce(0, +)
+        let gap = min(maxGap, max(minGap, spare / CGFloat(subviews.count)))
         var x = bounds.minX
-        for (subview, size) in zip(subviews, sizes) {
-            subview.place(at: CGPoint(x: x + (size.width + gap) / 2, y: bounds.midY),
-                          anchor: UnitPoint.center, proposal: ProposedViewSize(size))
-            x += size.width + gap
+        for (subview, width) in zip(subviews, sizes) {
+            subview.place(at: CGPoint(x: x + (width + gap) / 2, y: bounds.midY),
+                          anchor: UnitPoint.center, proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width + gap
         }
     }
 }
 
-/// The performance's mark: a few clips sitting offset on their tracks, as on an edit page.
-struct PerformanceGlyph: Shape {
-    /// The name ToolItem takes in place of a symbol's to draw this mark.
-    static let name = "editrr.performance"
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let bar = rect.height * 0.22
-        // (from, to, top) as fractions of the box.
-        let clips: [(CGFloat, CGFloat, CGFloat)] = [(0, 0.56, 0.04), (0.3, 1, 0.39), (0.12, 0.74, 0.74)]
-        for (from, to, top) in clips {
-            path.addRoundedRect(in: CGRect(x: rect.minX + rect.width * from, y: rect.minY + rect.height * top,
-                                           width: rect.width * (to - from), height: bar),
-                                cornerSize: CGSize(width: bar * 0.2, height: bar * 0.2))
-        }
-        return path
-    }
+/// The performance's mark: a grid of four squares (his pick).
+enum PerformanceGlyph {
+    static let name = "square.grid.2x2"
 }
 
 extension EnvironmentValues {
