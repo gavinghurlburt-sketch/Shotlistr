@@ -550,8 +550,6 @@ struct EditingView: View {
     @State private var fullScreen = false
     @State private var exporting = false
     @State private var autoEditing = false
-    /// The starter recipes sheet.
-    @State private var recipesOpen = false
     @State private var lyricsOpen = false
     /// The lyrics' look on its own (from the lyrics track's Look tool).
     @State private var lookOpen = false
@@ -882,11 +880,6 @@ struct EditingView: View {
             }
         }
         .frame(height: 52)
-        .sheet(isPresented: $recipesOpen) {
-            RecipesSheet(model: model)
-                .presentationDetents([.medium])
-                .presentationBackground(Tint.surface)
-        }
         // The lyrics' look (colors, font, animation...), without the word editing.
         .sheet(isPresented: $lookOpen) {
             LyricsSheet(model: model, lookOnly: true)
@@ -942,15 +935,8 @@ struct EditingView: View {
                              spoken: "Performance: every video synced to the song") {
                         withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
                     }
-                    ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
-                    shuffleTool
-                    ToolItem(icon: "list.bullet.rectangle", text: "Recipes",
-                             spoken: "Starter recipes: lyric video, performance cut, 15 second teaser") {
-                        model.pause()
-                        recipesOpen = true
-                    }
-                    // On the edit page only once there are clips besides the performance.
-                    if model.cutaways.count >= 2 { tapBeatTool }
+                    // No Auto edit, Shuffle or Tap to cut here: the performance is already edited
+                    // (on its own page), so nothing on this page can re-cut it by accident.
                 }
                 // A photo or video on top of the main video.
                 ToolItem(icon: "square.on.square", text: "Overlay", enabled: model.canAddOverlay,
@@ -1415,51 +1401,6 @@ struct ExportSheet: View {
     }
 }
 
-/// One-tap starting points: each sets the length, the lyrics and the cuts.
-struct RecipesSheet: View {
-    let model: EditorModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Starter recipes").font(.title3.weight(.bold))
-            Text("One tap sets the length, the lyrics and the cuts. Undo takes the cuts back.")
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.7))
-            ForEach(StarterRecipe.allCases) { recipe in
-                Button {
-                    dismiss()
-                    Task { await model.applyRecipe(recipe) }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: recipe.icon)
-                            .font(.title3.weight(.semibold))
-                            .frame(width: 30)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(recipe.name).font(.body.weight(.bold))
-                            Text(recipe == .lyricVideo && !model.hasLyrics
-                                 ? "Add your lyrics first (Lyrics, on the left)."
-                                 : recipe.detail)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.7))
-                                .multilineTextAlignment(.leading)
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").foregroundStyle(.white.opacity(0.5))
-                    }
-                    .padding(12)
-                    .background(Tint.surface2, in: Corner.chip)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(.white)
-        .padding(20)
-    }
-}
-
 /// After an export: a quick celebration, then one tap to post. The video is already in Photos
 /// (newest first), so Instagram and TikTok open straight to where you pick it. More is the share
 /// sheet. You do the posting.
@@ -1628,7 +1569,7 @@ struct FirstTips: View {
 
     private let tips = [
         Tip(icon: "wand.and.stars", title: "Start with Auto edit",
-            text: "It makes a whole cut from your clips in one tap. Change anything you like after."),
+            text: "On the Performance page, it makes a whole cut from your takes in one tap. Change anything you like after."),
         Tip(icon: "hand.tap", title: "Double tap the performance",
             text: "Pick which take shows at each moment. Done brings you back here."),
         Tip(icon: "plus.square", title: "Tap anything to edit it",

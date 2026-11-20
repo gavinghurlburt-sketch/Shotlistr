@@ -1118,40 +1118,6 @@ final class EditorModel {
         return history.count > before
     }
 
-    /// A starter recipe: sets Start and End, turns the lyrics on for a lyric video, then runs
-    /// Auto edit its way. Undo takes the cuts back.
-    func applyRecipe(_ recipe: StarterRecipe) async {
-        guard busy == nil, kind == .performance, !layers.isEmpty, duration > 0 else { return }
-        pause()
-        switch recipe {
-        case .performanceCut:
-            inPoint = 0
-            outPoint = duration
-        case .lyricVideo:
-            guard hasLyrics else {
-                notice = "Add your lyrics first: tap Lyrics on the left, then try Lyric video again."
-                return
-            }
-            inPoint = 0
-            outPoint = duration
-            if !lyricStyle.show { toggleLyricsShown() }
-        case .teaser:
-            let length = min(15, duration)
-            let start = loudestStretch(seconds: length)
-            inPoint = start
-            outPoint = min(duration, start + length)
-        }
-        updateLoop()
-        scheduleSave()
-        time = loopStart
-        requestSeek(time)
-        let was = cuts
-        await autoEdit(pace: recipe.style.pace, recipe: recipe.style)
-        if problem == nil, cuts != was {
-            notice = "\(recipe.name) is ready. Shuffle for another version, or Undo to go back."
-        }
-    }
-
     /// Where the loudest stretch of the song this long starts (timeline seconds, on a whole frame):
     /// usually the chorus or the drop. The start when there's no song to listen to.
     private func loudestStretch(seconds length: Double) -> Double {
