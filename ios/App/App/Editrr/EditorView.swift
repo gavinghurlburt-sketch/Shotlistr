@@ -2722,6 +2722,11 @@ struct FXSheet: View {
                 note("The first cut has nothing before it to come in from, so it has no transition.")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(.opacity)
+                    .task {
+                        // Shows for 3 seconds, then fades.
+                        try? await Task.sleep(for: .seconds(3))
+                        withAnimation(.easeOut(duration: 0.6)) { noTransitionWhy = false }
+                    }
             }
           }
         }
