@@ -51,7 +51,7 @@ Payment is charged to your Apple ID at confirmation of purchase (or at the end o
 Terms of Use: https://www.creatrr.co/terms
 Privacy Policy: https://www.creatrr.co/privacy
 
-(Launch is creatrr Artist only. Submit only creatrr_artist_monthly with version 1.0; leave Plus and Pro unsubmitted until they launch, and the in-app paywall must offer Artist only. Change the price here and in docs/terms.html if Artist's price changes.)
+(Launch is creatrr Artist only. Submit only creatrr_artist_monthly with version 1.0; leave Plus and Pro unsubmitted until they launch; the in-app paywall offers Artist only. Change the price here and in docs/terms.html if Artist's price changes.)
 
 ## App Privacy ("nutrition label") answers
 Tracking: **No** (no ads, no cross-app tracking, no analytics, no crash reporting SDK).
@@ -97,7 +97,6 @@ Contact: apps@gavingeddes.art
 ## Before submitting
 - [ ] Paid Apps agreement, bank and tax info active
 - [ ] Subscription group "creatrr": creatrr_artist_monthly "Ready to Submit" and added to version 1.0 (Plus and Pro not submitted yet)
-- [ ] Paywall offers Artist only: Plus and Pro cards removed (kept in for now on Gavin's word; the Settings plan picker already hides itself in TestFlight and App Store builds)
 - [ ] Demo account password set and tested
 - [ ] Screenshots
 - [ ] Age rating questionnaire
