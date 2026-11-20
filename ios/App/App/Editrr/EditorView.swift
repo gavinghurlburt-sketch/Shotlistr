@@ -571,6 +571,8 @@ struct EditingView: View {
     @State private var soundFiles = false
     @State private var soundIsEffect = false
     @State private var musicSongs = false
+    /// Add sound on the toolbar: picking music, a sound effect or a creatrr song.
+    @State private var soundChoosing = false
     /// Read here so the timeline's height follows the tall-tracks switch.
     @AppStorage(LaneMetrics.tallKey) private var tallTracks = false
 
@@ -705,8 +707,7 @@ struct EditingView: View {
                     }
                 }
                     .frame(height: EditMetrics.height(lyrics: model.hasLyrics, overlays: model.onTop.count,
-                                                      texts: model.textLaneCount, sounds: model.soundLaneCount,
-                                                      adder: true, song: model.kind == .performance))
+                                                      texts: model.textLaneCount, sounds: model.soundLaneCount))
                     // The grey rows run edge to edge of the screen, as in Edits.
                     .padding(.horizontal, -12)
                     .transition(.opacity)
@@ -930,6 +931,24 @@ struct EditingView: View {
                          spoken: "Add or change text") {
                     model.textButton()
                 }
+                // Music or a sound effect at the playhead: its row shows once there is one.
+                ToolItem(icon: "music.note", text: "Add sound", tint: MusicTint.color,
+                         spoken: "Add music or a sound effect at the playhead") {
+                    model.pause()
+                    soundChoosing = true
+                }
+                .confirmationDialog("Add at the playhead", isPresented: $soundChoosing, titleVisibility: .visible) {
+                    Button("Music from Files") {
+                        soundIsEffect = false
+                        soundFiles = true
+                    }
+                    Button("Sound effect from Files") {
+                        soundIsEffect = true
+                        soundFiles = true
+                    }
+                    Button("Song or section from creatrr") { musicSongs = true }
+                    Button("Cancel", role: .cancel) {}
+                }
                 if model.kind == .performance {
                     ToolItem(icon: "music.note.list", text: "Performance",
                              spoken: "Performance: every video synced to the song") {
@@ -1100,6 +1119,13 @@ struct EditingView: View {
                         ToolItem(icon: "music.note.list", text: "Edit performance",
                                  spoken: "Edit the performance: every video synced to the song") {
                             withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
+                        }
+                        // The song off or on (its band along the bottom of the performance shows which).
+                        let muted = model.soundMuted
+                        ToolItem(icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                                 text: muted ? "Unmute" : "Mute", tint: Tint.warn, on: muted,
+                                 spoken: muted ? "Turn the song back on" : "Turn the song off") {
+                            model.soundMuted.toggle()
                         }
                     } else if model.layers.indices.contains(index) {
                         // The clip's own sound off or on (its band on the track shows which).
