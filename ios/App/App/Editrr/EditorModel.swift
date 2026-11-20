@@ -33,10 +33,23 @@ private struct EditState: Equatable {
 
     /// Where the clips sit (what needs a full rebuild when it changes), as one list.
     var timing: [Double] {
-        places.flatMap { [$0.offset, $0.trimStart, $0.trimEnd, $0.muted ? 1 : 0, $0.voice ? 1 : 0] }
-            + overlays.flatMap { [$0.start, $0.length, $0.trimStart] }
-            + order.map(Double.init)
-            + (range ?? [])
+        // Built up step by step (one long expression is too slow for the compiler to check).
+        var list: [Double] = []
+        for place in places {
+            list.append(place.offset)
+            list.append(place.trimStart)
+            list.append(place.trimEnd)
+            list.append(place.muted ? 1 : 0)
+            list.append(place.voice ? 1 : 0)
+        }
+        for overlay in overlays {
+            list.append(overlay.start)
+            list.append(overlay.length)
+            list.append(overlay.trimStart)
+        }
+        for index in order { list.append(Double(index)) }
+        if let range { list.append(contentsOf: range) }
+        return list
     }
 }
 
