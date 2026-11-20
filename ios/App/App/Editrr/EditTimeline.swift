@@ -420,6 +420,14 @@ struct EditTimeline: View {
                                 px += 3
                             }
                             inside.fill(wave, with: .color(ClipSoundTint.wave))
+                            // Voice isolation on: a small voice mark over the waveform.
+                            if layer.voice != nil {
+                                let mark = CGRect(x: max(sound.minX, 0) + 9, y: sound.minY + 1, width: 18, height: sound.height - 2)
+                                inside.fill(Path(mark), with: .color(ClipSoundTint.color))
+                                inside.draw(Text(Image(systemName: "person.wave.2.fill"))
+                                                .font(.system(size: 10, weight: .bold)).foregroundStyle(.white),
+                                            at: CGPoint(x: mark.midX, y: mark.midY))
+                            }
                         }
                     }
                 }

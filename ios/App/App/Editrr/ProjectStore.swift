@@ -25,6 +25,8 @@ struct SavedLayer: Codable, Equatable {
     var speed: Double? = nil
     /// Its own sound is off (nil: on).
     var muted: Bool? = nil
+    /// Its own sound plays with the voice isolated (nil: as recorded).
+    var voice: Bool? = nil
 }
 
 /// A named project: the song, the videos, where each sits, and every cut, keyframe and In/Out.

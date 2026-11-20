@@ -147,6 +147,8 @@ struct Layer: Identifiable {
     var original: LayerSource? = nil
     /// Its own sound is off (editing a video).
     var muted = false
+    /// Its own sound with the voice isolated (nil: as recorded). Plays in place of `audio`.
+    var voice: VoiceTrack? = nil
 
     /// Timeline seconds where the kept part of the clip starts and ends (can run past 0...duration).
     var clipStart: Double { offset + trimStart }
@@ -336,12 +338,14 @@ enum TimelineBuilder {
                     CMTimeRange(start: time(layer.trackStart + skip), duration: time(range.upperBound - range.lowerBound)),
                     of: layer.track, at: time(range.lowerBound))
                 tracks[layer.id] = LayerInfo(trackID: track.trackID, orientation: layer.orientation)
-                if videoSound, !layer.muted, let sound = layer.audio,
+                if videoSound, !layer.muted, let sound = layer.voice?.track ?? layer.audio,
                    let audio = composition.addMutableTrack(withMediaType: .audio,
                                                            preferredTrackID: kCMPersistentTrackID_Invalid) {
+                    // The voice-isolated sound starts (at 0) where the video's own sound starts.
+                    let from = max(0, layer.trackStart + skip - (layer.voice?.start ?? 0))
                     do {
                         try audio.insertTimeRange(
-                            CMTimeRange(start: time(layer.trackStart + skip),
+                            CMTimeRange(start: time(from),
                                         duration: time(range.upperBound - range.lowerBound)),
                             of: sound, at: time(range.lowerBound))
                     } catch {

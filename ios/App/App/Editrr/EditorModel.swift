@@ -17,6 +17,7 @@ private struct EditState: Equatable {
         var alternatives: [Double]
         var keyframes: [Keyframe]
         var muted = false
+        var voice = false
     }
     var cuts: [Cut]
     var places: [Place]
@@ -32,7 +33,7 @@ private struct EditState: Equatable {
 
     /// Where the clips sit (what needs a full rebuild when it changes), as one list.
     var timing: [Double] {
-        places.flatMap { [$0.offset, $0.trimStart, $0.trimEnd, $0.muted ? 1 : 0] }
+        places.flatMap { [$0.offset, $0.trimStart, $0.trimEnd, $0.muted ? 1 : 0, $0.voice ? 1 : 0] }
             + overlays.flatMap { [$0.start, $0.length, $0.trimStart] }
             + order.map(Double.init)
             + (range ?? [])
@@ -1235,7 +1236,8 @@ final class EditorModel {
         project.layers = layers.map {
             SavedLayer(video: $0.video, offset: $0.offset, trimStart: $0.trimStart, trimEnd: $0.trimEnd,
                        sync: $0.sync, alternatives: $0.alternatives, keyframes: $0.keyframes, color: $0.color,
-                       speed: abs($0.speed - 1) > 0.001 ? $0.speed : nil, muted: $0.muted ? true : nil)
+                       speed: abs($0.speed - 1) > 0.001 ? $0.speed : nil, muted: $0.muted ? true : nil,
+                       voice: $0.voice != nil ? true : nil)
         }
         project.cuts = cuts
         project.duration = duration
@@ -1385,6 +1387,17 @@ final class EditorModel {
                 layer.trimEnd = place.trimEnd
             }
             layer.muted = place.muted ?? false
+            // The voice-isolated sound, if it was on (left as recorded if its file is gone).
+            if place.voice == true {
+                let url = Self.voiceURL(layer, in: saved.id)
+                if let kept = voiceCache[url] {
+                    layer.voice = kept
+                } else if let audio = layer.audio,
+                          let opened = await VoiceTrack.open(url, start: (try? await audio.load(.timeRange))?.start.seconds ?? 0) {
+                    voiceCache[url] = opened
+                    layer.voice = opened
+                }
+            }
             made.append(layer)
         }
         guard !made.isEmpty else {
@@ -1523,7 +1536,7 @@ final class EditorModel {
                   offset: layer.offset, sync: layer.sync, trimStart: layer.trimStart * factor / layer.speed,
                   trimEnd: layer.trimEnd * factor / layer.speed, alternatives: layer.alternatives,
                   keyframes: layer.keyframes, video: layer.video, color: layer.color, audio: audio,
-                  speed: factor, original: original)
+                  speed: factor, original: original, muted: layer.muted)
         }
         guard abs(speed - 1) > 0.001 else {
             return made(asset: source.asset, track: source.track, audio: source.audio, factor: 1, original: nil)
@@ -1740,6 +1753,72 @@ final class EditorModel {
             guard performancePieces.count > 1, let piece = pickedPiece else { return false }
             return abs(piece.start - loopStart) < 0.001 || abs(piece.end - performanceEnd) < 0.001
         }
+    }
+
+    /// Voice-isolated sounds opened this session, by file (Undo brings one back from here).
+    @ObservationIgnored private var voiceCache: [URL: VoiceTrack] = [:]
+
+    /// The file in the project's folder that holds a video's voice-isolated sound (one per video
+    /// and speed; clips cut from the same video share it).
+    private static func voiceURL(_ layer: Layer, in project: UUID) -> URL {
+        let name = abs(layer.speed - 1) > 0.001
+            ? "voice-\(layer.video)-\(Int((layer.speed * 1000).rounded())).caf"
+            : "voice-\(layer.video).caf"
+        return ProjectStore.folder(for: project).appendingPathComponent(name)
+    }
+
+    /// Editing a video: plays a clip's own sound with the voice isolated (background noise taken
+    /// out), or back as it was recorded. Clips cut from the same video change together, as
+    /// they're one recording. The first time, the voice isolation model downloads.
+    func toggleVoice(_ index: Int) async {
+        guard kind == .video, layers.indices.contains(index), busy == nil, let id = currentProject?.id else { return }
+        pause()
+        problem = nil
+        let url = Self.voiceURL(layers[index], in: id)
+        func setAll(_ voice: VoiceTrack?) {
+            history.append(snapshot())
+            future = []
+            for other in layers.indices where Self.voiceURL(layers[other], in: id) == url {
+                layers[other].voice = voice
+            }
+            rebuildAll()
+        }
+        if layers[index].voice != nil {
+            setAll(nil)
+            return
+        }
+        guard let audio = layers[index].audio else {
+            problem = "This clip has no sound to clean up."
+            return
+        }
+        let asset = layers[index].asset
+        let start = (try? await audio.load(.timeRange))?.start.seconds ?? 0
+        var found = voiceCache[url]
+        if found == nil { found = await VoiceTrack.open(url, start: start) }
+        if found == nil {
+            defer { busy = nil }
+            do {
+                if !VoiceIsolation.isReady {
+                    busy = "Getting voice isolation ready…"
+                    try await VoiceIsolation.prepare()
+                }
+                busy = "Isolating the voice…"
+                try await VoiceIsolation.isolate(audio, of: asset, to: url)
+            } catch {
+                problem = (error as? LocalizedError)?.errorDescription ?? "The voice couldn't be isolated. Try again."
+                return
+            }
+            found = await VoiceTrack.open(url, start: start)
+        }
+        guard let made = found else {
+            problem = "The voice couldn't be isolated. Try again."
+            return
+        }
+        voiceCache[url] = made
+        // Still the same project and clip (it can take a while).
+        guard currentProject?.id == id, layers.indices.contains(index),
+              Self.voiceURL(layers[index], in: id) == url, layers[index].voice == nil else { return }
+        setAll(made)
     }
 
     /// Editing a video: turns a clip's own sound off or back on.
@@ -2756,7 +2835,7 @@ final class EditorModel {
         EditState(cuts: cuts, places: layers.map {
             EditState.Place(offset: $0.offset, trimStart: $0.trimStart, trimEnd: $0.trimEnd,
                             sync: $0.sync, alternatives: $0.alternatives, keyframes: $0.keyframes,
-                            muted: $0.muted)
+                            muted: $0.muted, voice: $0.voice != nil)
         }, lyrics: lyrics, lyricStyle: lyricStyle, titles: titles, overlays: overlays, trackKeys: trackKeys,
            splits: splits, order: order, range: range ? [inPoint, outPoint] : nil)
     }
@@ -2811,6 +2890,10 @@ final class EditorModel {
             layers[index].alternatives = place.alternatives
             layers[index].keyframes = place.keyframes
             layers[index].muted = place.muted
+            if (layers[index].voice != nil) != place.voice {
+                layers[index].voice = place.voice
+                    ? currentProject.flatMap { voiceCache[Self.voiceURL(layers[index], in: $0.id)] } : nil
+            }
         }
         if let pick = editPick, kind == .video, !layers.indices.contains(pick) { editPick = nil }
         // Editing a video: they stay back to back after an undo.
@@ -2858,7 +2941,8 @@ final class EditorModel {
               trimStart: original.trimStart, trimEnd: original.trimEnd,
               alternatives: original.alternatives, keyframes: original.keyframes,
               video: original.video, color: original.color, audio: original.audio,
-              speed: original.speed, original: original.original, muted: original.muted)
+              speed: original.speed, original: original.original, muted: original.muted,
+              voice: original.voice)
     }
 
     /// A finger took hold of a clip: held it to move it, or grabbed an edge to trim it.

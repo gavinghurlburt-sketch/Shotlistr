@@ -1122,6 +1122,13 @@ struct EditingView: View {
                                  spoken: muted ? "Turn this clip's sound back on" : "Turn this clip's sound off") {
                             model.toggleMute(index)
                         }
+                        // The clip's sound with the background noise taken out, leaving the voice.
+                        let voice = model.layers[index].voice != nil
+                        ToolItem(icon: "person.wave.2.fill", text: "Voice", tint: Tint.accent, on: voice,
+                                 enabled: model.layers[index].audio != nil && model.busy == nil,
+                                 spoken: voice ? "Play this clip's sound as recorded" : "Isolate the voice in this clip's sound") {
+                            Task { await model.toggleVoice(index) }
+                        }
                     }
                     // Gets rid of the picked clip (a piece split off, say); the rest close up.
                     ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
