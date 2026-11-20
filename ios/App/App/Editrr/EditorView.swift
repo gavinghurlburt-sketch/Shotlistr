@@ -1347,13 +1347,36 @@ struct ExportSheet: View {
         }
     }
 
+    /// What the edit page's switches do to the export (nil: nothing).
+    private var editPageNote: String? {
+        var sound: String?
+        if model.soundMuted {
+            sound = model.sounds.isEmpty
+                ? "the sound is muted, so the export has no sound"
+                : "the \(model.kind == .video ? "videos' sound" : "song") is muted, so the export has only your added music and sound effects"
+        }
+        let video = model.videoHidden
+            ? "the video is hidden, so the export has a black background under the overlays and words" : nil
+        let parts = [sound, video].compactMap { $0 }
+        guard !parts.isEmpty else { return nil }
+        let line = "On the edit page, " + parts.joined(separator: ", and ") + "."
+        return line
+    }
+
     private var choices: some View {
         VStack(spacing: 10) {
-            // Sound muted on the edit page: only No sound is offered.
+            // Sound muted on the edit page: only No sound is offered, or the added music and sound
+            // effects without the song.
             if !model.soundMuted {
                 Button { model.startExport(withSound: true) } label: {
                     Label(model.kind == .video ? "With sound" : "With the song",
                           systemImage: model.kind == .video ? "speaker.wave.2" : "music.note")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
+            } else if !model.sounds.isEmpty {
+                Button { model.startExport(withSound: true) } label: {
+                    Label("With your added sounds", systemImage: "speaker.wave.2")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
@@ -1363,12 +1386,9 @@ struct ExportSheet: View {
                 Label("No sound", systemImage: "speaker.slash")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: model.soundMuted))
-            if model.soundMuted || model.videoHidden {
-                Text(model.soundMuted && model.videoHidden
-                     ? "The sound is muted and the video is hidden on the edit page, so the export has no sound and a black background."
-                     : model.soundMuted ? "The sound is muted on the edit page, so the export has no sound."
-                     : "The video is hidden on the edit page, so the export has a black background under the overlays and words.")
+            .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: model.soundMuted && model.sounds.isEmpty))
+            if let note = editPageNote {
+                Text(note)
                     .font(.caption)
                     .foregroundStyle(Tint.warn)
                     .multilineTextAlignment(.center)

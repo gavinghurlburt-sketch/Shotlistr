@@ -88,8 +88,13 @@ final class EditorModel {
             redraw()
         }
     }
+    /// The Song (or Sound) row is off: the song, or the videos' own sound, is silent. Added music
+    /// and sound effects still play.
     var soundMuted = false {
-        didSet { player.isMuted = soundMuted }
+        didSet {
+            guard soundMuted != oldValue else { return }
+            player.currentItem?.audioMix = built.flatMap { songMix($0) }
+        }
     }
     /// Pictures and videos on top of the main video track, bottom first.
     var overlays: [SavedOverlay] = []
@@ -3007,6 +3012,7 @@ final class EditorModel {
             self.built = built
             segments = Program.segments(cuts: cuts, layers: layers, duration: duration)
             let item = AVPlayerItem(asset: built.composition)
+            item.audioMix = songMix(built)
             // Never let the system draw its own captions over the picture (the Closed Captions
             // setting, or auto captions): the only words on the video are the lyrics you style.
             let captions = AVPlayerItemLegibleOutput()
@@ -4708,6 +4714,21 @@ final class EditorModel {
 
     func sound(_ id: UUID) -> SavedMusic? { sounds.first { $0.id == id } }
 
+    /// With the Song row off: the song and the videos' own sound at zero, added sounds as they are
+    /// (nil: everything plays).
+    private func songMix(_ built: TimelineBuilder.Built) -> AVAudioMix? {
+        guard soundMuted else { return nil }
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = built.composition.tracks(withMediaType: .audio)
+            .filter { !built.musicTracks.contains($0.trackID) }
+            .map { track in
+                let silent = AVMutableAudioMixInputParameters(track: track)
+                silent.setVolume(0, at: .zero)
+                return silent
+            }
+        return mix
+    }
+
     /// Added sounds, ready for the timeline (any whose file couldn't be read are left out).
     private var soundsPlay: [TimelineBuilder.Music] {
         sounds.compactMap { sound in
@@ -4879,11 +4900,17 @@ final class EditorModel {
         }
         // The edit page's switches count: muted sound exports silent, hidden video exports black
         // under the overlays, text and lyrics.
+        // A muted song with added music or sound effects: those play, the song doesn't.
+        let addedOnly = withSound && soundMuted && !sounds.isEmpty
         let withSound = withSound && !soundMuted
         let source: TimelineBuilder.Built
         do {
             if withSound {
                 source = built
+            } else if addedOnly {
+                source = try TimelineBuilder.build(layers: layers, soundtrack: nil, duration: duration,
+                                                   length: timelineEnd, music: soundsPlay,
+                                                   overlays: overlays, media: overlayMedia)
             } else {
                 // Built again without the song, so the file has no sound at all.
                 source = try TimelineBuilder.build(layers: layers, soundtrack: nil, duration: duration,

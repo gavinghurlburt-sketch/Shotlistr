@@ -253,6 +253,8 @@ enum TimelineBuilder {
         let tracks: [Int: LayerInfo]
         /// Video overlays' composition tracks.
         var overlayTracks: [UUID: CMPersistentTrackID] = [:]
+        /// The added music and sound effects' sound tracks (they keep playing when the song is muted).
+        var musicTracks: Set<CMPersistentTrackID> = []
         var duration: CMTime { composition.duration }
     }
 
@@ -288,6 +290,7 @@ enum TimelineBuilder {
 
         // Added music and sound effects: each its own sound track, under everything, cut off where
         // the timeline ends.
+        var musicTracks: Set<CMPersistentTrackID> = []
         for piece in music {
             let place = max(0, piece.at)
             let play = min(piece.length, total - place)
@@ -297,6 +300,7 @@ enum TimelineBuilder {
             do {
                 try audio.insertTimeRange(CMTimeRange(start: time(piece.from), duration: time(play)),
                                           of: piece.track, at: time(place))
+                musicTracks.insert(audio.trackID)
             } catch {
                 composition.removeTrack(audio)
             }
@@ -376,7 +380,7 @@ enum TimelineBuilder {
            let padding = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
             padding.insertEmptyTimeRange(CMTimeRange(start: .zero, duration: time(total)))
         }
-        return Built(composition: composition, tracks: tracks, overlayTracks: overlayTracks)
+        return Built(composition: composition, tracks: tracks, overlayTracks: overlayTracks, musicTracks: musicTracks)
     }
 
     /// One instruction per stretch, each asking for just the layer that shows, so the phone only
