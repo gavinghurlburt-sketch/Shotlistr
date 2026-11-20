@@ -3251,6 +3251,14 @@ struct FXSheet: View {
                 note(fx.followFace ? "Keeps the face in the middle, zoomed in a little."
                      : "No face was found to follow in this cut.")
             }
+        case .glow:
+            chips(GlowStyle.allCases, selected: fx.glow ?? .glimmer, name: { $0.name }) { style in
+                var next = fx
+                next.glow = style
+                model.setFXHere(next)
+            }
+            keyedSlider(.glow, name: "Glow", range: 0...1, ends: ("Faint", "Bright"))
+            note(glowNote(fx.glow ?? .glimmer))
         case .rgbSplit, .fisheye:
             if fx.custom == kind.customID {
                 keyedSlider(.amount, name: kind.name, range: 0...1, ends: ("Subtle", "Strong"))
@@ -3263,6 +3271,14 @@ struct FXSheet: View {
             } else {
                 note("Off. Only one of RGB split and Fisheye can be on at a time.")
             }
+        }
+    }
+
+    private func glowNote(_ style: GlowStyle) -> String {
+        switch style {
+        case .glimmer: "X shaped stars and a glow on the brightest spots."
+        case .fog: "A soft, blurry glow around the brightest spots."
+        case .cross: "Stars that go up, down and sideways, and a glow."
         }
     }
 
@@ -3471,6 +3487,18 @@ struct FXIcon: View {
                     .frame(width: 34, height: 34)
             }
             .offset(x: x * (1 - p), y: y * (1 - p))
+        case .glow:
+            // Glows, and a little star turns and twinkles over it.
+            ZStack {
+                sparkle.shadow(color: .white.opacity(0.9 * p), radius: 10 * p)
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .light))
+                    .foregroundStyle(.white)
+                    .rotationEffect(.degrees(45 + 90 * p))
+                    .scaleEffect(0.4 + 0.8 * p)
+                    .opacity(p)
+                    .offset(x: 11, y: -11)
+            }
         case .rgbSplit:
             // Red and blue pull apart; where all three meet it's white.
             ZStack {

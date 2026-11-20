@@ -49,9 +49,23 @@ enum ColorLook: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// Glow on a cut's highlights: Glimmer adds X stars and a glow, Fog glow a soft haze, Cross glow
+/// stars that go up, down and sideways.
+enum GlowStyle: String, Codable, CaseIterable, Sendable {
+    case glimmer, fog, cross
+
+    var name: String {
+        switch self {
+        case .glimmer: "Glimmer"
+        case .fog: "Fog glow"
+        case .cross: "Cross glow"
+        }
+    }
+}
+
 /// One effect in the Fx page's picker: each cut can have any of these, one card each.
 enum FXKind: String, CaseIterable, Identifiable, Sendable {
-    case transition, zoom, color, blur, tilt, shake, mirror, face, rgbSplit, fisheye
+    case transition, zoom, color, blur, tilt, shake, mirror, face, glow, rgbSplit, fisheye
 
     /// The effects the Fx page offers (Mirror is its own button on the toolbar: on or off).
     static let onFxPage = allCases.filter { $0 != .mirror }
@@ -68,6 +82,7 @@ enum FXKind: String, CaseIterable, Identifiable, Sendable {
         case .shake: "Shake"
         case .mirror: "Mirror"
         case .face: "Follow face"
+        case .glow: "Glow"
         case .rgbSplit: "RGB split"
         case .fisheye: "Fisheye"
         }
@@ -83,6 +98,7 @@ enum FXKind: String, CaseIterable, Identifiable, Sendable {
         case .shake: "waveform.path"
         case .mirror: "arrow.left.and.right.righttriangle.left.righttriangle.right"
         case .face: "face.smiling"
+        case .glow: "sparkles"
         case .rgbSplit: "rectangle.split.3x1"
         case .fisheye: "camera.aperture"
         }
@@ -131,6 +147,9 @@ struct CutFX: Codable, Equatable, Sendable {
     var fishX: Double = 0.5
     var fishY: Double = 0.5
     var fishKeys: [FishKey]?
+    /// Glow on the highlights (nil: none), and how bright.
+    var glow: GlowStyle?
+    var glowAmount: Double = 0.5
     /// Sliders that are keyframed: each one's keyframes (timeline times). A keyframed slider
     /// moves between them instead of holding its one value.
     /// Keyed by FXParam raw value.
@@ -157,6 +176,7 @@ struct CutFX: Codable, Equatable, Sendable {
             case .shake: shake
             case .amount: customAmount
             case .colorMix: colorAmount
+            case .glow: glowAmount
             }
         }
         set {
@@ -166,6 +186,7 @@ struct CutFX: Codable, Equatable, Sendable {
             case .shake: shake = newValue
             case .amount: customAmount = newValue
             case .colorMix: colorAmount = newValue
+            case .glow: glowAmount = newValue
             }
         }
     }
@@ -189,12 +210,13 @@ struct CutFX: Codable, Equatable, Sendable {
 
     var isEmpty: Bool {
         color == .none && blur < 0.01 && abs(rotate) < 0.1 && !mirror && shake < 0.01 && !followFace && custom == nil
+            && glow == nil
             && !(keys?.values.contains { list in list.contains { abs($0.value) > 0.01 } } ?? false)
     }
 
     private enum CodingKeys: String, CodingKey {
         case color, colorAmount, blur, rotate, mirror, shake, followFace, faces, facesLayer, custom, customAmount
-        case fishX, fishY, fishKeys, keys
+        case fishX, fishY, fishKeys, keys, glow, glowAmount
     }
 
     init(from decoder: Decoder) throws {
@@ -214,12 +236,14 @@ struct CutFX: Codable, Equatable, Sendable {
         fishY = (try? c.decodeIfPresent(Double.self, forKey: .fishY)) ?? 0.5
         fishKeys = try? c.decodeIfPresent([FishKey].self, forKey: .fishKeys)
         keys = try? c.decodeIfPresent([String: [FXValueKey]].self, forKey: .keys)
+        glow = try? c.decodeIfPresent(GlowStyle.self, forKey: .glow)
+        glowAmount = (try? c.decodeIfPresent(Double.self, forKey: .glowAmount)) ?? 0.5
     }
 }
 
 /// The Fx page's sliders that can be keyframed.
 enum FXParam: String, Codable, Sendable, CaseIterable {
-    case blur, tilt, shake, amount, colorMix
+    case blur, tilt, shake, amount, colorMix, glow
 }
 
 /// One keyframe of a slider: a timeline time and its value then.
@@ -310,6 +334,10 @@ enum Effects {
             ]).cropped(to: rect)
         }
 
+        if let style = fx.glow, fx.glowAmount >= 0.01 {
+            image = Glow.apply(style, amount: fx.glowAmount, to: image, rect: rect)
+        }
+
         if let id = fx.custom {
             image = CustomFX.apply(id, to: image, fx: fx, time: time, canvas: canvas)
         }
@@ -352,6 +380,98 @@ enum Effects {
             "inputBVector": CIVector(x: 0, y: 0, z: b, w: 0),
             "inputBiasVector": CIVector(x: lift, y: lift, z: lift, w: 0)
         ])
+    }
+}
+
+// MARK: - Glow
+
+/// Glow on the brightest parts of the picture, made from Core Image's own filters (no shader).
+enum Glow {
+    static func apply(_ style: GlowStyle, amount: Double, to image: CIImage, rect: CGRect) -> CIImage {
+        let a: Double = min(max(amount, 0), 1)
+        let size = Double(min(rect.width, rect.height))
+        // The highlights only, kept in their own colors. The curve runs on ordinary (sRGB) values.
+        let plain = image.applyingFilter("CILinearToSRGBToneCurve")
+        let bright = highlights(plain, from: 0.62 - 0.12 * a).applyingFilter("CISRGBToneCurveToLinear")
+        var light = CIImage(color: .clear).cropped(to: rect)
+
+        // A glow around them: soft and wide for Fog glow, closer for the stars.
+        let fog = style == .fog
+        let haze: Double = fog ? size * (0.02 + 0.05 * a) : size * (0.008 + 0.015 * a)
+        let hazeGain: Double = fog ? 0.4 + 0.8 * a : 0.25 + 0.45 * a
+        light = add(gain(blurred(bright, sigma: haze, rect: rect), hazeGain), over: light)
+        if fog {
+            // A second, wider veil, so it reads as fog and not only a halo.
+            let veil = blurred(bright, sigma: size * (0.06 + 0.08 * a), rect: rect)
+            light = add(gain(veil, 0.25 + 0.45 * a), over: light)
+        } else {
+            // Stars: only small, very bright points throw them (a glint, a light), not a whole
+            // bright sky: what's left after taking away the area around each point.
+            let hot = highlights(plain, from: 0.82 - 0.1 * a).applyingFilter("CISRGBToneCurveToLinear")
+            let around = blurred(hot, sigma: max(3, size * 0.006), rect: rect)
+            let points = around.applyingFilter("CISubtractBlendMode", parameters: [kCIInputBackgroundImageKey: hot])
+                .applyingFilter("CIColorClamp")
+                .cropped(to: rect)
+            let angles: [Double] = style == .glimmer ? [Double.pi / 4, 3 * Double.pi / 4] : [0, Double.pi / 2]
+            let reach: Double = size * (0.04 + 0.1 * a)
+            let strength: Double = 0.8 + 2.2 * a
+            for angle in angles {
+                light = add(streak(points, angle: angle, reach: reach, strength: strength, rect: rect), over: light)
+            }
+        }
+        return add(light, over: image).cropped(to: rect)
+    }
+
+    /// Keeps what's brighter than `from` (0...1), fading in above it, in its own colors.
+    private static func highlights(_ image: CIImage, from: Double) -> CIImage {
+        let f = CGFloat(min(max(from, 0.3), 0.95))
+        let mid: CGFloat = f + (1 - f) * 0.5
+        let top: CGFloat = 1 - (1 - f) * 0.15
+        return image.applyingFilter("CIToneCurve", parameters: [
+            "inputPoint0": CIVector(x: 0, y: 0),
+            "inputPoint1": CIVector(x: f, y: 0),
+            "inputPoint2": CIVector(x: mid, y: 0.25),
+            "inputPoint3": CIVector(x: top, y: 0.8),
+            "inputPoint4": CIVector(x: 1, y: 1),
+        ])
+    }
+
+    /// One star line through each bright point (both ways along `angle`), bright in the middle and
+    /// fading to its tips. Made at half size, which is quicker and softer.
+    private static func streak(_ points: CIImage, angle: Double, reach: Double, strength: Double, rect: CGRect) -> CIImage {
+        let half = CGAffineTransform(scaleX: 0.5, y: 0.5)
+        let small = points.transformed(by: half)
+        let smallRect = rect.applying(half)
+        var line = CIImage(color: .clear).cropped(to: smallRect)
+        // Long and faint plus short and bright: together the line tapers.
+        let parts: [(radius: Double, weight: Double)] = [(reach * 0.5, 1.0), (reach * 0.2, 0.9), (reach * 0.08, 0.7)]
+        for part in parts {
+            let smeared = small.clampedToExtent()
+                .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: part.radius, kCIInputAngleKey: angle])
+                .cropped(to: smallRect)
+            // A motion blur spreads a point thin; the gain brings the line back up.
+            let g: Double = part.weight * strength * max(1, part.radius / 12)
+            line = add(gain(smeared, g), over: line)
+        }
+        return line.transformed(by: CGAffineTransform(scaleX: 2, y: 2)).cropped(to: rect)
+    }
+
+    private static func blurred(_ image: CIImage, sigma: Double, rect: CGRect) -> CIImage {
+        image.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: rect)
+    }
+
+    private static func gain(_ image: CIImage, _ g: Double) -> CIImage {
+        let v = CGFloat(g)
+        return image.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: v, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: v, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: v, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+        ])
+    }
+
+    private static func add(_ image: CIImage, over base: CIImage) -> CIImage {
+        image.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: base])
     }
 }
 

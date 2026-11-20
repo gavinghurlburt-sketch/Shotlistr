@@ -5006,6 +5006,7 @@ final class EditorModel {
         case .shake: return fx.shake >= 0.01 || !fxKeys(.shake).isEmpty
         case .mirror: return fx.mirror
         case .face: return fx.followFace
+        case .glow: return fx.glow != nil
         case .rgbSplit, .fisheye: return fx.custom != nil && fx.custom == kind.customID
         }
     }
@@ -5035,6 +5036,9 @@ final class EditorModel {
         case .tilt: fx.rotate = 8
         case .shake: fx.shake = 0.4
         case .mirror: fx.mirror = true
+        case .glow:
+            fx.glow = .glimmer
+            fx.glowAmount = 0.5
         case .rgbSplit, .fisheye:
             fx.custom = kind.customID
             fx.customAmount = 0.5
@@ -5072,6 +5076,10 @@ final class EditorModel {
             fx.shake = 0
             fx.keys?[FXParam.shake.rawValue] = nil
         case .mirror: fx.mirror = false
+        case .glow:
+            fx.glow = nil
+            fx.glowAmount = 0.5
+            fx.keys?[FXParam.glow.rawValue] = nil
         case .rgbSplit, .fisheye:
             guard fx.custom == kind.customID else { return }
             fx.custom = nil
