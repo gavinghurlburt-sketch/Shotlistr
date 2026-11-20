@@ -6040,8 +6040,8 @@ final class EditorModel {
 
     // MARK: Exporting
 
-    /// Renders the edit (the real cuts, never a preview) to a 1080 x 1920 (or 1920 x 1080 horizontal), 30 fps video and saves it
-    /// to Photos. That one file fits Reels, TikTok and Shorts. Without sound, the song can be added
+    /// Renders the edit (the real cuts, never a preview) to a 1080 x 1920 (or 1920 x 1080 horizontal), 30 fps video, then
+    /// the share pop up comes up to save it, text it or post it. That one file fits Reels, TikTok and Shorts. Without sound, the song can be added
     /// inside Instagram or TikTok instead.
     func startExport(withSound: Bool) {
         guard let built, duration > 0 else { return }
@@ -6114,7 +6114,6 @@ final class EditorModel {
             defer { progress.cancel() }
             do {
                 try await session.export(to: url, as: .mp4)
-                try await EditorModel.saveToPhotos(url)
                 self?.exportState = .saved(url)
             } catch is CancellationError {
                 self?.exportState = .idle
@@ -6141,10 +6140,10 @@ final class EditorModel {
         exportState = .idle
     }
 
-    nonisolated private static func saveToPhotos(_ url: URL) async throws {
+    nonisolated static func saveToPhotos(_ url: URL) async throws {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            throw EditorError.couldNotBuild("editrr isn't allowed to save to Photos. Turn it on in Settings > editrr > Photos.")
+            throw EditorError.couldNotBuild("creatrr isn't allowed to save to Photos. Turn it on in Settings > creatrr > Photos.")
         }
         try await PHPhotoLibrary.shared().performChanges {
             let request = PHAssetCreationRequest.forAsset()

@@ -1383,7 +1383,7 @@ extension EditorModel.ExportState {
     }
 }
 
-/// Export: one 1080 x 1920 (or 1920 x 1080 horizontal) video saved to Photos, with or without the song.
+/// Export: one 1080 x 1920 (or 1920 x 1080 horizontal) video, with or without the song, then the share pop up.
 struct ExportSheet: View {
     let model: EditorModel
     @Environment(\.dismiss) private var dismiss
@@ -1909,16 +1909,17 @@ struct TapPad: View {
     }
 }
 
-/// After an export: a quick celebration, then one tap to post. The video is already in Photos
-/// (newest first), so Instagram and TikTok open straight to where you pick it. More is the share
-/// sheet. You do the posting.
+/// After an export: a quick celebration, then the share pop up comes up by itself, where you pick
+/// Save Video, Messages, Instagram, TikTok, YouTube, Facebook or anything else on the phone. Share
+/// brings it back (closing it by mistake loses nothing). You do the posting.
 struct ReadyToPost: View {
     let url: URL
     let done: () -> Void
-    @Environment(\.openURL) private var openURL
     @State private var pop = false
-    /// An app that didn't open (not on this phone).
-    @State private var missing: String?
+    /// What happened in the share pop up last (nil: nothing yet).
+    @State private var result: String?
+    @State private var saving = false
+    @State private var shownOnce = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -1931,59 +1932,107 @@ struct ReadyToPost: View {
             }
             .frame(height: 96)
             Text("Ready to post!").font(.title2.weight(.bold))
-            Text("It's in Photos, at the top.")
+            Text("Save it, text it, or post it to Instagram, TikTok, YouTube Shorts or Facebook Reels.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.7))
-            HStack(spacing: 10) {
-                post("Instagram", icon: "camera", links: ["instagram://camera", "instagram://app"])
-                post("TikTok", icon: "music.note", links: ["tiktok://", "snssdk1233://"])
+                .multilineTextAlignment(.center)
+            Button { share() } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .font(.body.weight(.bold))
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
             HStack(spacing: 10) {
-                ShareLink(item: url) {
-                    Label("More", systemImage: "square.and.arrow.up")
+                Button { save() } label: {
+                    Label(saving ? "Saving…" : "Save to Photos", systemImage: "square.and.arrow.down")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(GlassButtonStyle())
+                .disabled(saving)
                 Button(action: done) {
                     Text("Done").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(GlassButtonStyle())
             }
-            if let missing {
-                Text("\(missing) didn't open. Tap More to share it another way.")
+            if let result {
+                Text(result)
                     .font(.caption)
-                    .foregroundStyle(Tint.warn)
+                    .foregroundStyle(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
             }
         }
         .sensoryFeedback(.success, trigger: pop)
         .onAppear {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) { pop = true }
+            guard !shownOnce else { return }
+            shownOnce = true
+            // The pop up comes up on its own once the check mark has landed.
+            Task {
+                try? await Task.sleep(for: .milliseconds(700))
+                share()
+            }
         }
     }
 
-    /// Opens the app (trying each link in turn); says so when none opens.
-    private func post(_ name: String, icon: String, links: [String]) -> some View {
-        Button {
-            missing = nil
-            open(links, name: name)
-        } label: {
-            Label(name, systemImage: icon)
-                .font(.body.weight(.bold))
-                .frame(maxWidth: .infinity)
+    private func share() {
+        SharePopUp.present(url) { activity, completed in
+            guard completed else { return }
+            result = SharePopUp.sentLine(activity)
         }
-        .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
-        .accessibilityLabel("Post to \(name)")
     }
 
-    private func open(_ links: [String], name: String) {
-        guard let first = links.first, let link = URL(string: first) else {
-            missing = name
-            return
+    private func save() {
+        saving = true
+        Task {
+            do {
+                try await EditorModel.saveToPhotos(url)
+                result = "Saved to Photos, at the top."
+            } catch {
+                result = EditorError.explain(error)
+            }
+            saving = false
         }
-        openURL(link) { opened in
-            if !opened { open(Array(links.dropFirst()), name: name) }
+    }
+}
+
+/// The phone's own share pop up for a video, over whatever is showing. It lists the apps on this
+/// phone that take a video (Instagram, TikTok, YouTube, Facebook only show when they're installed).
+@MainActor
+enum SharePopUp {
+    static func present(_ url: URL, finished: @escaping (UIActivity.ActivityType?, Bool) -> Void) {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        guard var top = scene?.windows.first(where: \.isKeyWindow)?.rootViewController
+                ?? scene?.windows.first?.rootViewController else { return }
+        while let next = top.presentedViewController, !next.isBeingDismissed { top = next }
+        // Already up: don't stack a second one.
+        if top is UIActivityViewController { return }
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        sheet.completionWithItemsHandler = { activity, completed, _, _ in
+            finished(activity, completed)
         }
+        if let pop = sheet.popoverPresentationController {
+            // iPad: it points at the middle of the screen.
+            pop.sourceView = top.view
+            pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
+            pop.permittedArrowDirections = []
+        }
+        top.present(sheet, animated: true)
+    }
+
+    /// One line for what was just done with the video.
+    static func sentLine(_ activity: UIActivity.ActivityType?) -> String {
+        guard let raw = activity?.rawValue else { return "Shared." }
+        if activity == .saveToCameraRoll { return "Saved to Photos, at the top." }
+        if activity == .message { return "Sent in Messages." }
+        if activity == .airDrop { return "Sent with AirDrop." }
+        let lower = raw.lowercased()
+        if lower.contains("instagram") { return "Sent to Instagram." }
+        if lower.contains("tiktok") || lower.contains("musically") || lower.contains("aweme") { return "Sent to TikTok." }
+        if lower.contains("youtube") { return "Sent to YouTube." }
+        if lower.contains("facebook") { return "Sent to Facebook." }
+        return "Shared."
     }
 }
 
