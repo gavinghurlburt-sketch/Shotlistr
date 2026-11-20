@@ -589,6 +589,91 @@ enum LyricText {
         return words
     }
 
+    /// Clean up: nudges tapped words toward where the singing was heard, never more than `limit`
+    /// seconds either way. Words that match a heard word (in order, close by) take its start; the
+    /// rest move with their matched neighbors. Nil when too little matched to trust.
+    static func cleanUp(_ words: [LyricWord], range: Range<Int>, heard: [LyricWord],
+                        limit: Double = 1.0) -> (words: [LyricWord], moved: Int)? {
+        let range = range.clamped(to: words.indices)
+        guard !range.isEmpty, !heard.isEmpty else { return nil }
+        let heardNorm: [String] = heard.map { norm($0.text) }
+        func same(_ a: String, _ b: String) -> Bool {
+            if a.isEmpty || b.isEmpty { return false }
+            if a == b { return true }
+            return a.count >= 3 && b.count >= 3 && a.prefix(3) == b.prefix(3)
+        }
+        // Match in order: each tapped word takes the closest heard word after the last one used.
+        var shift: [Int: Double] = [:]
+        var after = -1
+        for i in range {
+            let mine: String = norm(words[i].text)
+            let at: Double = words[i].start
+            var best: Int?
+            var bestGap: Double = limit
+            var j = after + 1
+            while j < heard.count {
+                let gap: Double = heard[j].start - at
+                if gap > limit { break }
+                if abs(gap) <= bestGap, same(mine, heardNorm[j]) {
+                    best = j
+                    bestGap = abs(gap)
+                }
+                j += 1
+            }
+            if let best {
+                shift[i] = heard[best].start - at
+                after = best
+            }
+        }
+        guard shift.count >= 3 else { return nil }
+        let matched: [Int] = shift.keys.sorted()
+        // Unmatched words: in between, slide from one matched neighbor's move to the next.
+        func move(_ i: Int) -> Double {
+            if let own = shift[i] { return own }
+            let before: Int? = matched.last(where: { $0 < i })
+            let next: Int? = matched.first(where: { $0 > i })
+            switch (before, next) {
+            case let (b?, n?):
+                let part: Double = Double(i - b) / Double(n - b)
+                return shift[b]! + (shift[n]! - shift[b]!) * part
+            case let (b?, nil): return shift[b]!
+            case let (nil, n?): return shift[n]!
+            default: return 0
+            }
+        }
+        var out = words
+        for i in range {
+            let d: Double = min(limit, max(-limit, move(i)))
+            out[i].start = max(0, words[i].start + d)
+            out[i].end = max(out[i].start + 0.04, words[i].end + d)
+        }
+        // Keep the order, and words that touched still touch.
+        for i in range {
+            let prev = i - 1
+            guard out.indices.contains(prev) else { continue }
+            if prev >= range.lowerBound {
+                let earliest: Double = out[prev].start + 0.05
+                if out[i].start < earliest {
+                    out[i].start = min(earliest, words[i].start + limit)
+                    out[i].end = max(out[i].end, out[i].start + 0.04)
+                }
+            }
+            let touched: Bool = words[prev].end >= words[i].start - 0.01
+            if prev >= range.lowerBound && touched {
+                out[prev].end = max(out[prev].start + 0.04, out[i].start)
+            } else if out[prev].end > out[i].start {
+                out[prev].end = max(out[prev].start + 0.04, out[i].start)
+            }
+        }
+        let last = range.upperBound - 1
+        if out.indices.contains(last + 1), out[last].end > out[last + 1].start {
+            out[last].end = max(out[last].start + 0.04, out[last + 1].start)
+        }
+        var moved = 0
+        for i in range where abs(out[i].start - words[i].start) > 0.02 { moved += 1 }
+        return (out, moved)
+    }
+
     /// "Re-time my words": keeps the words as typed, takes the times from `heard` wherever the
     /// words match (in order), and spreads the rest between their neighbors.
     static func retime(_ mine: [LyricWord], to heard: [LyricWord]) -> (words: [LyricWord], missing: Int) {

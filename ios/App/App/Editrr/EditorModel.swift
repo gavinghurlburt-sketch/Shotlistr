@@ -288,6 +288,19 @@ final class EditorModel {
     var tapChecking = false
     /// When the last tap landed (song time), so both thumbs at once count once.
     @ObservationIgnored private var tapLastAt: Double = -1
+    /// Clean up has nudged the taps toward the singing (its button then takes it back).
+    var tapCleaned = false
+    /// Clean up is waiting on the AI to finish listening.
+    var tapCleanBusy = false
+    /// What Clean up did, or why it couldn't (shown on the tap screen).
+    var tapCleanNote: String?
+    /// The taps as they were before Clean up.
+    @ObservationIgnored private var tapRaw: [LyricWord]?
+    /// What the AI heard for Clean up, and the soundtrack it heard it in.
+    @ObservationIgnored private var cleanHeard: [LyricWord] = []
+    @ObservationIgnored private weak var cleanHeardIn: AVMutableComposition?
+    @ObservationIgnored private var cleanTask: Task<Void, Never>?
+    @ObservationIgnored private weak var cleanTried: AVMutableComposition?
 
     let player: AVPlayer = {
         let player = AVPlayer()
@@ -3385,6 +3398,9 @@ final class EditorModel {
         tapTiming = false
         tapNext = 0
         tapBefore = nil
+        cleanTask?.cancel()
+        cleanTask = nil
+        forgetCleanUp()
     }
 
     private func updateLyricNow(at seconds: Double) {
@@ -3988,11 +4004,14 @@ final class EditorModel {
         tapLastAt = -1
         tapChecking = false
         tapTiming = true
+        forgetCleanUp()
         let at = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
         tapFrom = at
         time = at
         requestSeek(at)
         notice = nil
+        // The AI listens quietly meanwhile, so Clean up is ready when the tapping's done.
+        hearForCleanUp()
     }
 
     /// Start over: every tap this go comes off, the words go back to how they were, and the
@@ -4006,6 +4025,7 @@ final class EditorModel {
         tapLastAt = -1
         tapChecking = false
         lyricSelected = nil
+        forgetCleanUp()
         time = tapFrom
         requestSeek(tapFrom)
         notice = nil
@@ -4029,6 +4049,7 @@ final class EditorModel {
         let at = min(max(0, now), duration)
         // Two taps closer than a couple of frames are one tap (both thumbs at once).
         if tapLastAt >= 0, abs(at - tapLastAt) < 0.06 { return }
+        forgetCleanUp()
         // A word of more than one syllable takes a tap for each: these stay on the same word.
         let current = tapNext - 1
         if current >= tapFirst, lyrics.indices.contains(current), tapSyllable < LyricSyllables.count(lyrics[current]) {
@@ -4066,6 +4087,7 @@ final class EditorModel {
         guard tapTiming, tapNext > tapFirst, let before = tapBefore else { return }
         pause()
         tapChecking = false
+        forgetCleanUp()
         tapNext -= 1
         let i = tapNext
         if before.indices.contains(i), lyrics.indices.contains(i) {
@@ -4124,6 +4146,8 @@ final class EditorModel {
         tapChecking = false
         guard tapTiming else { return }
         tapTiming = false
+        let cleaned = tapCleaned
+        forgetCleanUp()
         guard let before = tapBefore else { return }
         tapBefore = nil
         var timed = lyrics
@@ -4147,7 +4171,79 @@ final class EditorModel {
         let count = tapNext - tapFirst
         editLyrics { lyrics = timed }
         scheduleSave()
-        notice = count == 1 ? "Timed 1 word." : "Timed \(count) words."
+        let words = count == 1 ? "Timed 1 word" : "Timed \(count) words"
+        notice = cleaned ? words + ", cleaned up to the singing." : words + "."
+    }
+
+    // MARK: Clean up (the AI nudges the taps toward the singing)
+
+    /// Clean up: moves this go's tapped words toward where the AI heard them sung, never more than
+    /// a second either way. Tapped again, it puts the taps back as they were.
+    func lyricTapCleanUp() {
+        guard tapTiming, tapNext > tapFirst else { return }
+        if tapCleaned, let raw = tapRaw {
+            lyrics = raw
+            forgetCleanUp()
+            lyricsLive.update(words: lyrics, style: lyricStyle)
+            return
+        }
+        guard let built else { return }
+        let sound: AVMutableComposition = built.composition
+        guard cleanHeardIn === sound, !cleanHeard.isEmpty else {
+            if !canListen {
+                tapCleanNote = "Clean up needs the song's sound to listen to."
+            } else if cleanTried === sound && cleanTask == nil {
+                tapCleanNote = "Couldn't hear the singing well enough to clean up."
+            } else {
+                tapCleanBusy = true
+                tapCleanNote = "Listening to the singing…"
+                hearForCleanUp()
+            }
+            return
+        }
+        guard let result = LyricText.cleanUp(lyrics, range: tapFirst..<tapNext, heard: cleanHeard) else {
+            tapCleanNote = "Couldn't match enough words to the singing to clean up."
+            return
+        }
+        tapRaw = lyrics
+        lyrics = result.words
+        tapCleaned = true
+        tapCleanBusy = false
+        tapCleanNote = result.moved == 0 ? "Already right on the singing." :
+            (result.moved == 1 ? "Cleaned up 1 word." : "Cleaned up \(result.moved) words.")
+        lyricsLive.update(words: lyrics, style: lyricStyle)
+    }
+
+    /// Any tap, Back or Start over drops Clean up (the button's ready to clean the new taps).
+    private func forgetCleanUp() {
+        tapRaw = nil
+        tapCleaned = false
+        tapCleanBusy = false
+        tapCleanNote = nil
+    }
+
+    /// Listens to the soundtrack in the background for Clean up, once for each soundtrack.
+    private func hearForCleanUp() {
+        guard cleanTask == nil, canListen, let built else { return }
+        let sound: AVMutableComposition = built.composition
+        guard cleanHeardIn !== sound || cleanHeard.isEmpty, cleanTried !== sound || tapCleanBusy else { return }
+        let trackIDs = lyricTrackIDs(built)
+        let box = AssetBox(asset: built.composition)
+        let quiet: @Sendable (String) -> Void = { _ in }
+        cleanTask = Task { [weak self] in
+            let found: [LyricWord] = (try? await LyricListener.listen(to: box.asset, trackIDs: trackIDs, update: quiet)) ?? []
+            guard let self, !Task.isCancelled else { return }
+            self.cleanTask = nil
+            let heardIn = box.asset as? AVMutableComposition
+            self.cleanTried = heardIn
+            if !found.isEmpty {
+                self.cleanHeard = found
+                self.cleanHeardIn = heardIn
+            }
+            guard self.tapCleanBusy else { return }
+            self.tapCleanBusy = false
+            self.lyricTapCleanUp()
+        }
     }
 
     /// The next word a tap will time (for the pads).

@@ -100,6 +100,15 @@ final class SongLyricsModel: LyricTapping {
     @ObservationIgnored private var tapFirst = 0
     @ObservationIgnored private var tapFrom: Double = 0
     @ObservationIgnored private var tapLastAt: Double = -1
+    /// Clean up has nudged the taps toward the singing (its button then takes it back).
+    var tapCleaned = false
+    /// Clean up is waiting on the AI to finish listening.
+    var tapCleanBusy = false
+    /// What Clean up did, or why it couldn't (shown on the tap screen).
+    var tapCleanNote: String?
+    @ObservationIgnored private var tapRaw: [LyricWord]?
+    @ObservationIgnored private var cleanTask: Task<Void, Never>?
+    @ObservationIgnored private var cleanTried = false
 
     /// The longest a tapped word stays up before the next tap.
     static let tapLongest = 3.0
@@ -187,6 +196,8 @@ final class SongLyricsModel: LyricTapping {
         if tapTiming { finishTapTiming(keep: true) }
         listenTask?.cancel()
         listenTask = nil
+        cleanTask?.cancel()
+        cleanTask = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
@@ -311,10 +322,13 @@ final class SongLyricsModel: LyricTapping {
         tapLastAt = -1
         tapChecking = false
         tapTiming = true
+        forgetCleanUp()
         let at: Double = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
         tapFrom = at
         seek(at)
         notice = nil
+        // The AI listens quietly meanwhile, so Clean up is ready when the tapping's done.
+        hearForCleanUp()
     }
 
     func lyricTap() {
@@ -332,6 +346,7 @@ final class SongLyricsModel: LyricTapping {
         let at = min(max(0, now), duration)
         // Two taps closer than a couple of frames are one tap (both thumbs at once).
         if tapLastAt >= 0, abs(at - tapLastAt) < 0.06 { return }
+        forgetCleanUp()
         // A word of more than one syllable takes a tap for each: these stay on the same word.
         let current = tapNext - 1
         if current >= tapFirst, lyrics.indices.contains(current), tapSyllable < LyricSyllables.count(lyrics[current]) {
@@ -361,6 +376,7 @@ final class SongLyricsModel: LyricTapping {
         guard tapTiming, tapNext > tapFirst, let before = tapBefore else { return }
         pause()
         tapChecking = false
+        forgetCleanUp()
         tapNext -= 1
         let i = tapNext
         if before.indices.contains(i), lyrics.indices.contains(i) { lyrics[i] = before[i] }
@@ -378,6 +394,7 @@ final class SongLyricsModel: LyricTapping {
         tapSyllable = 0
         tapLastAt = -1
         tapChecking = false
+        forgetCleanUp()
         seek(tapFrom)
     }
 
@@ -414,6 +431,8 @@ final class SongLyricsModel: LyricTapping {
         tapChecking = false
         guard tapTiming else { return }
         tapTiming = false
+        let cleaned = tapCleaned
+        forgetCleanUp()
         guard let before = tapBefore else { return }
         tapBefore = nil
         var timed = lyrics
@@ -432,7 +451,67 @@ final class SongLyricsModel: LyricTapping {
         }
         let count = tapNext - tapFirst
         change(timed)
-        notice = count == 1 ? "Timed 1 word." : "Timed \(count) words."
+        let words = count == 1 ? "Timed 1 word" : "Timed \(count) words"
+        notice = cleaned ? words + ", cleaned up to the singing." : words + "."
+    }
+
+    // MARK: Clean up (the AI nudges the taps toward the singing)
+
+    /// Clean up: moves this go's tapped words toward where the AI heard them sung, never more than
+    /// a second either way. Tapped again, it puts the taps back as they were.
+    func lyricTapCleanUp() {
+        guard tapTiming, tapNext > tapFirst else { return }
+        if tapCleaned, let raw = tapRaw {
+            lyrics = raw
+            forgetCleanUp()
+            return
+        }
+        guard !heard.isEmpty else {
+            if !canListen {
+                tapCleanNote = "Clean up needs the song's sound to listen to."
+            } else if cleanTried && cleanTask == nil {
+                tapCleanNote = "Couldn't hear the singing well enough to clean up."
+            } else {
+                tapCleanBusy = true
+                tapCleanNote = "Listening to the singing…"
+                hearForCleanUp()
+            }
+            return
+        }
+        guard let result = LyricText.cleanUp(lyrics, range: tapFirst..<tapNext, heard: heard) else {
+            tapCleanNote = "Couldn't match enough words to the singing to clean up."
+            return
+        }
+        tapRaw = lyrics
+        lyrics = result.words
+        tapCleaned = true
+        tapCleanBusy = false
+        tapCleanNote = result.moved == 0 ? "Already right on the singing." :
+            (result.moved == 1 ? "Cleaned up 1 word." : "Cleaned up \(result.moved) words.")
+    }
+
+    /// Any tap, Back or Start over drops Clean up (the button's ready to clean the new taps).
+    private func forgetCleanUp() {
+        tapRaw = nil
+        tapCleaned = false
+        tapCleanBusy = false
+        tapCleanNote = nil
+    }
+
+    /// Listens to the song in the background for Clean up (once; Listen fills it in too).
+    private func hearForCleanUp() {
+        guard cleanTask == nil, listenTask == nil, heard.isEmpty, !cleanTried, let asset, LyricListener.isAvailable else { return }
+        let quiet: @Sendable (String) -> Void = { _ in }
+        cleanTask = Task { [weak self] in
+            let found: [LyricWord] = (try? await LyricListener.listen(to: asset, update: quiet)) ?? []
+            guard let self, !Task.isCancelled else { return }
+            self.cleanTask = nil
+            self.cleanTried = true
+            if !found.isEmpty, self.heard.isEmpty { self.heard = found }
+            guard self.tapCleanBusy else { return }
+            self.tapCleanBusy = false
+            self.lyricTapCleanUp()
+        }
     }
 }
 

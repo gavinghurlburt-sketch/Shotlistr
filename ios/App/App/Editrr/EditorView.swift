@@ -1567,6 +1567,13 @@ protocol LyricTapping: AnyObject {
     var isPlaying: Bool { get }
     var time: Double { get }
     var lyricTapCount: Int { get }
+    /// Clean up has nudged the taps toward the singing.
+    var tapCleaned: Bool { get }
+    /// Clean up is waiting on the AI to finish listening.
+    var tapCleanBusy: Bool { get }
+    /// What Clean up did, or why it couldn't.
+    var tapCleanNote: String? { get }
+    func lyricTapCleanUp()
     func lyricTap()
     func lyricTapBack()
     func lyricTapRestart()
@@ -1623,8 +1630,11 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
             Button("Cancel") { model.finishTapTiming(keep: false) }
                 .foregroundStyle(.white.opacity(0.75))
             Spacer()
-            Text(model.tapChecking ? "Checking your timing" : TapQueueLook.timedText(count))
+            Text(model.tapChecking ? "Checking your timing" : (model.tapCleanNote ?? TapQueueLook.timedText(count)))
                 .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(model.tapCleaned && !model.tapChecking ? Tint.accent : Color.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Spacer()
             Button("Done") { model.finishTapTiming(keep: true) }
                 .font(.body.weight(.bold))
@@ -1635,42 +1645,65 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
         .frame(height: 44)
     }
 
-    /// Back (the last word off), Play back (check it with the music), Start over (all of them off).
+    /// Back (the last word off), Play back (check it with the music), Clean up (the AI nudges the
+    /// taps toward the singing, a second at most), Start over (all of them off).
     private func tryAgainRow(count: Int) -> some View {
         let dim: Color = Color.white.opacity(0.3)
         let none: Bool = count == 0
         let checking = model.tapChecking
-        return HStack {
+        let cleaned = model.tapCleaned
+        let busy = model.tapCleanBusy
+        return HStack(spacing: 0) {
             Button { model.lyricTapBack() } label: {
-                Label("Back", systemImage: "arrow.uturn.backward")
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
+                TapRowLabel(title: "Back", icon: "arrow.uturn.backward")
             }
             .foregroundStyle(none ? dim : Color.white)
             .disabled(none)
             .accessibilityHint("Takes the last word off to do it again")
-            Spacer()
             Button { model.lyricTapCheck(!checking) } label: {
-                Label(checking ? "Stop" : "Play back", systemImage: checking ? "stop.fill" : "play.fill")
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
+                TapRowLabel(title: checking ? "Stop" : "Play back", icon: checking ? "stop.fill" : "play.fill")
             }
             .foregroundStyle(none ? dim : Tint.accent)
             .disabled(none)
             .accessibilityHint("Plays from the start with the words as you tapped them")
-            Spacer()
+            Button { model.lyricTapCleanUp() } label: {
+                if busy {
+                    VStack(spacing: 4) {
+                        ProgressView().tint(.white).frame(height: 20)
+                        Text("Listening").font(.caption.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                } else {
+                    TapRowLabel(title: cleaned ? "Undo clean up" : "Clean up",
+                                icon: cleaned ? "arrow.uturn.backward.circle" : "wand.and.stars")
+                }
+            }
+            .foregroundStyle(none || busy ? dim : (cleaned ? Tint.accent : Color.white))
+            .disabled(none || busy)
+            .accessibilityHint(cleaned ? "Puts your taps back as you tapped them"
+                               : "The AI moves your taps toward the singing, a second at most")
             Button { model.lyricTapRestart() } label: {
-                Label("Start over", systemImage: "arrow.counterclockwise")
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
+                TapRowLabel(title: "Start over", icon: "arrow.counterclockwise")
             }
             .foregroundStyle(none ? dim : Color.white)
             .disabled(none)
             .accessibilityHint("Takes every tap off and goes back to the start")
         }
-        .font(.body.weight(.semibold))
-        .labelStyle(.titleAndIcon)
         .buttonStyle(.plain)
+    }
+}
+
+/// A tap screen button: its icon over its name, the four sharing the row.
+private struct TapRowLabel: View {
+    let title: String
+    let icon: String
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon).font(.body.weight(.semibold)).frame(height: 20)
+            Text(title).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .contentShape(Rectangle())
     }
 }
 
