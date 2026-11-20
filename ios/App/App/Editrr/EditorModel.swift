@@ -217,7 +217,15 @@ final class EditorModel {
     var segments: [Segment] = []
     var duration: Double = 0
     var time: Double = 0
-    var isPlaying = false
+    var isPlaying = false {
+        // The zoom boxes show while stopped and the zoom itself while playing.
+        didSet {
+            guard oldValue != isPlaying, let index = fxTarget, cuts.indices.contains(index),
+                  cuts[index].zoom != .off else { return }
+            refreshCuts()
+            if !isPlaying { requestSeek(time) }
+        }
+    }
     var fps: Double = 0
     var pixelsPerSecond: Double = 40
     var canUndo: Bool { !history.isEmpty }
@@ -3113,8 +3121,9 @@ final class EditorModel {
         // Loop off: playing from before Out stops at Out. (Starting past Out plays on to the end.)
         stopAtOut = !looping && time < loopEnd - 0.05
         RenderStats.shared.reset()
-        player.play()
+        // Set first: with the Fx page's zoom boxes up, this puts the zoom back before it plays.
         isPlaying = true
+        player.play()
     }
 
     func pause() {
@@ -3185,7 +3194,7 @@ final class EditorModel {
             captions.suppressesPlayerRendering = true
             item.add(captions)
             item.videoComposition = TimelineBuilder.videoComposition(segments: onScreen, built: built,
-                                                                     cuts: cuts, layers: layers, duration: duration,
+                                                                     cuts: screenCuts, layers: layers, duration: duration,
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
                                                                      media: overlayMedia, board: overlayBoard,
@@ -3210,11 +3219,20 @@ final class EditorModel {
         guard let built, let item = player.currentItem else { return }
         overlayBoard.update(overlays, media: overlayMedia, track: trackKeys)
         item.videoComposition = TimelineBuilder.videoComposition(segments: onScreen, built: built,
-                                                                     cuts: cuts, layers: layers, duration: duration,
+                                                                     cuts: screenCuts, layers: layers, duration: duration,
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
                                                                      media: overlayMedia, board: overlayBoard,
                                                                      filter: filter)
+    }
+
+    /// The cuts as the video on screen draws them: the same, except that while the Fx page shows
+    /// the zoom's Start and End boxes, that cut's zoom is held off so the whole frame shows.
+    private var screenCuts: [Cut] {
+        guard zoomFramesShown, let index = fxTarget, cuts.indices.contains(index) else { return cuts }
+        var shown = cuts
+        shown[index].zoom = .off
+        return shown
     }
 
     /// What actually plays: the cuts, or only the previewed video while you take a look.
@@ -3288,7 +3306,38 @@ final class EditorModel {
 
     var hasLyrics: Bool { !lyrics.isEmpty }
     /// Listening needs a soundtrack and a phone that has Apple's speech model.
-    var canListen: Bool { soundtrack != nil && LyricListener.isAvailable }
+    var canListen: Bool { !lyricAudioChoices.isEmpty && LyricListener.isAvailable }
+
+    /// Which sound Lyrics listens to for the words.
+    enum LyricAudio: String, CaseIterable {
+        case song, video
+        var name: String { self == .song ? "The song" : "Video sound" }
+    }
+    /// The one picked when there's both (see `lyricAudioChoices`).
+    var lyricAudio: LyricAudio = .song
+
+    /// The sounds there are to listen to: the song (the performance's song, or music added from
+    /// creatrr or Files), and the videos' own sound.
+    var lyricAudioChoices: [LyricAudio] {
+        guard let built else { return [] }
+        var song = built.musicTracks
+        if let id = built.songTrack { song.insert(id) }
+        let audio = built.composition.tracks(withMediaType: .audio).map(\.trackID)
+        var choices: [LyricAudio] = []
+        if audio.contains(where: { song.contains($0) }) { choices.append(.song) }
+        if audio.contains(where: { !song.contains($0) }) { choices.append(.video) }
+        return choices
+    }
+
+    /// The sound tracks to listen to for the words.
+    private func lyricTrackIDs(_ built: TimelineBuilder.Built) -> Set<CMPersistentTrackID> {
+        var song = built.musicTracks
+        if let id = built.songTrack { song.insert(id) }
+        let audio = Set(built.composition.tracks(withMediaType: .audio).map(\.trackID))
+        let choices = lyricAudioChoices
+        let pick = choices.contains(lyricAudio) ? lyricAudio : (choices.first ?? .song)
+        return pick == .song ? audio.intersection(song) : audio.subtracting(song)
+    }
 
     /// Hands the words and look to the player. Paused, the frame is drawn again right away.
     private func syncLyrics() {
@@ -3337,10 +3386,11 @@ final class EditorModel {
     /// stay as they are and only take the times from what was heard.
     func listenForLyrics(retime: Bool) {
         guard listening == nil, let built else { return }
-        guard soundtrack != nil else {
+        guard !lyricAudioChoices.isEmpty else {
             problem = LyricListenError.noSound.errorDescription
             return
         }
+        let trackIDs = lyricTrackIDs(built)
         pause()
         tapTiming = false
         problem = nil
@@ -3354,7 +3404,7 @@ final class EditorModel {
         }
         listenTask = Task { [weak self] in
             do {
-                let heard = try await LyricListener.listen(to: box.asset, update: report)
+                let heard = try await LyricListener.listen(to: box.asset, trackIDs: trackIDs, update: report)
                 guard let self, !Task.isCancelled else { return }
                 self.finishListening(heard, retime: retime)
             } catch {
@@ -4392,8 +4442,8 @@ final class EditorModel {
     }
 
     /// Auto zoom only works inside the cuts, so it doesn't count when framing the whole track.
-    private var frameZoomHere: Double {
-        framedLayer == Self.wholeTrack ? 1 : zoomFactorHere
+    private var frameZoomHere: ZoomBox {
+        framedLayer == Self.wholeTrack ? .full : zoomBoxAtPlayhead
     }
 
     /// The top overlay showing at the playhead under a point on the video (fractions of the frame
@@ -4419,28 +4469,56 @@ final class EditorModel {
         fxIndex.map { cuts[$0].zoom } ?? .off
     }
 
-    /// How much auto zoom is adding right now (1 = none).
-    private var zoomFactorHere: Double {
-        guard let index = cutAtPlayhead else { return 1 }
+    /// Where auto zoom's frame is right now (the whole frame when there's none, or while the
+    /// Fx page holds it off to show its boxes).
+    private var zoomBoxAtPlayhead: ZoomBox {
+        guard let index = cutAtPlayhead, cuts[index].zoom != .off else { return .full }
+        if zoomFramesShown, index == fxTarget { return .full }
         let start = cuts[index].time
         let end = index + 1 < cuts.count ? cuts[index + 1].time : duration
-        guard end - start > 0.05 else { return 1 }
-        return cuts[index].zoom.factor((playheadFrame - start) / (end - start), amount: cuts[index].zoomBy)
+        guard end - start > 0.05 else { return .full }
+        let p = Ease.smooth.apply((playheadFrame - start) / (end - start))
+        return ZoomBox.between(cuts[index].zoomStart, cuts[index].zoomEnd, p)
     }
 
-    /// How far the slow zoom goes on the cut the Fx page is on.
-    var zoomAmountHere: Double {
-        fxIndex.map { cuts[$0].zoomBy } ?? AutoZoom.amount
+    /// The Fx page is open on a cut with a slow zoom and nothing is playing: the video shows the
+    /// whole frame with the green Start and red End boxes on it. Playing shows the zoom itself.
+    var zoomFramesShown: Bool {
+        guard let index = fxTarget, cuts.indices.contains(index) else { return false }
+        return cuts[index].zoom != .off && !isPlaying
     }
 
-    /// Sets how far the slow zoom goes on the cut the Fx page is on.
-    func setZoomAmountHere(_ amount: Double) {
-        guard let index = fxIndex else { return }
-        let amount = min(max(amount, AutoZoom.amounts.lowerBound), AutoZoom.amounts.upperBound)
-        guard abs(cuts[index].zoomBy - amount) > 0.0001 else { return }
+    /// The Start and End boxes of the cut the Fx page is on.
+    var zoomFramesHere: (start: ZoomBox, end: ZoomBox) {
+        guard let index = fxIndex else { return (.full, .full) }
+        return (cuts[index].zoomStart, cuts[index].zoomEnd)
+    }
+
+    /// Keeps a moved or resized Start or End box (one Undo each).
+    func setZoomFrame(start: Bool, _ box: ZoomBox) {
+        guard let index = fxIndex, cuts[index].zoom != .off else { return }
+        let box = box.held()
+        guard box != (start ? cuts[index].zoomStart : cuts[index].zoomEnd) else { return }
         pause()
         history.append(snapshot())
-        cuts[index].zoomAmount = amount
+        let other = start ? cuts[index].zoomEnd : cuts[index].zoomStart
+        cuts[index].zoomFrom = start ? box : other
+        cuts[index].zoomTo = start ? other : box
+        // The label on the timeline follows the boxes: a smaller End box zooms in.
+        cuts[index].zoom = cuts[index].zoomTo!.size <= cuts[index].zoomFrom!.size ? .zoomIn : .zoomOut
+        redraw()
+    }
+
+    /// Zoom in or Zoom out's ready-made frames, from the icons on the Zoom card.
+    func useZoomPreset(_ zoom: AutoZoom) {
+        guard let index = fxIndex, zoom != .off else { return }
+        guard cuts[index].zoom != zoom || cuts[index].zoomFrom != nil || cuts[index].zoomTo != nil else { return }
+        pause()
+        history.append(snapshot())
+        cuts[index].zoom = zoom
+        cuts[index].zoomFrom = nil
+        cuts[index].zoomTo = nil
+        notice = "\(zoom.name) on this cut. Drag the green Start and red End boxes on the video to change it."
         redraw()
     }
 
@@ -4450,7 +4528,10 @@ final class EditorModel {
         pause()
         history.append(snapshot())
         cuts[index].zoom = zoom
-        if zoom == .off { cuts[index].zoomAmount = nil }
+        if zoom == .off {
+            cuts[index].zoomFrom = nil
+            cuts[index].zoomTo = nil
+        }
         notice = zoom == .off ? "Auto zoom off for this cut." : "\(zoom.name) on this cut. Each cut has its own."
         redraw()
     }
@@ -4465,11 +4546,14 @@ final class EditorModel {
         pause()
         draft = nil
         fxTarget = cutAtPlayhead
+        if let index = fxTarget, cuts[index].zoom != .off { redraw() }
         return fxTarget != nil
     }
 
     func endFX() {
+        let hadZoom = fxTarget.map { cuts.indices.contains($0) && cuts[$0].zoom != .off } ?? false
         fxTarget = nil
+        if hadZoom { redraw() }
         fishMoveStart = nil
         fishLive = nil
     }
@@ -4500,7 +4584,24 @@ final class EditorModel {
     var hasFXAtPlayhead: Bool {
         guard let index = cutAtPlayhead else { return false }
         let cut = cuts[index]
-        return (cut.transition?.kind ?? .none) != .none || !(cut.fx?.isEmpty ?? true)
+        var fx = cut.fx ?? CutFX()
+        fx.mirror = false   // Mirror has its own button
+        return (cut.transition?.kind ?? .none) != .none || !fx.isEmpty
+    }
+
+    /// The cut at the playhead is mirrored (side to side).
+    var mirrorHere: Bool { fxHere.mirror }
+
+    /// Mirror on the toolbar: flips the cut at the playhead side to side, or back.
+    func toggleMirrorHere() {
+        guard fxIndex != nil else {
+            notice = "Move the playhead onto a clip to mirror it."
+            return
+        }
+        var fx = fxHere
+        fx.mirror.toggle()
+        setFXHere(fx)
+        notice = fx.mirror ? "This cut is mirrored. Each cut has its own." : "Mirror off for this cut."
     }
 
     func setTransitionHere(_ transition: Transition) {
@@ -4526,6 +4627,7 @@ final class EditorModel {
         var cleared = CutFX()
         cleared.faces = cuts[index].fx?.faces ?? []
         cleared.facesLayer = cuts[index].fx?.facesLayer
+        cleared.mirror = cuts[index].fx?.mirror ?? false   // Mirror is its own button, not on the Fx page
         let next: CutFX? = cleared == CutFX() ? nil : cleared
         guard cuts[index].fx != next || cuts[index].transition != nil else { return }
         pause()
@@ -4547,6 +4649,16 @@ final class EditorModel {
             var fx = source
             fx.faces = cuts[i].fx?.faces ?? []
             fx.facesLayer = cuts[i].fx?.facesLayer
+            fx.mirror = cuts[i].fx?.mirror ?? false   // each cut keeps its own Mirror
+            // Keyframed sliders belong to this cut's stretch: the others get the value showing now.
+            if i != index, let keys = fx.keys {
+                for (name, list) in keys {
+                    if let param = FXParam(rawValue: name), let value = FXValueKey.value(list, at: playheadFrame) {
+                        fx[param] = value
+                    }
+                }
+                fx.keys = nil
+            }
             fx.followFace = source.followFace && !fx.faces.isEmpty && fx.facesLayer == cuts[i].layer
             // The circle's keyframes belong to this cut's stretch: the others get it where it sits now.
             if i != index, fx.fishKeys != nil {
@@ -4571,9 +4683,9 @@ final class EditorModel {
         case .transition: return transitionHere.kind != .none
         case .zoom: return zoomHere != .off
         case .color: return fx.color != .none
-        case .blur: return fx.blur >= 0.01
-        case .tilt: return abs(fx.rotate) >= 0.1
-        case .shake: return fx.shake >= 0.01
+        case .blur: return fx.blur >= 0.01 || !fxKeys(.blur).isEmpty
+        case .tilt: return abs(fx.rotate) >= 0.1 || !fxKeys(.tilt).isEmpty
+        case .shake: return fx.shake >= 0.01 || !fxKeys(.shake).isEmpty
         case .mirror: return fx.mirror
         case .face: return fx.followFace
         case .rgbSplit, .fisheye: return fx.custom != nil && fx.custom == kind.customID
@@ -4628,16 +4740,27 @@ final class EditorModel {
         case .face:
             Task { await followFaceHere(false) }
             return
-        case .color: fx.color = .none
-        case .blur: fx.blur = 0
-        case .tilt: fx.rotate = 0
-        case .shake: fx.shake = 0
+        case .color:
+            fx.color = .none
+            fx.colorAmount = 1
+            fx.keys?[FXParam.colorMix.rawValue] = nil
+        case .blur:
+            fx.blur = 0
+            fx.keys?[FXParam.blur.rawValue] = nil
+        case .tilt:
+            fx.rotate = 0
+            fx.keys?[FXParam.tilt.rawValue] = nil
+        case .shake:
+            fx.shake = 0
+            fx.keys?[FXParam.shake.rawValue] = nil
         case .mirror: fx.mirror = false
         case .rgbSplit, .fisheye:
             guard fx.custom == kind.customID else { return }
             fx.custom = nil
             fx.fishKeys = nil
+            fx.keys?[FXParam.amount.rawValue] = nil
         }
+        if fx.keys?.isEmpty == true { fx.keys = nil }
         setFXHere(fx)
     }
 
@@ -4802,6 +4925,84 @@ final class EditorModel {
         notice = "The circle isn't animated any more."
     }
 
+    // MARK: Keyframed sliders on the Fx page
+
+    /// A slider's keyframes on the cut the Fx page is on (empty when it isn't keyframed).
+    func fxKeys(_ param: FXParam) -> [FXValueKey] {
+        fxHere.keys?[param.rawValue] ?? []
+    }
+
+    /// The playhead sits on one of this slider's keyframes.
+    func fxKeyOnHere(_ param: FXParam) -> Bool {
+        let at = playheadFrame
+        return fxKeys(param).contains { abs($0.time - at) < 0.5 / 30 }
+    }
+
+    /// What the slider shows: its value at the playhead (keyframed) or its one value.
+    func fxValueHere(_ param: FXParam) -> Double {
+        FXValueKey.value(fxKeys(param), at: playheadFrame) ?? fxHere[param]
+    }
+
+    /// A slider let go: a keyframed one keeps the value as a keyframe at the playhead (a new one,
+    /// or the one already there); otherwise it's the slider's one value for the whole cut.
+    func setFXValue(_ param: FXParam, _ value: Double) {
+        var fx = fxHere
+        var keys = fx.keys?[param.rawValue] ?? []
+        if keys.isEmpty {
+            fx[param] = value
+        } else {
+            let at = playheadFrame
+            if let same = keys.firstIndex(where: { abs($0.time - at) < 0.5 / 30 }) {
+                keys[same].value = value
+            } else {
+                keys.append(FXValueKey(time: at, value: value))
+                keys.sort { $0.time < $1.time }
+            }
+            var all = fx.keys ?? [:]
+            all[param.rawValue] = keys
+            fx.keys = all
+        }
+        setFXHere(fx)
+    }
+
+    /// The diamond beside a slider: on a keyframe it takes it off; anywhere else it adds one with
+    /// the value showing now. The first one starts keyframing that slider.
+    func toggleFXKey(_ param: FXParam, name: String) {
+        guard fxIndex != nil else { return }
+        var fx = fxHere
+        var all = fx.keys ?? [:]
+        var keys = all[param.rawValue] ?? []
+        let at = playheadFrame
+        let shown = fxValueHere(param)
+        if let same = keys.firstIndex(where: { abs($0.time - at) < 0.5 / 30 }) {
+            keys.remove(at: same)
+            if keys.isEmpty {
+                // The last one gone: the slider holds the value it showed here, for the whole cut.
+                fx[param] = shown
+                notice = "\(name) isn't animated any more."
+            } else {
+                notice = "\(name) keyframe taken off."
+            }
+        } else {
+            keys.append(FXValueKey(time: at, value: shown))
+            keys.sort { $0.time < $1.time }
+            notice = keys.count == 1
+                ? "Keyframing \(name) from here. Move the playhead and the slider: each change makes a keyframe there."
+                : "\(name) keyframe \(keys.count) at \(Self.clock(at))."
+        }
+        all[param.rawValue] = keys.isEmpty ? nil : keys
+        fx.keys = all.isEmpty ? nil : all
+        setFXHere(fx)
+    }
+
+    /// Stop on the Fx page: stops playing and goes back to where this cut starts.
+    func stopCutPlay() {
+        pause()
+        let start = fxCutRange.lowerBound
+        time = start
+        requestSeek(start)
+    }
+
     func jumpToFishKey(forward: Bool) {
         pause()
         let times = (fxHere.fishKeys ?? []).map { $0.time }
@@ -4905,12 +5106,12 @@ final class EditorModel {
     func framingPreview(scale: Double, shift: CGSize) -> (scale: Double, shift: CGSize) {
         guard let rendered = framingHere else { return (1, .zero) }
         let zoom = frameZoomHere
-        let shown = rendered.zoomed(zoom)
-        let from = (draftHere?.framing ?? rendered).zoomed(zoom)
+        let shown = zoom.apply(to: rendered)
+        let from = zoom.apply(to: draftHere?.framing ?? rendered)
         let wanted = Framing(scale: from.scale * scale,
                              x: from.x * scale + Double(shift.width),
                              y: from.y * scale + Double(shift.height))
-        let held = wanted.zoomed(1 / zoom).clamped().zoomed(zoom)
+        let held = zoom.apply(to: zoom.undo(wanted).clamped())
         let applied = held.scale / shown.scale
         return (applied, CGSize(width: held.x - shown.x * applied, height: held.y - shown.y * applied))
     }
@@ -4924,11 +5125,11 @@ final class EditorModel {
             return
         }
         let zoom = frameZoomHere
-        let from = (draftHere?.framing ?? rendered).zoomed(zoom)
+        let from = zoom.apply(to: draftHere?.framing ?? rendered)
         let wanted = Framing(scale: from.scale * scale,
                              x: from.x * scale + Double(shift.width),
                              y: from.y * scale + Double(shift.height))
-        draft = FramingDraft(layer: index, time: playheadFrame, framing: wanted.zoomed(1 / zoom).clamped())
+        draft = FramingDraft(layer: index, time: playheadFrame, framing: zoom.undo(wanted).clamped())
         notice = "Tap the + diamond to keep this. Moving the playhead first throws it away."
     }
 

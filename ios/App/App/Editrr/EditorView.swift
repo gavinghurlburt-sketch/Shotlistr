@@ -560,6 +560,10 @@ struct EditingView: View {
     @State private var overlayItems: [PhotosPickerItem] = []
     /// The Fx page (effects on the cut at the playhead) is open.
     @State private var fxOpen = false
+    /// The Filters panel (one color look over the whole video) is open.
+    @State private var filtersOpen = false
+    /// The editor's height, for the bottom panels (about half of it, like a half-height sheet).
+    @State private var editorHeight: CGFloat = 700
     @State private var masking = false
     /// Picking a clip to go before or after the picked piece of the video track.
     @State private var clipPicking = false
@@ -600,6 +604,7 @@ struct EditingView: View {
                     // The apps' safe zones are for vertical video only.
                     if !model.wide {
                         SafeZonePicker(zone: $safeZone, tile: true)
+                            .zIndex(1)   // its fanned-out apps draw over the tiles under it
                     }
                     // Lyrics swaps the timeline for the lyrics timeline; it then reads Editing to go back.
                     Button { model.setLyricTimeline(!model.lyricTimeline) } label: {
@@ -651,6 +656,13 @@ struct EditingView: View {
                             MaskHandles(model: model, id: id)
                         }
                     }
+                    // While the Fx page is open on a cut with a slow zoom (and stopped): the whole
+                    // frame with the zoom's green Start and red End boxes, like DaVinci's Dynamic Zoom.
+                    .overlay {
+                        if model.zoomFramesShown {
+                            ZoomFrames(model: model)
+                        }
+                    }
                     // While Fisheye is open in the effects sheet: where its circle sits.
                     .overlay {
                         if model.fishEditing {
@@ -668,7 +680,10 @@ struct EditingView: View {
 
                 // As tall as the video (a horizontal one is short, so its tools can run past it),
                 // top-aligned beside it.
-                FramingControls(model: model)
+                FramingControls(model: model) {
+                    closeFX()
+                    withAnimation(.spring(duration: 0.35)) { filtersOpen = true }
+                }
                     .frame(width: 36)
                     .frame(height: model.wide ? max(videoWidth / ratio, geo.size.height) : videoWidth / ratio,
                            alignment: .top)
@@ -742,6 +757,20 @@ struct EditingView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { editorHeight = $0 }
+        // Fx and Filters: panels from the bottom, edge to edge (a half-height sheet floats with a
+        // gap at each side). The video above stays live: the Fisheye circle and zoom boxes are on it.
+        .overlay(alignment: .bottom) {
+            if fxOpen {
+                BottomPanel(height: editorHeight * 0.5, close: closeFX) {
+                    FXSheet(model: model, close: closeFX)
+                }
+            } else if filtersOpen {
+                BottomPanel(height: 300, close: closeFilters) {
+                    FilterSheet(model: model, close: closeFilters)
+                }
+            }
+        }
         .photosPicker(isPresented: $overlayPicking, selection: $overlayItems, maxSelectionCount: 1,
                       matching: .any(of: [.images, .videos]),
                       preferredItemEncoding: .current, photoLibrary: .shared())
@@ -897,14 +926,6 @@ struct EditingView: View {
         .frame(height: 52)
         // The Fx page: effects on the cut at the playhead. The video stays usable above it (the
         // Fisheye circle is moved there).
-        .sheet(isPresented: $fxOpen, onDismiss: { model.endFX() }) {
-            FXSheet(model: model)
-                .environment(\.colorScheme, .dark)
-                .presentationDetents([.medium])
-                .presentationContentInteraction(.scrolls)
-                .presentationBackground { FrostSheet() }
-                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-        }
         // The lyrics' look (colors, font, animation...), without the word editing.
         .sheet(isPresented: $lookOpen) {
             LyricsSheet(model: model, lookOnly: true)
@@ -955,6 +976,7 @@ struct EditingView: View {
                 model.textButton()
             }
             fxTool
+            mirrorTool
             // Music or a sound effect at the playhead: its row shows once there is one.
             ToolItem(icon: "music.note", text: "Add sound", tint: MusicTint.color,
                      spoken: "Add music or a sound effect at the playhead") {
@@ -1137,6 +1159,7 @@ struct EditingView: View {
             ToolStrip {
                 splitTools
                 fxTool
+                mirrorTool
                 if model.kind == .performance {
                     ToolItem(icon: PerformanceGlyph.name, text: "Edit performance",
                              spoken: "Edit the performance: every video synced to the song") {
@@ -1194,15 +1217,34 @@ struct EditingView: View {
         }
     }
 
+    private func closeFX() {
+        guard fxOpen else { return }
+        withAnimation(.spring(duration: 0.3)) { fxOpen = false }
+        model.endFX()
+    }
+
+    private func closeFilters() {
+        withAnimation(.spring(duration: 0.3)) { filtersOpen = false }
+    }
+
     /// Fx: effects on the cut at the playhead (each cut has its own).
     private var fxTool: some View {
         ToolItem(icon: "sparkles", text: "Fx", on: model.hasFXAtPlayhead || model.zoomHere != .off,
                  spoken: "Effects for the clip at the playhead") {
             if model.beginFX() {
-                fxOpen = true
+                filtersOpen = false
+                withAnimation(.spring(duration: 0.35)) { fxOpen = true }
             } else {
                 model.notice = "Move the playhead onto a clip to add effects."
             }
+        }
+    }
+
+    /// Mirror: flips the cut at the playhead side to side (it's either mirrored or it isn't).
+    private var mirrorTool: some View {
+        ToolItem(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", text: "Mirror",
+                 on: model.mirrorHere, spoken: "Mirror the clip at the playhead") {
+            model.toggleMirrorHere()
         }
     }
 
@@ -1221,6 +1263,7 @@ struct EditingView: View {
                 withAnimation(.spring(duration: 0.35)) { model.showEditPage() }
             }
             fxTool
+            mirrorTool
             ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
             shuffleTool
             tapBeatTool
@@ -1265,6 +1308,7 @@ struct EditingView: View {
                 }
                 .accessibilityHint("Shows this video from the playhead on")
                 fxTool
+                mirrorTool
                 ToolItem(icon: "eye", text: "Preview", on: model.previewing == index) { model.preview(index) }
                 ToolItem(icon: "plus.square.on.square", text: "Duplicate", enabled: !full) { model.duplicate(index) }
                 ToolItem(icon: "backward.frame", text: "1 frame", enabled: !model.locked,
@@ -1941,6 +1985,143 @@ struct VideoStage: View {
     }
 }
 
+/// A slow zoom's Start (green) and End (red) frames on the video, like DaVinci's Dynamic Zoom.
+/// Drag inside a box to move it, drag a corner to size it (the opposite corner stays put). Each box
+/// keeps the frame's shape and stays inside it. Where they overlap, the smaller box is the one moved.
+struct ZoomFrames: View {
+    let model: EditorModel
+    static let startColor = Color(red: 0.25, green: 0.9, blue: 0.4)
+    static let endColor = Color(red: 1, green: 0.27, blue: 0.27)
+    private static let reach: CGFloat = 26
+
+    private enum Grab {
+        case move(start: Bool, from: ZoomBox)
+        /// `fixed` is the opposite corner (fractions); `dx`, `dy` the side the finger's corner is on.
+        case corner(start: Bool, fixed: CGPoint, dx: Double, dy: Double)
+    }
+    @State private var grab: Grab?
+    @State private var liveStart: ZoomBox?
+    @State private var liveEnd: ZoomBox?
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            let saved = model.zoomFramesHere
+            let start = liveStart ?? saved.start
+            let end = liveEnd ?? saved.end
+            ZStack {
+                box(end, color: Self.endColor, label: "End", size: size)
+                box(start, color: Self.startColor, label: "Start", size: size)
+            }
+            .frame(width: size.width, height: size.height)
+            .contentShape(Path { path in
+                path.addRect(rect(end, size).insetBy(dx: -Self.reach, dy: -Self.reach))
+                path.addRect(rect(start, size).insetBy(dx: -Self.reach, dy: -Self.reach))
+            })
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in changed(value, size: size, start: start, end: end) }
+                    .onEnded { _ in ended() }
+            )
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Zoom start and end frames")
+    }
+
+    private func rect(_ b: ZoomBox, _ size: CGSize) -> CGRect {
+        CGRect(x: CGFloat(b.x - b.size / 2) * size.width, y: CGFloat(b.y - b.size / 2) * size.height,
+               width: CGFloat(b.size) * size.width, height: CGFloat(b.size) * size.height)
+    }
+
+    private func box(_ b: ZoomBox, color: Color, label: String, size: CGSize) -> some View {
+        let r = rect(b, size)
+        return ZStack(alignment: .topLeading) {
+            Rectangle()
+                .strokeBorder(color, lineWidth: 2)
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(color)
+                .padding(4)
+            ForEach(0..<4, id: \.self) { corner in
+                Rectangle()
+                    .fill(.white)
+                    .frame(width: 12, height: 12)
+                    .overlay(Rectangle().strokeBorder(color, lineWidth: 2))
+                    .position(x: corner % 2 == 0 ? 0 : r.width, y: corner < 2 ? 0 : r.height)
+            }
+        }
+        .frame(width: r.width, height: r.height)
+        .position(x: r.midX, y: r.midY)
+    }
+
+    private func changed(_ value: DragGesture.Value, size: CGSize, start: ZoomBox, end: ZoomBox) {
+        let w = Double(max(size.width, 1)), h = Double(max(size.height, 1))
+        if grab == nil {
+            model.pause()
+            let at = value.startLocation
+            // A corner first (the nearest within reach), then inside the smaller box, then the bigger.
+            var best: (Grab, CGFloat)?
+            for (isStart, b) in [(true, start), (false, end)] {
+                let r = rect(b, size)
+                for corner in [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
+                               CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)] {
+                    let d = hypot(corner.x - at.x, corner.y - at.y)
+                    guard d <= Self.reach, d < (best?.1 ?? .infinity) else { continue }
+                    let fixed = CGPoint(x: Double(corner.x == r.minX ? r.maxX : r.minX) / w,
+                                        y: Double(corner.y == r.minY ? r.maxY : r.minY) / h)
+                    best = (.corner(start: isStart, fixed: fixed,
+                                    dx: corner.x == r.minX ? -1 : 1, dy: corner.y == r.minY ? -1 : 1), d)
+                }
+            }
+            if let best {
+                grab = best.0
+            } else {
+                let order = start.size <= end.size ? [(true, start), (false, end)] : [(false, end), (true, start)]
+                if let hit = order.first(where: { rect($0.1, size).insetBy(dx: -8, dy: -8).contains(at) }) {
+                    grab = .move(start: hit.0, from: hit.1)
+                } else {
+                    return
+                }
+            }
+        }
+        guard let grab else { return }
+        switch grab {
+        case let .move(isStart, from):
+            var next = from
+            next.x += Double(value.translation.width) / w
+            next.y += Double(value.translation.height) / h
+            set(isStart, next.held())
+        case let .corner(isStart, fixed, dx, dy):
+            let fx = Double(fixed.x), fy = Double(fixed.y)
+            let px = Double(value.location.x) / w, py = Double(value.location.y) / h
+            var s: Double = max(abs(px - fx), abs(py - fy))
+            // Room from the fixed corner to the frame's edges on the finger's side.
+            let roomX: Double = dx > 0 ? 1 - fx : fx
+            let roomY: Double = dy > 0 ? 1 - fy : fy
+            s = min(max(s, ZoomBox.smallest), roomX, roomY)
+            set(isStart, ZoomBox(x: fx + dx * s / 2, y: fy + dy * s / 2, size: s).held())
+        }
+    }
+
+    private func set(_ isStart: Bool, _ b: ZoomBox) {
+        if isStart { liveStart = b } else { liveEnd = b }
+    }
+
+    private func ended() {
+        guard let grab else { return }
+        switch grab {
+        case let .move(isStart, _), let .corner(isStart, _, _, _):
+            if let b = isStart ? liveStart : liveEnd { model.setZoomFrame(start: isStart, b) }
+        }
+        self.grab = nil
+        liveStart = nil
+        liveEnd = nil
+    }
+}
+
 /// While Fisheye is open in the effects sheet: where its circle sits, in creatrr yellow (dashed
 /// between keyframes, solid on one).
 struct FishRing: View {
@@ -2190,25 +2371,19 @@ struct LyricsHandles: View {
 /// Filters for the whole video, and the keyframes of the video on screen.
 struct FramingControls: View {
     let model: EditorModel
-    @State private var showingFilters = false
+    /// Opens the Filters panel (it sits at the bottom of the editor, edge to edge).
+    let openFilters: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
             // Filters: a color look over the whole video. (Each clip's own effects are Fx, below.)
             Button {
                 model.pause()
-                showingFilters = true
+                openFilters()
             } label: {
                 SideTile(icon: "camera.filters", text: "Filters", lit: model.filter != .none)
             }
             .accessibilityLabel("Filters for the whole video")
-            .sheet(isPresented: $showingFilters) {
-                FilterSheet(model: model)
-                    .environment(\.colorScheme, .dark)
-                    .presentationDetents([.height(330)])
-                    .presentationBackground { FrostSheet() }
-                    .presentationBackgroundInteraction(.enabled(upThrough: .height(330)))
-            }
 
             // On a keyframe, the diamond takes it off; anywhere else it sets one.
             Button { model.setKeyframe() } label: {
@@ -2408,13 +2583,13 @@ struct AutoEditSheet: View {
 /// effect (each tile shows what it does to a ✨); picking one adds it as a card with its controls.
 struct FXSheet: View {
     let model: EditorModel
-    @Environment(\.dismiss) private var dismiss
+    let close: () -> Void
     /// Effects added while the page is open keep their card, even turned all the way down.
     @State private var kept: [FXKind] = []
     @State private var picking = false
 
     private var shown: [FXKind] {
-        FXKind.allCases.filter { model.effectOn($0) || kept.contains($0) }
+        FXKind.onFxPage.filter { model.effectOn($0) || kept.contains($0) }
     }
 
     var body: some View {
@@ -2425,6 +2600,7 @@ struct FXSheet: View {
             } else if shown.isEmpty {
                 empty
             } else {
+                cutScrubber
                 cards
             }
         }
@@ -2448,16 +2624,30 @@ struct FXSheet: View {
                 Text(model.fxCutName).font(.footnote).foregroundStyle(.white.opacity(0.65))
             }
             Spacer(minLength: 0)
-            Button { model.playCutHere() } label: {
-                Image(systemName: "play.fill")
+            // Play this cut (Stop while it plays: back to the cut's start), and Pause where it is.
+            Button {
+                if model.isPlaying { model.stopCutPlay() } else { model.playCutHere() }
+            } label: {
+                Image(systemName: model.isPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 40, height: 40)
                     .background(Color.white.opacity(0.08))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Play this cut")
-            Button { dismiss() } label: {
+            .accessibilityLabel(model.isPlaying ? "Stop" : "Play this cut")
+            Button { model.pause() } label: {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(model.isPlaying ? Color.white : Color.white.opacity(0.35))
+                    .frame(width: 40, height: 40)
+                    .background(Color.white.opacity(0.08))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!model.isPlaying)
+            .accessibilityLabel("Pause")
+            Button { close() } label: {
                 Text("Done")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.black)
@@ -2469,7 +2659,7 @@ struct FXSheet: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.top, 6)
         .padding(.bottom, 12)
     }
 
@@ -2502,7 +2692,7 @@ struct FXSheet: View {
     private var picker: some View {
         ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
-                ForEach(FXKind.allCases) { kind in
+                ForEach(FXKind.onFxPage) { kind in
                     let on = model.effectOn(kind)
                     let blocked = kind == .transition && !model.canTransitionHere
                     Button { choose(kind) } label: {
@@ -2621,9 +2811,17 @@ struct FXSheet: View {
                 model.setTransitionHere(next)
             }
         case .zoom:
-            chips([AutoZoom.zoomIn, .zoomOut], selected: model.zoomHere, name: { $0.name }) { model.setZoomHere($0) }
-            FXSlider(value: model.zoomAmountHere, range: AutoZoom.amounts, ends: ("A little", "A lot")) {
-                model.setZoomAmountHere($0)
+            HStack(spacing: 8) {
+                zoomPreset(.zoomIn)
+                zoomPreset(.zoomOut)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                VStack(spacing: 4) {
+                    Rectangle().strokeBorder(ZoomFrames.startColor, lineWidth: 2).frame(width: 14, height: 14)
+                    Rectangle().strokeBorder(ZoomFrames.endColor, lineWidth: 2).frame(width: 14, height: 14)
+                }
+                .padding(.top, 2)
+                note("Drag the green Start box and the red End box on the video, and drag a corner to size one. Play shows the zoom.")
             }
         case .color:
             chips(ColorLook.allCases.filter { $0 != .none }, selected: fx.color, name: { $0.name }) { look in
@@ -2631,26 +2829,15 @@ struct FXSheet: View {
                 next.color = look
                 model.setFXHere(next)
             }
+            keyedSlider(.colorMix, name: "Color", range: 0...1, ends: ("Original", "Full look"))
         case .blur:
-            FXSlider(value: fx.blur, range: 0...1, ends: ("None", "Soft")) { value in
-                var next = fx
-                next.blur = value
-                model.setFXHere(next)
-            }
+            keyedSlider(.blur, name: "Blur", range: 0...1, ends: ("None", "Soft"))
         case .tilt:
-            FXSlider(value: fx.rotate, range: -30...30, ends: ("Tilt left", "Tilt right"), snapToZero: true) { value in
-                var next = fx
-                next.rotate = value
-                model.setFXHere(next)
-            }
+            keyedSlider(.tilt, name: "Tilt", range: -30...30, ends: ("Tilt left", "Tilt right"), snapToZero: true)
         case .shake:
-            FXSlider(value: fx.shake, range: 0...1, ends: ("Gentle", "Big shake")) { value in
-                var next = fx
-                next.shake = value
-                model.setFXHere(next)
-            }
+            keyedSlider(.shake, name: "Shake", range: 0...1, ends: ("Gentle", "Big shake"))
         case .mirror:
-            note(fx.mirror ? "Flipped side to side." : "Off. Take it off and add it again to flip.")
+            note("Mirror is its own button in the tools under the timeline.")
         case .face:
             if model.busy == "Finding the face…" {
                 note("Finding the face…")
@@ -2660,11 +2847,7 @@ struct FXSheet: View {
             }
         case .rgbSplit, .fisheye:
             if fx.custom == kind.customID {
-                FXSlider(value: fx.customAmount, range: 0...1, ends: ("Subtle", "Strong")) { value in
-                    var next = fx
-                    next.customAmount = value
-                    model.setFXHere(next)
-                }
+                keyedSlider(.amount, name: kind.name, range: 0...1, ends: ("Subtle", "Strong"))
                 if kind == .fisheye {
                     fishPanel
                 }
@@ -2677,11 +2860,10 @@ struct FXSheet: View {
         }
     }
 
-    /// Fisheye's circle: drag or tap the video to place it, and keyframe it across the cut.
+    /// Fisheye's circle: drag or tap the video to place it. The diamond keyframes where it sits.
     private var fishPanel: some View {
         let count = model.fishKeyCount
         let here = model.fishKeyHere != nil
-        let range = model.fxCutRange
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "hand.draw")
@@ -2693,65 +2875,96 @@ struct FXSheet: View {
                 Spacer(minLength: 0)
                 plainButton("Center it", icon: "scope") { model.centerFish() }
                     .fixedSize()
-            }
-            // The playhead, kept inside this cut (where the effect is).
-            HStack(spacing: 8) {
-                Image(systemName: "play.square")
-                    .foregroundStyle(.white.opacity(0.6))
-                Slider(value: Binding(get: { min(max(model.time, range.lowerBound), range.upperBound) },
-                                      set: { model.scrubInCut(to: $0) }),
-                       in: range,
-                       onEditingChanged: { editing in
-                           if editing { model.beginScrub() } else { model.endScrub() }
-                       })
-                    .tint(Tint.accent)
-                    .accessibilityLabel("Playhead in this cut")
-                Text(EditorModel.clock(model.time))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            HStack(spacing: 8) {
-                if count > 0 {
-                    fishSquare("chevron.left", spoken: "Previous circle keyframe") { model.jumpToFishKey(forward: false) }
-                }
-                Button { model.addFishKey() } label: {
-                    Label(count == 0 ? "Start keyframing" : (here ? "Keyframe here" : "Add keyframe"),
-                          systemImage: here ? "diamond.fill" : "plus.diamond")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(here || count == 0 ? Tint.accent : .white)
-                        .frame(maxWidth: .infinity, minHeight: 40)
+                Button {
+                    if here { model.deleteFishKeyHere() } else { model.addFishKey() }
+                } label: {
+                    Image(systemName: here ? "diamond.fill" : "plus.diamond")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(count > 0 ? Tint.accent : .white)
+                        .frame(width: 36, height: 36)
                         .background(Color.white.opacity(0.08))
-                        .overlay(Rectangle().strokeBorder(here ? Tint.accent : .clear, lineWidth: 1.5))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(here)
-                if count > 0 {
-                    fishSquare("chevron.right", spoken: "Next circle keyframe") { model.jumpToFishKey(forward: true) }
-                    if here {
-                        fishSquare("trash", spoken: "Delete this circle keyframe", tint: Tint.bad) { model.deleteFishKeyHere() }
-                    } else {
-                        fishSquare("xmark.diamond", spoken: "Stop animating the circle", tint: Tint.bad) { model.stopFishKeys() }
-                    }
-                }
+                .accessibilityLabel(here ? "Take off this circle keyframe" : "Add a circle keyframe here")
             }
-            note(count == 0
-                 ? "The circle stays where you put it. Start keyframing to animate it from the playhead."
-                 : "\(count == 1 ? "1 keyframe" : "\(count) keyframes"). Move the playhead and move the circle: each move makes a keyframe there.")
+            if count > 0 {
+                note("\(count == 1 ? "1 circle keyframe" : "\(count) circle keyframes"). Move the playhead and move the circle: each move makes a keyframe there.")
+            }
         }
     }
 
-    private func fishSquare(_ icon: String, spoken: String, tint: Color = .white, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 40, height: 40)
-                .background(Color.white.opacity(0.08))
-                .contentShape(Rectangle())
+    /// The playhead, kept inside this cut (where its effects are), for keyframing.
+    private var cutScrubber: some View {
+        let range = model.fxCutRange
+        return HStack(spacing: 8) {
+            Slider(value: Binding(get: { min(max(model.time, range.lowerBound), range.upperBound) },
+                                  set: { model.scrubInCut(to: $0) }),
+                   in: range,
+                   onEditingChanged: { editing in
+                       if editing { model.beginScrub() } else { model.endScrub() }
+                   })
+                .tint(Tint.accent)
+                .accessibilityLabel("Playhead in this cut")
+            Text(EditorModel.clock(model.time))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+    }
+
+    /// A slider with its keyframe diamond beside it. Once a slider has a keyframe, moving it
+    /// sets (or adds) a keyframe at the playhead.
+    private func keyedSlider(_ param: FXParam, name: String, range: ClosedRange<Double>,
+                             ends: (String, String), snapToZero: Bool = false) -> some View {
+        let keyed = !model.fxKeys(param).isEmpty
+        let on = model.fxKeyOnHere(param)
+        return HStack(alignment: .top, spacing: 8) {
+            FXSlider(value: model.fxValueHere(param), range: range, ends: ends, snapToZero: snapToZero) { value in
+                model.setFXValue(param, value)
+            }
+            Button {
+                model.toggleFXKey(param, name: name)
+            } label: {
+                Image(systemName: on ? "diamond.fill" : "plus.diamond")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(keyed ? Tint.accent : Color.white)
+                    .frame(width: 36, height: 36)
+                    .background(Color.white.opacity(0.08))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(on ? "Take off this \(name) keyframe" : "Add a \(name) keyframe here")
+        }
+    }
+
+    /// Zoom in or Zoom out: a square with arrows pointing in or out, and its name under it.
+    private func zoomPreset(_ zoom: AutoZoom) -> some View {
+        let on = model.zoomHere == zoom
+        let arrows = zoom == .zoomIn ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+        return Button {
+            model.useZoomPreset(zoom)
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    Image(systemName: "square")
+                        .font(.system(size: 30, weight: .regular))
+                    Image(systemName: arrows)
+                        .font(.system(size: 13, weight: .bold))
+                }
+                Text(zoom.name)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(on ? Tint.accent : Color.white.opacity(0.85))
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .background(Color.white.opacity(on ? 0.14 : 0.08))
+            .overlay(Rectangle().strokeBorder(on ? Tint.accent : Color.clear, lineWidth: 1.5))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(spoken)
+        .accessibilityLabel(zoom.name)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func plainButton(_ title: String, icon: String, tint: Color = .white,
@@ -2882,7 +3095,7 @@ struct FXIcon: View {
 /// Each clip can still have its own Color in Fx.
 struct FilterSheet: View {
     let model: EditorModel
-    @Environment(\.dismiss) private var dismiss
+    let close: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2892,7 +3105,7 @@ struct FilterSheet: View {
                     Text("The whole video").font(.footnote).foregroundStyle(.white.opacity(0.65))
                 }
                 Spacer(minLength: 0)
-                Button { dismiss() } label: {
+                Button { close() } label: {
                     Text("Done")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.black)
@@ -2924,8 +3137,52 @@ struct FilterSheet: View {
                 .foregroundStyle(.white.opacity(0.6))
             Spacer(minLength: 0)
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
         .foregroundStyle(.white)
+    }
+}
+
+/// A panel that comes up from the bottom of the editor, edge to edge, in creatrr's dark frosted
+/// glass. Drag its grabber down to close it.
+struct BottomPanel<Content: View>: View {
+    let height: CGFloat
+    let close: () -> Void
+    @ViewBuilder var content: Content
+    @State private var pulled: CGFloat = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(.white.opacity(0.35))
+                .frame(width: 36, height: 5)
+                .frame(maxWidth: .infinity, minHeight: 20)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture()
+                        .onChanged { pulled = max(0, $0.translation.height) }
+                        .onEnded { value in
+                            if value.translation.height > 80 || value.predictedEndTranslation.height > 220 {
+                                close()
+                            }
+                            withAnimation(.spring(duration: 0.3)) { pulled = 0 }
+                        }
+                )
+                .accessibilityLabel("Close")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { close() }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .background {
+            FrostSheet().ignoresSafeArea(edges: [.bottom, .horizontal])
+        }
+        .environment(\.colorScheme, .dark)
+        .offset(y: pulled)
+        .transition(.move(edge: .bottom))
     }
 }
 

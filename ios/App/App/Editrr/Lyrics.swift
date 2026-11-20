@@ -625,10 +625,12 @@ enum LyricListener {
 
     /// Listens to the whole soundtrack and writes down every word with its time (timeline seconds).
     /// `update` gets short progress lines for the screen.
-    static func listen(to asset: AVAsset, update: @escaping @Sendable (String) -> Void) async throws -> [LyricWord] {
+    /// `trackIDs`: only these sound tracks (the song, or the videos' own sound); nil for all.
+    static func listen(to asset: AVAsset, trackIDs: Set<CMPersistentTrackID>? = nil,
+                       update: @escaping @Sendable (String) -> Void) async throws -> [LyricWord] {
         guard SpeechTranscriber.isAvailable else { throw LyricListenError.unavailable }
         update("Getting the song ready…")
-        let url = try await writeAudio(of: asset)
+        let url = try await writeAudio(of: asset, trackIDs: trackIDs)
         defer { try? FileManager.default.removeItem(at: url) }
 
         var found = await SpeechTranscriber.supportedLocale(equivalentTo: Locale.current)
@@ -704,8 +706,9 @@ enum LyricListener {
     }
 
     /// The soundtrack as a small mono file the speech model can read (16 kHz).
-    private static func writeAudio(of asset: AVAsset) async throws -> URL {
+    private static func writeAudio(of asset: AVAsset, trackIDs: Set<CMPersistentTrackID>?) async throws -> URL {
         let tracks = try await asset.loadTracks(withMediaType: .audio)
+            .filter { trackIDs?.contains($0.trackID) ?? true }
         guard !tracks.isEmpty else { throw LyricListenError.noSound }
         let reader = try AVAssetReader(asset: asset)
         let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: [

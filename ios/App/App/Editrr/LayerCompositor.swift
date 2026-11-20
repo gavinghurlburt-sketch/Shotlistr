@@ -21,14 +21,16 @@ struct LayerMotion: Sendable {
     var zoom: AutoZoom
     var sectionStart: Double
     var sectionEnd: Double
-    var zoomAmount: Double = AutoZoom.amount
+    var zoomStart: ZoomBox = .full
+    var zoomEnd: ZoomBox = .full
 
     static let still = LayerMotion(keyframes: [], zoom: .off, sectionStart: 0, sectionEnd: 0)
 
     func framing(at time: Double) -> Framing {
         let framing = Keyframes.framing(keyframes, at: time)
         guard zoom != .off, sectionEnd - sectionStart > 0.05 else { return framing }
-        return framing.zoomed(zoom.factor((time - sectionStart) / (sectionEnd - sectionStart), amount: zoomAmount))
+        let p = Ease.smooth.apply(min(max((time - sectionStart) / (sectionEnd - sectionStart), 0), 1))
+        return ZoomBox.between(zoomStart, zoomEnd, p).apply(to: framing)
     }
 }
 

@@ -53,6 +53,9 @@ enum ColorLook: String, Codable, CaseIterable, Sendable {
 enum FXKind: String, CaseIterable, Identifiable, Sendable {
     case transition, zoom, color, blur, tilt, shake, mirror, face, rgbSplit, fisheye
 
+    /// The effects the Fx page offers (Mirror is its own button on the toolbar: on or off).
+    static let onFxPage = allCases.filter { $0 != .mirror }
+
     var id: String { rawValue }
 
     var name: String {
@@ -106,6 +109,8 @@ struct FacePoint: Codable, Equatable, Sendable {
 /// Everything layered on one cut. Older projects without some of these fields still open.
 struct CutFX: Codable, Equatable, Sendable {
     var color: ColorLook = .none
+    /// How much of the color look shows over the original (0: none, 1: all of it).
+    var colorAmount: Double = 1
     /// 0 (none) to 1 (very soft).
     var blur: Double = 0
     /// Degrees, -30...30.
@@ -126,8 +131,44 @@ struct CutFX: Codable, Equatable, Sendable {
     var fishX: Double = 0.5
     var fishY: Double = 0.5
     var fishKeys: [FishKey]?
+    /// Sliders that are keyframed: each one's keyframes (timeline times). A keyframed slider
+    /// moves between them instead of holding its one value.
+    /// Keyed by FXParam raw value.
+    var keys: [String: [FXValueKey]]?
 
     init() {}
+
+    /// This cut's effects at a timeline time, with every keyframed slider at its value then.
+    func resolved(at time: Double) -> CutFX {
+        guard let keys, !keys.isEmpty else { return self }
+        var fx = self
+        for (name, list) in keys {
+            if let param = FXParam(rawValue: name), let value = FXValueKey.value(list, at: time) { fx[param] = value }
+        }
+        return fx
+    }
+
+    /// A slider's own value (the one it holds when it isn't keyframed).
+    subscript(param: FXParam) -> Double {
+        get {
+            switch param {
+            case .blur: blur
+            case .tilt: rotate
+            case .shake: shake
+            case .amount: customAmount
+            case .colorMix: colorAmount
+            }
+        }
+        set {
+            switch param {
+            case .blur: blur = newValue
+            case .tilt: rotate = newValue
+            case .shake: shake = newValue
+            case .amount: customAmount = newValue
+            case .colorMix: colorAmount = newValue
+            }
+        }
+    }
 
     /// Where the fisheye circle sits at a timeline time, as fractions of the frame (0,0 top left).
     /// Between two keyframes it moves with the first one's ease; before the first and after the last it holds.
@@ -148,16 +189,18 @@ struct CutFX: Codable, Equatable, Sendable {
 
     var isEmpty: Bool {
         color == .none && blur < 0.01 && abs(rotate) < 0.1 && !mirror && shake < 0.01 && !followFace && custom == nil
+            && !(keys?.values.contains { list in list.contains { abs($0.value) > 0.01 } } ?? false)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case color, blur, rotate, mirror, shake, followFace, faces, facesLayer, custom, customAmount
-        case fishX, fishY, fishKeys
+        case color, colorAmount, blur, rotate, mirror, shake, followFace, faces, facesLayer, custom, customAmount
+        case fishX, fishY, fishKeys, keys
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         color = (try? c.decodeIfPresent(ColorLook.self, forKey: .color)) ?? .none
+        colorAmount = (try? c.decodeIfPresent(Double.self, forKey: .colorAmount)) ?? 1
         blur = (try? c.decodeIfPresent(Double.self, forKey: .blur)) ?? 0
         rotate = (try? c.decodeIfPresent(Double.self, forKey: .rotate)) ?? 0
         mirror = (try? c.decodeIfPresent(Bool.self, forKey: .mirror)) ?? false
@@ -170,6 +213,34 @@ struct CutFX: Codable, Equatable, Sendable {
         fishX = (try? c.decodeIfPresent(Double.self, forKey: .fishX)) ?? 0.5
         fishY = (try? c.decodeIfPresent(Double.self, forKey: .fishY)) ?? 0.5
         fishKeys = try? c.decodeIfPresent([FishKey].self, forKey: .fishKeys)
+        keys = try? c.decodeIfPresent([String: [FXValueKey]].self, forKey: .keys)
+    }
+}
+
+/// The Fx page's sliders that can be keyframed.
+enum FXParam: String, Codable, Sendable, CaseIterable {
+    case blur, tilt, shake, amount, colorMix
+}
+
+/// One keyframe of a slider: a timeline time and its value then.
+struct FXValueKey: Codable, Equatable, Sendable {
+    var time: Double
+    var value: Double
+    var ease: Ease = .smooth
+
+    /// The value at a time: between two keyframes it moves with the first one's ease; before the
+    /// first and after the last it holds. Nil when there are none.
+    static func value(_ keys: [FXValueKey], at time: Double) -> Double? {
+        guard let first = keys.first, let last = keys.last else { return nil }
+        if time <= first.time { return first.value }
+        if time >= last.time { return last.value }
+        for i in 1..<keys.count where keys[i].time >= time {
+            let a = keys[i - 1], b = keys[i]
+            let span = b.time - a.time
+            let t = a.ease.apply(span > 1e-6 ? (time - a.time) / span : 1)
+            return a.value + (b.value - a.value) * t
+        }
+        return last.value
     }
 }
 
@@ -200,6 +271,7 @@ enum Effects {
     }
 
     static func apply(_ fx: CutFX, to input: CIImage, canvas: CGSize, time: Double) -> CIImage {
+        let fx = fx.resolved(at: time)
         let rect = CGRect(origin: .zero, size: canvas)
         var image = input
 
@@ -227,7 +299,16 @@ enum Effects {
             image = image.clampedToExtent().applyingGaussianBlur(sigma: fx.blur * 30).cropped(to: rect)
         }
 
-        image = color(fx.color, image, rect: rect)
+        let looked = color(fx.color, image, rect: rect)
+        if fx.color == .none || fx.colorAmount >= 0.999 {
+            image = looked
+        } else {
+            // Mixed with the original: 0 is the original, 1 the full look.
+            image = image.applyingFilter("CIDissolveTransition", parameters: [
+                kCIInputTargetImageKey: looked,
+                kCIInputTimeKey: max(0, min(1, fx.colorAmount)),
+            ]).cropped(to: rect)
+        }
 
         if let id = fx.custom {
             image = CustomFX.apply(id, to: image, fx: fx, time: time, canvas: canvas)

@@ -384,28 +384,60 @@ private struct AppMock: View {
     }
 }
 
-/// The glass chip that picks which app's safe zone to show.
+/// Picks which app's safe zone to show. A tap on it fans the apps' marks out from under it
+/// (Instagram, Facebook, YouTube, TikTok, all of them, and off); tap one to pick it.
 struct SafeZonePicker: View {
     @Binding var zone: SafeZone
     /// Drawn as a tile for the column beside the video.
     var tile = false
+    @State private var open = false
+
+    /// In the order they fan out.
+    private static let order: [SafeZone] = [.instagram, .facebook, .youtube, .tiktok, .all, .off]
+    private static let step: CGFloat = 46
 
     var body: some View {
-        Menu {
-            Picker("Show safe zone for", selection: $zone) {
-                ForEach(SafeZone.allCases, id: \.self) { zone in
-                    Text(zone.name).tag(zone)
+        ZStack(alignment: .top) {
+            ForEach(Array(Self.order.enumerated()), id: \.element) { index, option in
+                Button {
+                    zone = option
+                    withAnimation(.spring(duration: 0.3, bounce: 0.2)) { open = false }
+                } label: {
+                    SocialMark(zone: option, picked: zone == option)
+                        .frame(width: 36, height: 40)
+                        .background(Color.black.opacity(0.65))
+                        .overlay(Rectangle().strokeBorder(zone == option ? Tint.accent : .clear, lineWidth: 1.5))
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(option == .off ? "Safe zone off" : option.name)
+                .offset(y: open ? CGFloat(index + 1) * Self.step : 0)
+                .opacity(open ? 1 : 0)
+                .scaleEffect(open ? 1 : 0.6)
+                .animation(.spring(duration: 0.32, bounce: 0.25).delay(open ? Double(index) * 0.03 : 0), value: open)
+                .allowsHitTesting(open)
             }
-        } label: {
-            if tile {
-                SideTile(icon: "rectangle.dashed", text: zone == .off ? "Safe zone" : zone.short,
-                         tint: zone == .off ? Tint.calm : Tint.warn, lit: zone != .off)
-            } else {
-                chip
+            Button {
+                withAnimation(.spring(duration: 0.3, bounce: 0.2)) { open.toggle() }
+            } label: {
+                Group {
+                    if zone == .off {
+                        if tile {
+                            SideTile(icon: "rectangle.dashed", text: "Safe zone", lit: open)
+                        } else {
+                            chip
+                        }
+                    } else {
+                        SocialMark(zone: zone, picked: true)
+                            .frame(width: 36, height: 44)
+                    }
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(zone == .off ? "Safe zone" : "Safe zone: \(zone.name)")
+            .accessibilityHint("Shows the apps to pick from")
         }
-        .accessibilityLabel("Safe zone")
     }
 
     private var chip: some View {
@@ -419,5 +451,72 @@ struct SafeZonePicker: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .shadow(color: .black.opacity(0.8), radius: 3)
+    }
+}
+
+/// A small mark for each app's safe zone, drawn here (no image files): Instagram's camera, the
+/// Facebook f, YouTube's play button and TikTok's note. All is a stack, Off a dashed frame.
+struct SocialMark: View {
+    let zone: SafeZone
+    var picked = false
+
+    var body: some View {
+        Group {
+            switch zone {
+            case .instagram:
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(LinearGradient(colors: [Color(red: 0.98, green: 0.76, blue: 0.27),
+                                                      Color(red: 0.93, green: 0.2, blue: 0.4),
+                                                      Color(red: 0.55, green: 0.24, blue: 0.85)],
+                                             startPoint: .bottomLeading, endPoint: .topTrailing))
+                    RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+                        .strokeBorder(.white, lineWidth: 1.8)
+                        .padding(3.5)
+                    Circle().strokeBorder(.white, lineWidth: 1.8).frame(width: 9, height: 9)
+                    Circle().fill(.white).frame(width: 2.4, height: 2.4).offset(x: 4.6, y: -4.6)
+                }
+                .frame(width: 22, height: 22)
+            case .facebook:
+                ZStack {
+                    Circle().fill(Color(red: 0.09, green: 0.47, blue: 0.95))
+                    Text("f")
+                        .font(.system(size: 17, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                        .offset(x: 1, y: 2)
+                }
+                .frame(width: 22, height: 22)
+            case .youtube:
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color(red: 1, green: 0, blue: 0))
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 24, height: 17)
+            case .tiktok:
+                ZStack {
+                    note.foregroundStyle(Color(red: 0.15, green: 0.96, blue: 0.94)).offset(x: -1.2, y: -1.2)
+                    note.foregroundStyle(Color(red: 1, green: 0.17, blue: 0.33)).offset(x: 1.2, y: 1.2)
+                    note.foregroundStyle(.white)
+                }
+                .frame(width: 22, height: 22)
+            case .all:
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(picked ? Tint.warn : .white)
+            case .off:
+                Image(systemName: "rectangle.dashed")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .overlay(Rectangle().fill(.white.opacity(0.85)).frame(width: 26, height: 1.6).rotationEffect(.degrees(-35)))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var note: some View {
+        Image(systemName: "music.note").font(.system(size: 17, weight: .black))
     }
 }

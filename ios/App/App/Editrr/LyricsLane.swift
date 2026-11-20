@@ -293,6 +293,7 @@ struct LyricsToolbar: View {
             HStack(spacing: 8) {
                 if model.lyrics.isEmpty {
                     if model.canListen {
+                        LyricAudioPicker(model: model)
                         Button { model.listenForLyrics(retime: false) } label: {
                             Label("Listen to the song", systemImage: "waveform")
                         }

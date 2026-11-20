@@ -81,19 +81,54 @@ enum AutoZoom: String, CaseIterable, Sendable, Codable {
         }
     }
 
-    /// How much bigger the picture gets over the cut, unless the cut sets its own amount.
+    /// How much bigger the picture gets over the cut with the ready-made Zoom in and Zoom out.
     static let amount = 0.15
-    /// The range the Zoom slider covers.
-    static let amounts: ClosedRange<Double> = 0.03...0.6
 
-    /// The zoom factor part way (0...1) through the cut.
-    func factor(_ progress: Double, amount: Double = AutoZoom.amount) -> Double {
-        let p = Ease.smooth.apply(progress)
+    /// The ready-made start and end frames: Zoom in ends on a smaller frame in the middle, Zoom
+    /// out starts on one.
+    var presetFrames: (start: ZoomBox, end: ZoomBox) {
+        let inner = ZoomBox(x: 0.5, y: 0.5, size: 1 / (1 + Self.amount))
         switch self {
-        case .off: return 1
-        case .zoomIn: return 1 + amount * p
-        case .zoomOut: return 1 + amount * (1 - p)
+        case .off: return (.full, .full)
+        case .zoomIn: return (.full, inner)
+        case .zoomOut: return (inner, .full)
         }
+    }
+}
+
+/// A slow zoom's start or end frame, like DaVinci's Dynamic Zoom boxes: the part of the frame
+/// that fills the screen. Same shape as the frame; `x`, `y` is its middle and `size` its width,
+/// all as fractions of the frame. It always stays inside the frame, so no black edges show.
+struct ZoomBox: Equatable, Sendable, Codable {
+    var x: Double = 0.5
+    var y: Double = 0.5
+    var size: Double = 1
+
+    static let full = ZoomBox()
+    static let smallest = 0.2
+
+    /// Kept inside the frame and no smaller than `smallest`.
+    func held() -> ZoomBox {
+        let s = min(max(size, Self.smallest), 1)
+        let half = s / 2
+        return ZoomBox(x: min(max(x, half), 1 - half), y: min(max(y, half), 1 - half), size: s)
+    }
+
+    /// The framing that makes this box fill the screen, on top of a video's own framing.
+    func apply(to framing: Framing) -> Framing {
+        let s = max(size, 0.01)
+        return Framing(scale: framing.scale / s, x: (framing.x - (x - 0.5)) / s, y: (framing.y - (y - 0.5)) / s)
+    }
+
+    /// Takes this box back off a framing (the opposite of `apply`).
+    func undo(_ framing: Framing) -> Framing {
+        Framing(scale: framing.scale * size, x: framing.x * size + (x - 0.5), y: framing.y * size + (y - 0.5))
+    }
+
+    /// Part way (0...1, already eased) from one box to another. The size moves evenly to the eye.
+    static func between(_ a: ZoomBox, _ b: ZoomBox, _ t: Double) -> ZoomBox {
+        let size = exp(log(max(a.size, 0.01)) + (log(max(b.size, 0.01)) - log(max(a.size, 0.01))) * t)
+        return ZoomBox(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, size: size)
     }
 }
 
@@ -190,15 +225,17 @@ struct Soundtrack {
 
 /// From this time on, show this layer.
 struct Cut: Equatable, Codable {
-    /// How far this cut's slow zoom goes.
-    var zoomBy: Double { zoomAmount ?? AutoZoom.amount }
+    /// Where this cut's slow zoom starts and ends (its own frames, or Zoom in / out's).
+    var zoomStart: ZoomBox { zoomFrom ?? zoom.presetFrames.start }
+    var zoomEnd: ZoomBox { zoomTo ?? zoom.presetFrames.end }
 
     var time: Double
     var layer: Int
     /// A slow zoom across this cut only (each cut has its own).
     var zoom: AutoZoom = .off
-    /// How far the slow zoom goes (nil: the usual amount).
-    var zoomAmount: Double?
+    /// The slow zoom's own start and end frames (nil: Zoom in or Zoom out's ready-made ones).
+    var zoomFrom: ZoomBox?
+    var zoomTo: ZoomBox?
     /// How this cut comes in from the one before (nil: a plain cut).
     var transition: Transition?
     /// Effects on this cut (nil: none).
@@ -268,6 +305,8 @@ enum TimelineBuilder {
         var overlayTracks: [UUID: CMPersistentTrackID] = [:]
         /// The added music and sound effects' sound tracks (they keep playing when the song is muted).
         var musicTracks: Set<CMPersistentTrackID> = []
+        /// The song's sound track, when there's a song.
+        var songTrack: CMPersistentTrackID?
         var duration: CMTime { composition.duration }
     }
 
@@ -319,6 +358,7 @@ enum TimelineBuilder {
             }
         }
 
+        var songTrack: CMPersistentTrackID?
         if let soundtrack, let audio = composition.addMutableTrack(withMediaType: .audio,
                                                                   preferredTrackID: kCMPersistentTrackID_Invalid) {
             let place = soundtrack.trackStart + soundtrack.shift          // timeline time of its first sound
@@ -328,6 +368,7 @@ enum TimelineBuilder {
                 try audio.insertTimeRange(
                     CMTimeRange(start: time(soundtrack.trackStart + skip), duration: time(length)),
                     of: soundtrack.track, at: time(max(0, place)))
+                songTrack = audio.trackID
             } else {
                 composition.removeTrack(audio)
             }
@@ -395,7 +436,8 @@ enum TimelineBuilder {
            let padding = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
             padding.insertEmptyTimeRange(CMTimeRange(start: .zero, duration: time(total)))
         }
-        return Built(composition: composition, tracks: tracks, overlayTracks: overlayTracks, musicTracks: musicTracks)
+        return Built(composition: composition, tracks: tracks, overlayTracks: overlayTracks, musicTracks: musicTracks,
+                     songTrack: songTrack)
     }
 
     /// One instruction per stretch, each asking for just the layer that shows, so the phone only
@@ -460,7 +502,8 @@ enum TimelineBuilder {
                 },
                 zoom: cuts.indices.contains(section) ? cuts[section].zoom : .off,
                 sectionStart: sectionStart, sectionEnd: sectionEnd,
-                zoomAmount: cuts.indices.contains(section) ? cuts[section].zoomBy : AutoZoom.amount)
+                zoomStart: cuts.indices.contains(section) ? cuts[section].zoomStart : .full,
+                zoomEnd: cuts.indices.contains(section) ? cuts[section].zoomEnd : .full)
             info.fx = cuts.indices.contains(section) ? cuts[section].fx : nil
             info.layer = index
             return info

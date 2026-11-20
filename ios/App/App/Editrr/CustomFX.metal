@@ -20,8 +20,8 @@ namespace coreimage {
 }
 
 /// A round fisheye lens. Inside the circle the picture bulges out from the middle, gets color
-/// fringes, an out of focus blur and a blue tint toward the rim, with a thin bright blue rim line.
-/// Outside it, a dark matte with a soft blue glow. `center` and `radius` are in frame pixels;
+/// fringes, an out of focus blur and a dark blue tint toward the rim, with a dark blue rim line.
+/// Outside it, a near black matte. Nothing in it lightens the footage. `center` and `radius` are in frame pixels;
 /// `amount` (0...1) is how strong. Matches the mockup's math (it runs on sRGB colors).
 [[ stitchable ]] float4 fisheye(sampler src, float2 center, float radius, float amount, destination dest) {
     float2 px = dest.coord();
@@ -44,13 +44,14 @@ namespace coreimage {
         col += float3(rch, gch, bch);
     }
     col /= 9.0;
-    float3 blue = float3(0.22, 0.5, 1.0);
-    float tint = smoothstep(0.72, 1.0, r) * (0.45 + 0.55 * amount);
-    col = mix(col, col * 0.5 + blue * 0.45, tint * 0.75);
-    col *= 1.0 - 0.3 * smoothstep(0.55, 1.0, r);
-    float ringAt = (r - 0.995) / 0.018;
-    col += blue * 0.55 * exp(-ringAt * ringAt);
-    float3 bg = float3(0.012, 0.016, 0.04) + blue * (0.18 + 0.2 * amount) * exp(-max(r - 1.0, 0.0) * 9.0);
+    // Everything here only darkens: the blue is a dark filter multiplied in, never added.
+    float3 deepBlue = float3(0.10, 0.22, 0.55);
+    float tint = smoothstep(0.62, 1.0, r) * (0.55 + 0.45 * amount);
+    col *= mix(float3(1.0), deepBlue, tint);
+    col *= 1.0 - 0.45 * smoothstep(0.5, 1.0, r);
+    float ringAt = (r - 0.99) / 0.025;
+    col = mix(col, float3(0.01, 0.03, 0.10), 0.85 * exp(-ringAt * ringAt));
+    float3 bg = float3(0.006, 0.008, 0.02) + float3(0.01, 0.025, 0.07) * exp(-max(r - 1.0, 0.0) * 9.0);
     float inside = 1.0 - smoothstep(0.99, 1.008, r);
     return float4(mix(bg, col, inside), 1.0);
 }

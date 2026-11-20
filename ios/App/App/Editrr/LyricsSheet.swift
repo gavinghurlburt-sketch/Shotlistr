@@ -94,6 +94,7 @@ struct LyricsSheet: View {
     @ViewBuilder private var start: some View {
         VStack(alignment: .leading, spacing: 10) {
             if model.canListen {
+                LyricAudioPicker(model: model)
                 Button { model.listenForLyrics(retime: false) } label: {
                     Label("Listen to the song", systemImage: "waveform")
                 }
@@ -133,6 +134,7 @@ struct LyricsSheet: View {
                 .buttonStyle(GlassButtonStyle())
                 .disabled(model.listening != nil || (model.lyricsHeard.isEmpty && !model.canListen))
                 if model.canListen {
+                    LyricAudioPicker(model: model)
                     Button { model.listenForLyrics(retime: false) } label: {
                         Label("Listen again", systemImage: "waveform")
                     }
@@ -563,5 +565,30 @@ struct LyricsTypingSheet: View {
         }
         .padding(20)
         .foregroundStyle(.white)
+    }
+}
+
+/// Which sound Lyrics listens to for the words, when there's both a song (the performance's, or
+/// one added from creatrr or Files) and the videos' own sound. Shows nothing when there's one.
+struct LyricAudioPicker: View {
+    let model: EditorModel
+
+    var body: some View {
+        let choices = model.lyricAudioChoices
+        if choices.count > 1 {
+            HStack(spacing: 6) {
+                ForEach(choices, id: \.self) { choice in
+                    let on = model.lyricAudio == choice
+                    Button { model.lyricAudio = choice } label: {
+                        Label(choice.name, systemImage: choice == .song ? "music.note" : "video")
+                            .font(.footnote.weight(.semibold))
+                    }
+                    .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: on))
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Listen to")
+        }
     }
 }
