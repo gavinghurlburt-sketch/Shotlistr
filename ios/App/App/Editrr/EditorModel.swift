@@ -1661,6 +1661,22 @@ final class EditorModel {
     }
 
     /// A tap on the edit page picks a clip (nil lets go).
+    /// A tap beside the video lets go of whatever is picked: a clip, text, sound, lyrics or overlay.
+    /// (Not while a mask is being drawn; its handles need the overlay.)
+    func letGoOfAll() {
+        guard !maskEditing else { return }
+        titlePick = nil
+        soundPick = nil
+        lyricsPicked = false
+        lyricPiecePick = nil
+        overlayPick = nil
+        editPick = nil
+        piecePick = nil
+        selected = nil
+        lyricSelected = nil
+        notice = nil
+    }
+
     func pickOnEdit(_ index: Int?) {
         editPick = index
         // The performance picked as a whole: the piece the playhead is in.
@@ -3590,11 +3606,13 @@ final class EditorModel {
         return lyricsLive.lyricsBox(at: playheadFrame, canvas: TimelineBuilder.canvas)
     }
 
-    // MARK: Where the lyrics come in and go out (the edit page)
+    // MARK: Where the lyrics come in and go out, and their pieces (the edit page)
 
-    /// An end of the lyrics block is held: where they come in, or where they go out.
+    /// An end of a lyrics piece is held: where it comes in, or where it goes out.
     var lyricsTrimming: Grip?
-    @ObservationIgnored private var lyricsTrimStart: (from: Double, to: Double, before: EditState)?
+    /// The lyrics piece picked on the timeline (its ends get handles; Delete removes it).
+    var lyricPiecePick: Int?
+    @ObservationIgnored private var lyricsTrimStart: (piece: Int, from: Double, to: Double, before: EditState)?
 
     /// The words' own reach on the timeline: the first word to the last, inside the clip.
     private var lyricsReach: (first: Double, last: Double) {
@@ -3603,39 +3621,65 @@ final class EditorModel {
         return (first, max(first, last))
     }
 
-    /// Where the lyrics come in and go out: trimmed, or the first word to the last.
-    var lyricsSpan: (from: Double, to: Double) {
+    /// Where the lyrics show, in order: one piece from the first word to the last, unless trimmed
+    /// or split.
+    var lyricsPieces: [(from: Double, to: Double)] {
         let reach = lyricsReach
-        let from = min(max(reach.first, lyricStyle.from ?? reach.first), reach.last)
-        let to = max(min(reach.last, lyricStyle.to ?? reach.last), from)
-        return (from, to)
+        guard let pieces = lyricStyle.pieces else { return [(reach.first, reach.last)] }
+        return pieces
+            .map { piece -> (from: Double, to: Double) in
+                let from = min(max(reach.first, piece.from), reach.last)
+                return (from, max(min(reach.last, piece.to), from))
+            }
+            .sorted { $0.from < $1.from }
     }
 
-    func beginLyricsTrim(_ end: Grip) {
-        guard end != .move, hasLyrics else { return }
+    /// Stores the pieces, sorted. One piece reaching the words' own ends counts as untrimmed.
+    private func setLyricsPieces(_ pieces: [(from: Double, to: Double)]) {
+        let reach = lyricsReach
+        let sorted = pieces.sorted { $0.from < $1.from }
+        if sorted.count == 1, sorted[0].from <= reach.first + 0.02, sorted[0].to >= reach.last - 0.02 {
+            lyricStyle.pieces = nil
+        } else {
+            lyricStyle.pieces = sorted.map { LyricPiece(from: $0.from, to: $0.to) }
+        }
+        lyricsLive.update(words: lyrics, style: lyricStyle)
+    }
+
+    /// The lyrics piece under a time on the timeline.
+    func lyricsPiece(at seconds: Double) -> Int? {
+        lyricsPieces.firstIndex { seconds >= $0.from && seconds <= $0.to }
+    }
+
+    func beginLyricsTrim(_ end: Grip, piece: Int) {
+        let pieces = lyricsPieces
+        guard end != .move, hasLyrics, pieces.indices.contains(piece) else { return }
         pause()
-        let span = lyricsSpan
         lyricsTrimming = end
-        lyricsTrimStart = (span.from, span.to, snapshot())
+        lyricPiecePick = piece
+        lyricsTrimStart = (piece, pieces[piece].from, pieces[piece].to, snapshot())
         notice = nil
     }
 
-    /// Moves the held end. Pulled back out to the first or last word, it's untrimmed again.
+    /// Moves the held end, up to the next piece over (or the first or last word), keeping the
+    /// piece at least 0.3 s long.
     func dragLyricsTrim(by seconds: Double) {
         guard let end = lyricsTrimming, let start = lyricsTrimStart else { return }
+        var pieces = lyricsPieces
+        guard pieces.indices.contains(start.piece) else { return }
         let reach = lyricsReach
         let frames = { (value: Double) in (value * 30).rounded() / 30 }
+        let before = start.piece > 0 ? pieces[start.piece - 1].to : reach.first
+        let after = start.piece + 1 < pieces.count ? pieces[start.piece + 1].from : reach.last
         switch end {
         case .trimStart:
-            let at = min(max(frames(start.from + seconds), reach.first), start.to - 0.3)
-            lyricStyle.from = at <= reach.first + 0.02 ? nil : at
+            pieces[start.piece].from = min(max(frames(start.from + seconds), before), start.to - 0.3)
         case .trimEnd:
-            let at = max(min(frames(start.to + seconds), reach.last), start.from + 0.3)
-            lyricStyle.to = at >= reach.last - 0.02 ? nil : at
+            pieces[start.piece].to = max(min(frames(start.to + seconds), after), start.from + 0.3)
         case .move:
             return
         }
-        lyricsLive.update(words: lyrics, style: lyricStyle)
+        setLyricsPieces(pieces)
         redraw()
     }
 
@@ -3648,10 +3692,49 @@ final class EditorModel {
         scheduleSave()
     }
 
+    /// Whether Split would cut a lyrics piece at the playhead (each side at least 0.3 s).
+    var canSplitLyrics: Bool {
+        let t = time
+        return lyricsPieces.contains { t - $0.from >= 0.3 && $0.to - t >= 0.3 }
+    }
+
+    /// Cuts the lyrics piece under the playhead in two there; the piece after the cut is picked.
+    func splitLyrics() {
+        let t = (time * 30).rounded() / 30
+        var pieces = lyricsPieces
+        guard let index = pieces.firstIndex(where: { t - $0.from >= 0.3 && $0.to - t >= 0.3 }) else { return }
+        pause()
+        history.append(snapshot())
+        let piece = pieces[index]
+        pieces[index] = (piece.from, t)
+        pieces.insert((t, piece.to), at: index + 1)
+        setLyricsPieces(pieces)
+        lyricPiecePick = index + 1
+        syncLyrics()
+        redraw()
+        scheduleSave()
+    }
+
+    /// Removes the picked lyrics piece (never the last one; Hide is for that).
+    func deleteLyricsPiece() {
+        var pieces = lyricsPieces
+        guard pieces.count > 1, let index = lyricPiecePick, pieces.indices.contains(index) else { return }
+        history.append(snapshot())
+        pieces.remove(at: index)
+        setLyricsPieces(pieces)
+        lyricPiecePick = nil
+        lyricsPicked = false
+        syncLyrics()
+        redraw()
+        scheduleSave()
+    }
+
     /// A tap on the words picks them (true), a tap away lets go (false).
-    func pickLyrics(_ on: Bool) {
+    func pickLyrics(_ on: Bool, piece: Int? = nil) {
         // Picked even while hidden, so its tools can show them again.
         lyricsPicked = on && hasLyrics
+        // Which piece: the one tapped on the timeline, else the one under the playhead.
+        lyricPiecePick = lyricsPicked ? (piece ?? lyricsPiece(at: time) ?? 0) : nil
         guard lyricsPicked else { return }
         soundPick = nil
         titlePick = nil

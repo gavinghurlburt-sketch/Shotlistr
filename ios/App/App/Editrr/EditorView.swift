@@ -343,7 +343,7 @@ struct NewVideoSheet: View {
             kindCard(.video, icon: "film", title: "Edit a video",
                      detail: "Put videos together, then add text, lyrics and effects.")
             divider.padding(.leading, 48)
-            kindCard(.performance, icon: "music.note.list", title: "Edit a performance",
+            kindCard(.performance, icon: PerformanceGlyph.name, title: "Edit a performance",
                      detail: "Sync takes to the song and cut between them.")
             if let shoot {
                 divider.padding(.leading, 48)
@@ -363,10 +363,15 @@ struct NewVideoSheet: View {
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: icon)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 34)
+                Group {
+                    if icon == PerformanceGlyph.name {
+                        PerformanceGlyph().frame(width: 26, height: 21).frame(height: 28)
+                    } else {
+                        Image(systemName: icon).font(.title2.weight(.semibold))
+                    }
+                }
+                .foregroundStyle(tint)
+                .frame(width: 34)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline)
                     Text(detail)
@@ -666,6 +671,13 @@ struct EditingView: View {
                            alignment: .top)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // A tap beside the video (in the columns around its buttons) lets go of whatever is picked.
+            .background {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.letGoOfAll() }
+                    .accessibilityHidden(true)
+            }
             }
             .frame(maxHeight: .infinity)
                 .fullScreenCover(isPresented: $fullScreen) { FullScreenPreview(model: model) }
@@ -920,54 +932,52 @@ struct EditingView: View {
 
     /// The edit page's tools with nothing picked.
     private var editTools: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                // Split cuts the video track at the playhead.
-                ToolItem(icon: "scissors", text: "Split", spoken: "Split the video track at the playhead") {
-                    model.splitHere()
+        ToolStrip {
+            // Split cuts the video track at the playhead.
+            ToolItem(icon: "scissors", text: "Split", spoken: "Split the video track at the playhead") {
+                model.splitHere()
+            }
+            // Aa: opens the text at the playhead, or adds one there.
+            ToolItem(icon: "textformat", text: "Title", on: model.hasTitleAtPlayhead,
+                     spoken: "Add or change text") {
+                model.textButton()
+            }
+            // Music or a sound effect at the playhead: its row shows once there is one.
+            ToolItem(icon: "music.note", text: "Add sound", tint: MusicTint.color,
+                     spoken: "Add music or a sound effect at the playhead") {
+                model.pause()
+                soundChoosing = true
+            }
+            .confirmationDialog("Add at the playhead", isPresented: $soundChoosing, titleVisibility: .visible) {
+                Button("Music from Files") {
+                    soundIsEffect = false
+                    soundFiles = true
                 }
-                // Aa: opens the text at the playhead, or adds one there.
-                ToolItem(icon: "textformat", text: "Title", on: model.hasTitleAtPlayhead,
-                         spoken: "Add or change text") {
-                    model.textButton()
+                Button("Sound effect from Files") {
+                    soundIsEffect = true
+                    soundFiles = true
                 }
-                // Music or a sound effect at the playhead: its row shows once there is one.
-                ToolItem(icon: "music.note", text: "Add sound", tint: MusicTint.color,
-                         spoken: "Add music or a sound effect at the playhead") {
-                    model.pause()
-                    soundChoosing = true
+                Button("Song or section from creatrr") { musicSongs = true }
+                Button("Cancel", role: .cancel) {}
+            }
+            if model.kind == .performance {
+                ToolItem(icon: PerformanceGlyph.name, text: "Performance",
+                         spoken: "Performance: every video synced to the song") {
+                    withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
                 }
-                .confirmationDialog("Add at the playhead", isPresented: $soundChoosing, titleVisibility: .visible) {
-                    Button("Music from Files") {
-                        soundIsEffect = false
-                        soundFiles = true
-                    }
-                    Button("Sound effect from Files") {
-                        soundIsEffect = true
-                        soundFiles = true
-                    }
-                    Button("Song or section from creatrr") { musicSongs = true }
-                    Button("Cancel", role: .cancel) {}
-                }
-                if model.kind == .performance {
-                    ToolItem(icon: "music.note.list", text: "Performance",
-                             spoken: "Performance: every video synced to the song") {
-                        withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
-                    }
-                    // No Auto edit, Shuffle or Tap to cut here: the performance is already edited
-                    // (on its own page), so nothing on this page can re-cut it by accident.
-                }
-                // A photo or video on top of the main video.
-                ToolItem(icon: "square.on.square", text: "Overlay", enabled: model.canAddOverlay,
-                         spoken: "Add an overlay: a photo or video on top") {
-                    model.pause()
-                    overlayPicking = true
-                }
-                // Export last, after every other tool.
-                ToolItem(icon: "square.and.arrow.up", text: "Export", on: true) {
-                    model.resetExport()
-                    exporting = true
-                }
+                // No Auto edit, Shuffle or Tap to cut here: the performance is already edited
+                // (on its own page), so nothing on this page can re-cut it by accident.
+            }
+            // A photo or video on top of the main video.
+            ToolItem(icon: "square.on.square", text: "Overlay", enabled: model.canAddOverlay,
+                     spoken: "Add an overlay: a photo or video on top") {
+                model.pause()
+                overlayPicking = true
+            }
+            // Export last, after every other tool.
+            ToolItem(icon: "square.and.arrow.up", text: "Export", on: true) {
+                model.resetExport()
+                exporting = true
             }
         }
     }
@@ -984,16 +994,14 @@ struct EditingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to all tools")
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ToolItem(icon: "textformat", text: "Edit", spoken: "Change the text's words and look") {
-                        model.openTitle(id)
-                    }
-                    ToolItem(icon: "scissors", text: "Cut", enabled: model.canSplitTitle(id),
-                             spoken: "Cut the text in two at the playhead") { model.splitTitle(id) }
-                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
-                             spoken: "Delete the text") { model.deleteTitle(id) }
+            ToolStrip {
+                ToolItem(icon: "textformat", text: "Edit", spoken: "Change the text's words and look") {
+                    model.openTitle(id)
                 }
+                ToolItem(icon: "scissors", text: "Cut", enabled: model.canSplitTitle(id),
+                         spoken: "Cut the text in two at the playhead") { model.splitTitle(id) }
+                ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                         spoken: "Delete the text") { model.deleteTitle(id) }
             }
         }
     }
@@ -1011,18 +1019,17 @@ struct EditingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to all tools")
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ToolItem(icon: "arrow.right.to.line", text: "Start here",
-                             spoken: "Start the \(what) at the playhead") { model.moveSoundHere(sound.id) }
-                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
-                             spoken: "Delete the \(what)") { model.deleteSound(sound.id) }
-                }
+            ToolStrip {
+                ToolItem(icon: "arrow.right.to.line", text: "Start here",
+                         spoken: "Start the \(what) at the playhead") { model.moveSoundHere(sound.id) }
+                ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                         spoken: "Delete the \(what)") { model.deleteSound(sound.id) }
             }
         }
     }
 
-    /// The lyrics track picked: show or hide them, their look, or the lyric editor (the words).
+    /// A lyrics piece picked: split at the playhead, delete the piece, show or hide them, their look,
+    /// or the lyric editor (the words).
     private var lyricsTools: some View {
         HStack(spacing: 0) {
             Button { model.pickLyrics(false) } label: {
@@ -1034,23 +1041,27 @@ struct EditingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to all tools")
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ToolItem(icon: model.lyricStyle.show ? "eye" : "eye.slash",
-                             text: model.lyricStyle.show ? "Hide" : "Show",
-                             spoken: model.lyricStyle.show ? "Hide the lyrics" : "Show the lyrics") {
-                        model.toggleLyricsShown()
-                        // Picked again, so the words can be dragged once they're showing.
-                        model.pickLyrics(true)
-                    }
-                    ToolItem(icon: "paintpalette", text: "Look", spoken: "Edit the lyrics' look") {
-                        model.pause()
-                        lookOpen = true
-                    }
-                    ToolItem(icon: "quote.bubble", text: "Lyric editor", spoken: "Open the lyric editor") {
-                        model.pickLyrics(false)
-                        model.setLyricTimeline(true)
-                    }
+            ToolStrip {
+                ToolItem(icon: "scissors", text: "Split", enabled: model.canSplitLyrics,
+                         spoken: "Split the lyrics at the playhead") { model.splitLyrics() }
+                if model.lyricsPieces.count > 1 {
+                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                             spoken: "Delete this piece of the lyrics") { model.deleteLyricsPiece() }
+                }
+                ToolItem(icon: model.lyricStyle.show ? "eye" : "eye.slash",
+                         text: model.lyricStyle.show ? "Hide" : "Show",
+                         spoken: model.lyricStyle.show ? "Hide the lyrics" : "Show the lyrics") {
+                    model.toggleLyricsShown()
+                    // Picked again, so the words can be dragged once they're showing.
+                    model.pickLyrics(true, piece: model.lyricPiecePick)
+                }
+                ToolItem(icon: "paintpalette", text: "Look", spoken: "Edit the lyrics' look") {
+                    model.pause()
+                    lookOpen = true
+                }
+                ToolItem(icon: "quote.bubble", text: "Lyric editor", spoken: "Open the lyric editor") {
+                    model.pickLyrics(false)
+                    model.setLyricTimeline(true)
                 }
             }
         }
@@ -1068,33 +1079,31 @@ struct EditingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to all tools")
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    if model.overlay(id)?.isCutaway == true {
-                        // A clip on the video track: split it, add one next to it, or delete it.
-                        splitTools
-                        ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true) { model.deleteOverlay(id) }
-                        Text("Drag it on the video to frame it. Hold it on the track to move it.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.65))
-                            .lineLimit(2)
-                            .frame(maxWidth: 190, alignment: .leading)
-                            .padding(.horizontal, 8)
-                    } else {
-                        ToolItem(icon: "scissors", text: "Split", spoken: "Split it at the playhead") { model.splitHere() }
-                        ToolItem(icon: "circle.dashed", text: "Mask",
-                                 on: model.overlay(id).map { $0.mask.shape != .off } ?? false) {
-                            model.beginMaskEdit()
-                            masking = true
-                        }
-                        ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true) { model.deleteOverlay(id) }
-                        Text("Drag it on the video to move it. Pinch to size it. The + diamond animates it.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.65))
-                            .lineLimit(2)
-                            .frame(maxWidth: 190, alignment: .leading)
-                            .padding(.horizontal, 8)
+            ToolStrip {
+                if model.overlay(id)?.isCutaway == true {
+                    // A clip on the video track: split it, add one next to it, or delete it.
+                    splitTools
+                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true) { model.deleteOverlay(id) }
+                    Text("Drag it on the video to frame it. Hold it on the track to move it.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(2)
+                        .frame(maxWidth: 190, alignment: .leading)
+                        .padding(.horizontal, 8)
+                } else {
+                    ToolItem(icon: "scissors", text: "Split", spoken: "Split it at the playhead") { model.splitHere() }
+                    ToolItem(icon: "circle.dashed", text: "Mask",
+                             on: model.overlay(id).map { $0.mask.shape != .off } ?? false) {
+                        model.beginMaskEdit()
+                        masking = true
                     }
+                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true) { model.deleteOverlay(id) }
+                    Text("Drag it on the video to move it. Pinch to size it. The + diamond animates it.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(2)
+                        .frame(maxWidth: 190, alignment: .leading)
+                        .padding(.horizontal, 8)
                 }
             }
         }
@@ -1112,42 +1121,40 @@ struct EditingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to all tools")
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    splitTools
-                    if model.kind == .performance {
-                        ToolItem(icon: "music.note.list", text: "Edit performance",
-                                 spoken: "Edit the performance: every video synced to the song") {
-                            withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
-                        }
-                        // The song off or on (its band along the bottom of the performance shows which).
-                        let muted = model.soundMuted
-                        ToolItem(icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                                 text: muted ? "Unmute" : "Mute", tint: Tint.warn, on: muted,
-                                 spoken: muted ? "Turn the song back on" : "Turn the song off") {
-                            model.soundMuted.toggle()
-                        }
-                    } else if model.layers.indices.contains(index) {
-                        // The clip's own sound off or on (its band on the track shows which).
-                        let muted = model.layers[index].muted
-                        ToolItem(icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                                 text: muted ? "Unmute" : "Mute", tint: Tint.warn, on: muted,
-                                 spoken: muted ? "Turn this clip's sound back on" : "Turn this clip's sound off") {
-                            model.toggleMute(index)
-                        }
-                        // The clip's sound with the background noise taken out, leaving the voice.
-                        let voice = model.layers[index].voice != nil
-                        ToolItem(icon: "person.wave.2.fill", text: "Voice", tint: Tint.accent, on: voice,
-                                 enabled: model.layers[index].audio != nil && model.busy == nil,
-                                 spoken: voice ? "Play this clip's sound as recorded" : "Isolate the voice in this clip's sound") {
-                            Task { await model.toggleVoice(index) }
-                        }
+            ToolStrip {
+                splitTools
+                if model.kind == .performance {
+                    ToolItem(icon: PerformanceGlyph.name, text: "Edit performance",
+                             spoken: "Edit the performance: every video synced to the song") {
+                        withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
                     }
-                    // Gets rid of the picked clip (a piece split off, say); the rest close up.
-                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
-                             enabled: model.canDeleteClip, spoken: "Delete this clip") {
-                        model.deleteClip()
+                    // The song off or on (its band along the bottom of the performance shows which).
+                    let muted = model.soundMuted
+                    ToolItem(icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                             text: muted ? "Unmute" : "Mute", tint: Tint.warn, on: muted,
+                             spoken: muted ? "Turn the song back on" : "Turn the song off") {
+                        model.soundMuted.toggle()
                     }
+                } else if model.layers.indices.contains(index) {
+                    // The clip's own sound off or on (its band on the track shows which).
+                    let muted = model.layers[index].muted
+                    ToolItem(icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                             text: muted ? "Unmute" : "Mute", tint: Tint.warn, on: muted,
+                             spoken: muted ? "Turn this clip's sound back on" : "Turn this clip's sound off") {
+                        model.toggleMute(index)
+                    }
+                    // The clip's sound with the background noise taken out, leaving the voice.
+                    let voice = model.layers[index].voice != nil
+                    ToolItem(icon: "person.wave.2.fill", text: "Voice", tint: Tint.accent, on: voice,
+                             enabled: model.layers[index].audio != nil && model.busy == nil,
+                             spoken: voice ? "Play this clip's sound as recorded" : "Isolate the voice in this clip's sound") {
+                        Task { await model.toggleVoice(index) }
+                    }
+                }
+                // Gets rid of the picked clip (a piece split off, say); the rest close up.
+                ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                         enabled: model.canDeleteClip, spoken: "Delete this clip") {
+                    model.deleteClip()
                 }
             }
         }
@@ -1182,19 +1189,17 @@ struct EditingView: View {
 
     /// The performance page's tools with no video picked. Done goes to the edit page.
     private var performanceTools: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ToolItem(icon: "checkmark", text: "Done", tint: Tint.accent, on: true,
-                         spoken: "Done: edit the performance from Start to End") {
-                    withAnimation(.spring(duration: 0.35)) { model.showEditPage() }
-                }
-                ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
-                shuffleTool
-                tapBeatTool
-                exportRangeTools
-                // Lock: clips can't be moved, trimmed or nudged while it's on.
-                lockTool
+        ToolStrip {
+            ToolItem(icon: "checkmark", text: "Done", tint: Tint.accent, on: true,
+                     spoken: "Done: edit the performance from Start to End") {
+                withAnimation(.spring(duration: 0.35)) { model.showEditPage() }
             }
+            ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
+            shuffleTool
+            tapBeatTool
+            exportRangeTools
+            // Lock: clips can't be moved, trimmed or nudged while it's on.
+            lockTool
         }
     }
 
@@ -1218,69 +1223,67 @@ struct EditingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to all tools")
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    // Which video this is, in its color.
-                    VStack(spacing: 3) {
-                        Text("\(index + 1)")
-                            .font(.headline.weight(.heavy).monospacedDigit())
-                            .foregroundStyle(tint)
-                        Text("Video").font(.caption2)
-                    }
-                    .frame(width: 52, height: 52)
-                    .accessibilityElement(children: .combine)
-                    ToolItem(icon: "scissors", text: "Cut to it", tint: tint, on: model.showing == index) {
-                        model.cut(to: index)
-                    }
-                    .accessibilityHint("Shows this video from the playhead on")
-                    ToolItem(icon: "eye", text: "Preview", on: model.previewing == index) { model.preview(index) }
-                    ToolItem(icon: "plus.square.on.square", text: "Duplicate", enabled: !full) { model.duplicate(index) }
-                    ToolItem(icon: "backward.frame", text: "1 frame", enabled: !model.locked,
-                             spoken: "1 frame earlier") { model.nudge(frames: -1) }
-                    ToolItem(icon: "forward.frame", text: "1 frame", enabled: !model.locked,
-                             spoken: "1 frame later") { model.nudge(frames: 1) }
-                    // A take shot to the song played faster or slower: play it slowed down or sped up.
-                    Menu {
-                        Section("Shot to a faster or slower song? Pick how it plays.") {
-                            ForEach(EditorModel.speeds, id: \.self) { speed in
-                                Button {
-                                    Task { await model.setSpeed(index, to: speed) }
-                                } label: {
-                                    if abs(layer.speed - speed) < 0.001 {
-                                        Label(EditorModel.speedName(speed), systemImage: "checkmark")
-                                    } else {
-                                        Text(EditorModel.speedName(speed))
-                                    }
+            ToolStrip {
+                // Which video this is, in its color.
+                VStack(spacing: 3) {
+                    Text("\(index + 1)")
+                        .font(.headline.weight(.heavy).monospacedDigit())
+                        .foregroundStyle(tint)
+                    Text("Video").font(.caption2)
+                }
+                .frame(width: 52, height: 52)
+                .accessibilityElement(children: .combine)
+                ToolItem(icon: "scissors", text: "Cut to it", tint: tint, on: model.showing == index) {
+                    model.cut(to: index)
+                }
+                .accessibilityHint("Shows this video from the playhead on")
+                ToolItem(icon: "eye", text: "Preview", on: model.previewing == index) { model.preview(index) }
+                ToolItem(icon: "plus.square.on.square", text: "Duplicate", enabled: !full) { model.duplicate(index) }
+                ToolItem(icon: "backward.frame", text: "1 frame", enabled: !model.locked,
+                         spoken: "1 frame earlier") { model.nudge(frames: -1) }
+                ToolItem(icon: "forward.frame", text: "1 frame", enabled: !model.locked,
+                         spoken: "1 frame later") { model.nudge(frames: 1) }
+                // A take shot to the song played faster or slower: play it slowed down or sped up.
+                Menu {
+                    Section("Shot to a faster or slower song? Pick how it plays.") {
+                        ForEach(EditorModel.speeds, id: \.self) { speed in
+                            Button {
+                                Task { await model.setSpeed(index, to: speed) }
+                            } label: {
+                                if abs(layer.speed - speed) < 0.001 {
+                                    Label(EditorModel.speedName(speed), systemImage: "checkmark")
+                                } else {
+                                    Text(EditorModel.speedName(speed))
                                 }
                             }
                         }
-                    } label: {
-                        let normal = abs(layer.speed - 1) < 0.001
-                        VStack(spacing: 4) {
-                            Image(systemName: "gauge.with.dots.needle.33percent")
-                                .font(.system(size: 19, weight: .semibold))
-                                .frame(height: 22)
-                            Text(normal ? "Speed" : EditorModel.speedName(layer.speed))
-                                .font(.caption2.weight(.medium))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
-                        .foregroundStyle(normal ? Color.white.opacity(0.9) : tint)
-                        .frame(width: 60, height: 52)
-                        .contentShape(Rectangle())
                     }
-                    .accessibilityLabel("Speed: \(EditorModel.speedName(layer.speed))")
-                    ToolItem(icon: "paintpalette", text: "Color", tint: tint) { coloring = index }
-                        .popover(isPresented: Binding(get: { coloring == index },
-                                                      set: { if !$0 { coloring = nil } })) {
-                            TrackColorPicker(selected: LayerTint.pick(layer)) { pick in
-                                model.setTrackColor(index, to: pick)
-                                coloring = nil
-                            }
-                            .presentationCompactAdaptation(.popover)
-                        }
-                    lockTool
+                } label: {
+                    let normal = abs(layer.speed - 1) < 0.001
+                    VStack(spacing: 4) {
+                        Image(systemName: "gauge.with.dots.needle.33percent")
+                            .font(.system(size: 19, weight: .semibold))
+                            .frame(height: 22)
+                        Text(normal ? "Speed" : EditorModel.speedName(layer.speed))
+                            .font(.caption2.weight(.medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(normal ? Color.white.opacity(0.9) : tint)
+                    .frame(width: 60, height: 52)
+                    .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Speed: \(EditorModel.speedName(layer.speed))")
+                ToolItem(icon: "paintpalette", text: "Color", tint: tint) { coloring = index }
+                    .popover(isPresented: Binding(get: { coloring == index },
+                                                  set: { if !$0 { coloring = nil } })) {
+                        TrackColorPicker(selected: LayerTint.pick(layer)) { pick in
+                            model.setTrackColor(index, to: pick)
+                            coloring = nil
+                        }
+                        .presentationCompactAdaptation(.popover)
+                    }
+                lockTool
             }
         }
     }
@@ -2167,8 +2170,8 @@ struct ProjectTile: View {
                 .overlay(alignment: .topLeading) {
                     // A performance gets a small mark, so the two kinds are easy to tell apart.
                     if project.kind != "video" {
-                        Image(systemName: "music.note.list")
-                            .font(.caption2.weight(.bold))
+                        PerformanceGlyph()
+                            .frame(width: 13, height: 10)
                             .foregroundStyle(.black)
                             .padding(.horizontal, 6).padding(.vertical, 4)
                             .background(Tint.accent, in: Capsule())

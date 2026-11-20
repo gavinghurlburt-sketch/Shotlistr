@@ -117,6 +117,15 @@ enum LyricFont: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// One stretch of the timeline where the lyrics show (seconds).
+struct LyricPiece: Codable, Equatable, Sendable {
+    var from: Double
+    var to: Double
+}
+
+/// The keys an older save kept its one trim under.
+private enum OldTrim: String, CodingKey { case from, to }
+
 /// The look, as in Lyric Sync. Sizes are in pixels on a 1080-wide frame.
 struct LyricStyle: Codable, Equatable, Sendable {
     var show = true
@@ -159,10 +168,9 @@ struct LyricStyle: Codable, Equatable, Sendable {
     /// Rainbow: every letter takes the next color of `palette`, running on across all the words.
     var rainbow = false
     var palette: [String] = LyricStyle.palettes[0].colors
-    /// Where the lyrics come in and go out (timeline seconds), trimmed on the edit page. nil: from
-    /// the first word, to the last. Words sung outside don't show.
-    var from: Double? = nil
-    var to: Double? = nil
+    /// Where the lyrics show (timeline seconds), trimmed and split on the edit page. nil: one piece,
+    /// from the first word to the last. Words sung outside every piece don't show.
+    var pieces: [LyricPiece]? = nil
 
     /// Ready-made rainbow palettes.
     static let palettes: [(name: String, colors: [String])] = [
@@ -197,8 +205,13 @@ struct LyricStyle: Codable, Equatable, Sendable {
         read(.chroma, &s.chroma); read(.chromaAngle, &s.chromaAngle); read(.hitChroma, &s.hitChroma)
         read(.hitGlow, &s.hitGlow); read(.shake, &s.shake); read(.hitDecay, &s.hitDecay)
         read(.rainbow, &s.rainbow); read(.palette, &s.palette)
-        s.from = (try? c.decodeIfPresent(Double.self, forKey: .from)) ?? nil
-        s.to = (try? c.decodeIfPresent(Double.self, forKey: .to)) ?? nil
+        s.pieces = (try? c.decodeIfPresent([LyricPiece].self, forKey: .pieces)) ?? nil
+        if s.pieces == nil, let old = try? decoder.container(keyedBy: OldTrim.self) {
+            // A save from before splitting: one trimmed piece (nil ends reach to the words' own ends).
+            let from = (try? old.decodeIfPresent(Double.self, forKey: .from)) ?? nil
+            let to = (try? old.decodeIfPresent(Double.self, forKey: .to)) ?? nil
+            if from != nil || to != nil { s.pieces = [LyricPiece(from: from ?? 0, to: to ?? 100_000)] }
+        }
         self = s
     }
 
@@ -232,8 +245,7 @@ struct LyricStyle: Codable, Equatable, Sendable {
         next.customFont = customFont
         next.posX = posX
         next.posY = posY
-        next.from = from
-        next.to = to
+        next.pieces = pieces
         Self.presets[index].apply(&next)
         return next
     }

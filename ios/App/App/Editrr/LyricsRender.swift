@@ -49,9 +49,8 @@ final class LyricsOverlay: @unchecked Sendable {
 
     /// The words inside where the lyrics come in and go out (all of them when they aren't trimmed).
     static func shown(_ words: [LyricWord], _ style: LyricStyle) -> [LyricWord] {
-        guard style.from != nil || style.to != nil else { return words }
-        let from = style.from ?? -.infinity, to = style.to ?? .infinity
-        return words.filter { $0.start >= from - 0.001 && $0.start < to }
+        guard let pieces = style.pieces else { return words }
+        return words.filter { word in pieces.contains { word.start >= $0.from - 0.001 && word.start < $0.to } }
     }
 
     func update(words: [LyricWord], style: LyricStyle) {

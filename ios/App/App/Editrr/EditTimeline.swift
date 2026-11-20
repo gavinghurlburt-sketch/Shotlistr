@@ -429,15 +429,20 @@ struct EditTimeline: View {
                         }
                     }
                     // A small label, so it reads as the performance.
-                    let label = context.resolve(Text("\(Image(systemName: "music.note.list")) Performance")
+                    // The performance's mark (clips offset on their tracks), then its name.
+                    let label = context.resolve(Text("Performance")
                         .font(.caption2.weight(.bold)).foregroundStyle(.white))
                     let textSize = label.measure(in: CGSize(width: 200, height: 40))
+                    let mark = CGSize(width: 12, height: 9)
                     let spot = CGRect(x: max(rect.minX, 0) + (picked == clip.id ? 17 : 4),
                                       y: rect.maxY - band - textSize.height - 5,
-                                      width: textSize.width + 8, height: textSize.height + 2)
+                                      width: mark.width + 3 + textSize.width + 8, height: textSize.height + 2)
                     if spot.maxX < rect.maxX - 4 {
                         context.fill(Path(spot), with: .color(.black.opacity(0.6)))
-                        context.draw(label, at: CGPoint(x: spot.midX, y: spot.midY))
+                        let markBox = CGRect(x: spot.minX + 4, y: spot.midY - mark.height / 2,
+                                             width: mark.width, height: mark.height)
+                        context.fill(PerformanceGlyph().path(in: markBox), with: .color(.white))
+                        context.draw(label, at: CGPoint(x: markBox.maxX + 3, y: spot.midY), anchor: .leading)
                     }
                 }
             }
@@ -575,35 +580,35 @@ struct EditTimeline: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// The lyrics as one plain block (the words are edited on the lyrics page). Tap it for its
-    /// tools; picked, it gets the yellow outline. Faded while they're hidden.
+    /// The lyrics as plain blocks, one per piece (the words are edited on the lyrics page). Tap a
+    /// piece for its tools; picked, it gets the yellow outline and ends. Faded while they're hidden.
     private var lyricsTrack: some View {
         let time = model.time
         let pps = model.pixelsPerSecond
         let shown = model.lyricStyle.show
-        let picked = model.lyricsPicked
+        let pickedPiece = model.lyricsPicked ? model.lyricPiecePick : nil
         let held = model.lyricsTrimming
-        // From where they come in to where they go out (the first word to the last unless trimmed),
-        // inside the clip (In to Out).
-        let span = model.lyricsSpan
-        let first = span.from, last = span.to
+        // From where each piece comes in to where it goes out (the first word to the last unless
+        // trimmed or split), inside the clip (In to Out).
+        let pieces = model.lyricsPieces
 
         return Canvas { context, size in
             let middle = size.width / 2
             func x(_ seconds: Double) -> CGFloat { middle + CGFloat((seconds - time) * pps) }
-            let left = x(first), right = x(last)
-            guard right > left, right > 0, left < size.width else { return }
-            let band = CGRect(x: left + 1, y: 2, width: max(2, right - left - 2), height: size.height - 4)
-            var lane = context
-            lane.opacity = shown ? 1 : 0.35
-            lane.fill(Path(band), with: .color(LyricsTint.color))
-            var inside = lane
-            inside.clip(to: Path(band.insetBy(dx: 5, dy: 0)))
-            inside.draw(Text("\(Image(systemName: "quote.opening")) Lyrics")
-                            .font(.caption2.weight(.bold)).foregroundStyle(.white),
-                        at: CGPoint(x: max(band.minX, 0) + 8, y: band.midY), anchor: .leading)
-            if picked {
-                // Yellow ends, like a clip's: drag them to change where the lyrics come in and go out.
+            for (index, piece) in pieces.enumerated() {
+                let left = x(piece.from), right = x(piece.to)
+                guard right > left, right > 0, left < size.width else { continue }
+                let band = CGRect(x: left + 1, y: 2, width: max(2, right - left - 2), height: size.height - 4)
+                var lane = context
+                lane.opacity = shown ? 1 : 0.35
+                lane.fill(Path(band), with: .color(LyricsTint.color))
+                var inside = lane
+                inside.clip(to: Path(band.insetBy(dx: 5, dy: 0)))
+                inside.draw(Text("\(Image(systemName: "quote.opening")) Lyrics")
+                                .font(.caption2.weight(.bold)).foregroundStyle(.white),
+                            at: CGPoint(x: max(band.minX, 0) + 8, y: band.midY), anchor: .leading)
+                guard index == pickedPiece else { continue }
+                // Yellow ends, like a clip's: drag them to change where this piece comes in and goes out.
                 context.stroke(Path(band.insetBy(dx: -1.5, dy: -1.5)), with: .color(Tint.accent), lineWidth: 3)
                 for which in [EditorModel.Grip.trimStart, .trimEnd] {
                     let width: CGFloat = held == which ? 14 : 11
@@ -758,16 +763,17 @@ struct EditTimeline: View {
         return toStart <= toEnd ? .trimStart : .trimEnd
     }
 
-    /// Takes hold of an end of the picked lyrics block: where they come in, or where they go out.
+    /// Takes hold of an end of the picked lyrics piece: where it comes in, or where it goes out.
     private func grabLyricsEnd(at point: CGPoint, width: CGFloat) -> Bool {
-        guard model.lyricsPicked else { return false }
-        let span = model.lyricsSpan
+        guard model.lyricsPicked, let index = model.lyricPiecePick else { return false }
+        let pieces = model.lyricsPieces
+        guard pieces.indices.contains(index) else { return false }
         let middle = width / 2
-        let startX = middle + CGFloat((span.from - model.time) * model.pixelsPerSecond)
-        let endX = middle + CGFloat((span.to - model.time) * model.pixelsPerSecond)
+        let startX = middle + CGFloat((pieces[index].from - model.time) * model.pixelsPerSecond)
+        let endX = middle + CGFloat((pieces[index].to - model.time) * model.pixelsPerSecond)
         let toStart = abs(point.x - startX), toEnd = abs(point.x - endX)
         guard min(toStart, toEnd) <= 26 else { return false }
-        model.beginLyricsTrim(toStart <= toEnd ? .trimStart : .trimEnd)
+        model.beginLyricsTrim(toStart <= toEnd ? .trimStart : .trimEnd, piece: index)
         return model.lyricsTrimming != nil
     }
 
@@ -956,9 +962,13 @@ struct EditTimeline: View {
                     model.pickOverlay(hit && model.overlayPick != overlayID ? overlayID : nil)
                     return
                 }
-                // A tap on the lyrics row picks the lyrics: their tools (show/hide, look, lyric editor).
+                // A tap on the lyrics row picks a piece: its tools (split, delete, show/hide, look, lyric editor).
                 if row == .lyrics {
-                    model.pickLyrics(!model.lyricsPicked)
+                    // A tap on a piece picks it; again, or between pieces, lets go.
+                    let at = model.time + Double(point.x - width / 2) / model.pixelsPerSecond
+                    let hit = model.lyricsPiece(at: at)
+                    let again = model.lyricsPicked && hit == model.lyricPiecePick
+                    model.pickLyrics(hit != nil && !again, piece: hit)
                     return
                 }
                 // A tap on a clip picks it; again, or anywhere else, lets go.

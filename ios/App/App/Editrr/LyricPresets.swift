@@ -82,8 +82,7 @@ extension LyricStyle {
         next.posY = posY
         next.size = size
         next.show = show
-        next.from = from
-        next.to = to
+        next.pieces = pieces
         return next
     }
 
