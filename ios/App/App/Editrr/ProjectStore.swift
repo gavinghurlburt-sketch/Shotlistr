@@ -63,13 +63,17 @@ struct SavedProject: Codable, Equatable, Identifiable {
     var order: [Int]?
     /// A horizontal (16:9, 1920 x 1080) project, shot sideways. nil: vertical, like every older one.
     var wide: Bool?
-    /// Music added on the edit page, playing under everything (nil: none).
+    /// Music added on the edit page by the first build of it (one piece at most). Read only to
+    /// bring it into `sounds`; new saves leave it out.
     var music: SavedMusic?
+    /// Music and sound effects added with the + under the tracks (nil: none).
+    var sounds: [SavedMusic]?
 }
 
-/// Music added on the edit page (a song from Files, or a creatrr song or section). It plays under
-/// everything else, from where it was added.
-struct SavedMusic: Codable, Equatable {
+/// Music or a sound effect added on the edit page (a file from Files, or a creatrr song or section).
+/// It plays under everything else, from where it was added, on its own audio row.
+struct SavedMusic: Codable, Equatable, Identifiable {
+    var id = UUID()
     /// The file, kept in the project's folder.
     var source: MediaSource
     var name: String
@@ -79,6 +83,33 @@ struct SavedMusic: Codable, Equatable {
     var at: Double
     /// How long it plays (a section's length, or the rest of the file).
     var length: Double
+    /// Which audio row it sits on (0 is the first, under the song).
+    var lane = 0
+    /// A sound effect rather than music (only its icon differs).
+    var effect = false
+
+    init(source: MediaSource, name: String, from: Double, at: Double, length: Double, lane: Int = 0, effect: Bool = false) {
+        self.source = source
+        self.name = name
+        self.from = from
+        self.at = at
+        self.length = length
+        self.lane = lane
+        self.effect = effect
+    }
+
+    /// Anything missing from an older save keeps its default.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        source = try c.decode(MediaSource.self, forKey: .source)
+        name = try c.decode(String.self, forKey: .name)
+        from = try c.decode(Double.self, forKey: .from)
+        at = try c.decode(Double.self, forKey: .at)
+        length = try c.decode(Double.self, forKey: .length)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        lane = (try? c.decodeIfPresent(Int.self, forKey: .lane)) ?? 0
+        effect = (try? c.decodeIfPresent(Bool.self, forKey: .effect)) ?? false
+    }
 }
 
 /// Saved projects live in Application Support/Projects/<id>/, each with project.json, a small

@@ -568,8 +568,10 @@ struct EditingView: View {
     /// Picking a clip for the + at the end of the video track: it goes after everything.
     @State private var endPicking = false
     @State private var endItems: [PhotosPickerItem] = []
-    /// The +: music from Files, or a creatrr song or section.
-    @State private var musicFiles = false
+    /// The + at the bottom of the timeline: music or a sound effect from Files, or a creatrr song
+    /// or section.
+    @State private var soundFiles = false
+    @State private var soundIsEffect = false
     @State private var musicSongs = false
     /// Read here so the timeline's height follows the tall-tracks switch.
     @AppStorage(LaneMetrics.tallKey) private var tallTracks = false
@@ -695,12 +697,18 @@ struct EditingView: View {
                     model.pause()
                     switch addition {
                     case .clip: endPicking = true
-                    case .musicFile: musicFiles = true
+                    case .musicFile:
+                        soundIsEffect = false
+                        soundFiles = true
+                    case .soundFile:
+                        soundIsEffect = true
+                        soundFiles = true
                     case .creatrrSong: musicSongs = true
                     }
                 }
                     .frame(height: EditMetrics.height(lyrics: model.hasLyrics, overlays: model.onTop.count,
-                                                      texts: model.textLaneCount, music: model.music != nil))
+                                                      texts: model.textLaneCount, sounds: model.soundLaneCount,
+                                                      adder: true))
                     // The grey rows run edge to edge of the screen, as in Edits.
                     .padding(.horizontal, -12)
                     .transition(.opacity)
@@ -738,10 +746,11 @@ struct EditingView: View {
             endItems = []
             Task { await model.addToEnd(chosen) }
         }
-        // The +'s music: a song from Files, or a creatrr song or section, at the playhead.
-        .fileImporter(isPresented: $musicFiles, allowedContentTypes: [.audio]) { result in
+        // The bottom +: music or a sound effect from Files, or a creatrr song or section, at the playhead.
+        .fileImporter(isPresented: $soundFiles, allowedContentTypes: [.audio]) { result in
             guard case .success(let url) = result else { return }
-            Task { await model.addMusicFile(url) }
+            let effect = soundIsEffect
+            Task { await model.addSoundFile(url, effect: effect) }
         }
         .sheet(isPresented: $musicSongs) {
             ShootSongSheet(forMusic: true) { song, part in
@@ -858,8 +867,8 @@ struct EditingView: View {
                 }
             } else if let id = model.titlePick, model.title(id) != nil {
                 titleTools(id)
-            } else if model.musicPicked, let music = model.music {
-                musicTools(music)
+            } else if let id = model.soundPick, let sound = model.sound(id) {
+                soundTools(sound)
             } else if model.lyricsPicked, model.hasLyrics {
                 lyricsTools
             } else if let id = model.overlayPick, model.overlay(id) != nil {
@@ -982,10 +991,11 @@ struct EditingView: View {
         }
     }
 
-    /// The added music picked: start it at the playhead, or delete it.
-    private func musicTools(_ music: SavedMusic) -> some View {
-        HStack(spacing: 0) {
-            Button { model.pickMusic(false) } label: {
+    /// Music or a sound effect picked: start it at the playhead, or delete it.
+    private func soundTools(_ sound: SavedMusic) -> some View {
+        let what = sound.effect ? "sound effect" : "music"
+        return HStack(spacing: 0) {
+            Button { model.pickSound(nil) } label: {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
                     .frame(width: 40, height: 52)
@@ -997,9 +1007,9 @@ struct EditingView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
                     ToolItem(icon: "arrow.right.to.line", text: "Start here",
-                             spoken: "Start the music at the playhead") { model.moveMusicHere() }
+                             spoken: "Start the \(what) at the playhead") { model.moveSoundHere(sound.id) }
                     ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
-                             spoken: "Delete the music") { model.deleteMusic() }
+                             spoken: "Delete the \(what)") { model.deleteSound(sound.id) }
                 }
             }
         }

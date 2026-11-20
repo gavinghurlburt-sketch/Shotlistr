@@ -11,10 +11,13 @@ enum EditMetrics {
     static let lyricsHeight: CGFloat = 26
     /// Each overlay's row, above the video track.
     static let overlayHeight: CGFloat = 32
-    static func height(lyrics: Bool, overlays: Int = 0, texts: Int = 0, music: Bool = false) -> CGFloat {
+    /// The row at the bottom with the + for music and sound effects.
+    static let addHeight: CGFloat = 32
+    static func height(lyrics: Bool, overlays: Int = 0, texts: Int = 0, sounds: Int = 0, adder: Bool = false) -> CGFloat {
         LaneMetrics.rulerHeight + videoHeight + gap + audioHeight + 6 + LaneMetrics.chrome
             + (lyrics ? gap + lyricsHeight : 0)
-            + (music ? gap + audioHeight : 0)
+            + CGFloat(sounds) * (gap + audioHeight)
+            + (adder ? gap + addHeight : 0)
             + CGFloat(overlays + texts) * (overlayHeight + gap)
     }
 }
@@ -25,10 +28,9 @@ enum EditMetrics {
 /// and the ones after close up). The ruler counts from the clip's start.
 struct EditTimeline: View {
     let model: EditorModel
-    /// What the + at the end of the video track adds.
-    enum Addition { case clip, musicFile, creatrrSong }
-    /// The + at the end of the video track: a photo or video on the same track after everything,
-    /// or music (from Files or a creatrr song) at the playhead.
+    /// What a + adds: the one at the end of the video track adds a clip; the one at the bottom adds
+    /// music or a sound effect from Files, or a creatrr song or section, at the playhead.
+    enum Addition { case clip, musicFile, soundFile, creatrrSong }
     var onAdd: ((Addition) -> Void)?
 
     @State private var dragStartTime: Double = 0
@@ -40,7 +42,9 @@ struct EditTimeline: View {
 
     /// Which row a touch is on.
     private enum Row: Equatable {
-        case video, sound, lyrics, music
+        case video, sound, lyrics
+        /// An audio row of added music and sound effects (A1 is 0).
+        case audio(Int)
         case overlay(UUID)
         /// A text lane (T1 is 0).
         case text(Int)
@@ -128,20 +132,22 @@ struct EditTimeline: View {
                 .frame(height: EditMetrics.audioHeight)
                 .background(LaneMetrics.row)
 
-                // Music added with the +, under the song.
-                if model.music != nil {
+                // Music and sound effects added with the + at the bottom, a row each under the song.
+                ForEach(0..<model.soundLaneCount, id: \.self) { lane in
                     Color.clear.frame(height: EditMetrics.gap)
                     HStack(spacing: 0) {
-                        Image(systemName: "music.note")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(MusicTint.color)
-                            .frame(width: EditMetrics.sideWidth)
-                            .frame(maxHeight: .infinity)
-                            .accessibilityHidden(true)
-                        musicTrack
+                        HStack(spacing: 1) {
+                            Image(systemName: "music.note").font(.system(size: 13, weight: .semibold))
+                            Text("\(lane + 1)").font(.system(size: 10, weight: .bold).monospacedDigit())
+                        }
+                        .foregroundStyle(MusicTint.color)
+                        .frame(width: EditMetrics.sideWidth)
+                        .frame(maxHeight: .infinity)
+                        .accessibilityHidden(true)
+                        soundRow(lane)
                             .frame(width: laneWidth, height: EditMetrics.audioHeight)
                             .clipped()
-                            .overlay { touches(width: laneWidth, row: .music) }
+                            .overlay { touches(width: laneWidth, row: .audio(lane)) }
                     }
                     .frame(height: EditMetrics.audioHeight)
                     .background(LaneMetrics.row)
@@ -160,6 +166,11 @@ struct EditTimeline: View {
                     }
                     .frame(height: EditMetrics.lyricsHeight)
                     .background(LaneMetrics.row)
+                }
+
+                if onAdd != nil {
+                    Color.clear.frame(height: EditMetrics.gap)
+                    soundAdder
                 }
 
                 Spacer(minLength: 0)
@@ -206,39 +217,63 @@ struct EditTimeline: View {
     }
 
     /// A white + square at the end of the video track (held inside the track when the end is off
-    /// screen), like Edits. It asks what to add: a photo or video on the same track after
-    /// everything, or music from Files or creatrr at the playhead.
+    /// screen), like Edits: it adds a photo or video on the same track, after everything.
     @ViewBuilder private func addButton(laneWidth: CGFloat) -> some View {
-        if let onAdd {
+        if let onAdd, model.canAddToEnd {
             let end = model.loopEnd
             let side: CGFloat = 30
             let endX = laneWidth / 2 + CGFloat((end - model.time) * model.pixelsPerSecond)
             let x = min(max(endX - side / 2, 4), laneWidth - side - 4)
-            Menu {
-                Button { onAdd(.clip) } label: {
-                    Label(model.kind == .video ? "Video at the end" : "Photo or video at the end",
-                          systemImage: "photo.on.rectangle")
-                }
-                .disabled(!model.canAddToEnd)
+            Button { onAdd(.clip) } label: {
+                plusSquare(side)
+            }
+            .buttonStyle(.plain)
+            .offset(x: x)
+            .accessibilityLabel(model.kind == .video ? "Add a video at the end" : "Add a photo or video at the end")
+        }
+    }
+
+    private func plusSquare(_ side: CGFloat) -> some View {
+        Image(systemName: "plus")
+            .font(.system(size: side > 28 ? 17 : 15, weight: .bold))
+            .foregroundStyle(.black)
+            .frame(width: side, height: side)
+            .background(Color.white)
+            .shadow(color: .black.opacity(0.4), radius: 3)
+            .contentShape(Rectangle())
+    }
+
+    /// The row at the bottom: a + that adds music or a sound effect at the playhead, on the first
+    /// audio row with room there.
+    private var soundAdder: some View {
+        Menu {
+            if let onAdd {
                 Button { onAdd(.musicFile) } label: {
-                    Label("Music from Files", systemImage: "folder")
+                    Label("Music from Files", systemImage: "music.note")
+                }
+                Button { onAdd(.soundFile) } label: {
+                    Label("Sound effect from Files", systemImage: "speaker.wave.2")
                 }
                 Button { onAdd(.creatrrSong) } label: {
                     Label("Song or section from creatrr", systemImage: "music.note.list")
                 }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(width: side, height: side)
-                    .background(Color.white)
-                    .shadow(color: .black.opacity(0.4), radius: 3)
-                    .contentShape(Rectangle())
             }
-            .menuOrder(.fixed)
-            .offset(x: x)
-            .accessibilityLabel("Add a photo, video or music")
+        } label: {
+            HStack(spacing: 0) {
+                plusSquare(24)
+                    .frame(width: EditMetrics.sideWidth)
+                Text(model.sounds.isEmpty ? "Add music or a sound effect" : "Add more music or sound effects")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.leading, 8)
+                Spacer(minLength: 0)
+            }
+            .frame(height: EditMetrics.addHeight)
+            .background(LaneMetrics.row)
+            .contentShape(Rectangle())
         }
+        .menuOrder(.fixed)
+        .accessibilityLabel("Add music or a sound effect")
     }
 
     /// A text row's left edge: the T and its lane number, in the text color.
@@ -453,39 +488,41 @@ struct EditTimeline: View {
         }
     }
 
-    /// The sound: a performance's song from In to Out, or each video's own sound under it. Grey
-    /// bars with their waveforms.
-    /// The added music: a bar from where it starts for as long as it plays, with its name. Picked,
-    /// it gets a yellow outline.
-    private var musicTrack: some View {
+    /// An audio row: each piece of music or sound effect on it, a bar from where it starts for as
+    /// long as it plays, with its name. The picked one gets a yellow outline.
+    private func soundRow(_ lane: Int) -> some View {
         let time = model.time
         let pps = model.pixelsPerSecond
-        let music = model.music
-        let picked = model.musicPicked
+        let sounds = model.sounds.filter { $0.lane == lane }
+        let picked = model.soundPick
         let end = model.loopEnd
         return Canvas { context, size in
-            guard let music else { return }
             let middle = size.width / 2
             func x(_ seconds: Double) -> CGFloat { middle + CGFloat((seconds - time) * pps) }
-            let stop = min(music.at + music.length, end)
-            let band = CGRect(x: x(music.at), y: 2, width: max(0.5, x(stop) - x(music.at)), height: size.height - 4)
-            guard band.maxX > 0, band.minX < size.width else { return }
-            context.fill(Path(band), with: .color(MusicTint.color.opacity(0.55)))
-            if picked {
-                context.stroke(Path(band.insetBy(dx: 1, dy: 1)), with: .color(Tint.accent), lineWidth: 2)
+            for sound in sounds {
+                let stop = min(sound.at + sound.length, end)
+                let band = CGRect(x: x(sound.at) + 1, y: 2, width: max(0.5, x(stop) - x(sound.at) - 2),
+                                  height: size.height - 4)
+                guard band.maxX > 0, band.minX < size.width else { continue }
+                context.fill(Path(band), with: .color(MusicTint.color.opacity(0.55)))
+                if picked == sound.id {
+                    context.stroke(Path(band.insetBy(dx: 1, dy: 1)), with: .color(Tint.accent), lineWidth: 2)
+                }
+                var inside = context
+                inside.clip(to: Path(band.insetBy(dx: 6, dy: 0)))
+                inside.addFilter(.shadow(color: .black.opacity(0.6), radius: 2))
+                inside.draw(Text("\(Image(systemName: sound.effect ? "speaker.wave.2" : "music.note")) \(sound.name)")
+                                .font(.caption2.weight(.bold)).foregroundStyle(.white),
+                            at: CGPoint(x: max(band.minX, 0) + 8, y: band.midY), anchor: .leading)
             }
-            var inside = context
-            inside.clip(to: Path(band.insetBy(dx: 6, dy: 0)))
-            inside.addFilter(.shadow(color: .black.opacity(0.6), radius: 2))
-            inside.draw(Text("\(Image(systemName: "music.note")) \(music.name)")
-                            .font(.caption2.weight(.bold)).foregroundStyle(.white),
-                        at: CGPoint(x: max(band.minX, 0) + 8, y: band.midY), anchor: .leading)
         }
         .accessibilityElement()
-        .accessibilityLabel(music.map { "Music: \($0.name)" } ?? "")
+        .accessibilityLabel(sounds.map(\.name).joined(separator: ", "))
         .accessibilityAddTraits(.isButton)
     }
 
+    /// The sound: a performance's song from In to Out, or each video's own sound under it. Grey
+    /// bars with their waveforms.
     private var songTrack: some View {
         let time = model.time
         let pps = model.pixelsPerSecond
@@ -849,14 +886,15 @@ struct EditTimeline: View {
             },
             swipeEnded: { model.endScrub() },
             tapped: { point in
-                // A tap on the music row picks the music (where it is): its tools. Again lets go.
-                if row == .music {
+                // A tap on music or a sound effect picks it: its tools. Again, or beside it, lets go.
+                if case .audio(let lane) = row {
                     let at = model.time + Double(point.x - width / 2) / model.pixelsPerSecond
-                    let on = model.music.map { at >= $0.at && at <= $0.at + $0.length } ?? false
-                    model.pickMusic(on && !model.musicPicked)
+                    let hit = model.sounds.first { $0.lane == lane && at >= $0.at && at <= $0.at + $0.length }?.id
+                    model.pickSound(hit == model.soundPick ? nil : hit)
+                    model.pickTitle(nil)
                     return
                 }
-                model.pickMusic(false)
+                model.pickSound(nil)
                 if let textLane {
                     // A tap on a text picks it (its ends' grips, its tools, its box on the video);
                     // again lets go. A double tap opens it to change its words and look.

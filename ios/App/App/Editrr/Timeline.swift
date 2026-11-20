@@ -256,7 +256,8 @@ enum TimelineBuilder {
         var duration: CMTime { composition.duration }
     }
 
-    /// Music added on the edit page: plays from `from` (file time) for `length`, at timeline `at`.
+    /// Music or a sound effect added on the edit page: plays from `from` (file time) for `length`,
+    /// at timeline `at`.
     struct Music {
         let track: AVAssetTrack
         let from: Double
@@ -280,20 +281,23 @@ enum TimelineBuilder {
     /// videos sit back to back), instead of the song. `length`: the whole timeline when clips
     /// after the performance run past the song (the song and videos still stop at `duration`).
     static func build(layers: [Layer], soundtrack: Soundtrack?, duration: Double, length: Double? = nil,
-                      videoSound: Bool = false, music: Music? = nil,
+                      videoSound: Bool = false, music: [Music] = [],
                       overlays: [SavedOverlay] = [], media: [UUID: OverlayMedia] = [:]) throws -> Built {
         let composition = AVMutableComposition()
         let total = max(duration, length ?? duration)
 
-        // Added music: its own sound track, under everything, cut off where the timeline ends.
-        if let music, let audio = composition.addMutableTrack(withMediaType: .audio,
-                                                              preferredTrackID: kCMPersistentTrackID_Invalid) {
-            let place = max(0, music.at)
-            let play = min(music.length, total - place)
-            if play > 0.01 {
-                try audio.insertTimeRange(CMTimeRange(start: time(music.from), duration: time(play)),
-                                          of: music.track, at: time(place))
-            } else {
+        // Added music and sound effects: each its own sound track, under everything, cut off where
+        // the timeline ends.
+        for piece in music {
+            let place = max(0, piece.at)
+            let play = min(piece.length, total - place)
+            guard play > 0.01, let audio = composition.addMutableTrack(withMediaType: .audio,
+                                                                        preferredTrackID: kCMPersistentTrackID_Invalid)
+            else { continue }
+            do {
+                try audio.insertTimeRange(CMTimeRange(start: time(piece.from), duration: time(play)),
+                                          of: piece.track, at: time(place))
+            } catch {
                 composition.removeTrack(audio)
             }
         }

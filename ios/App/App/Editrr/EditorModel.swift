@@ -212,13 +212,13 @@ final class EditorModel {
     var lyricSelected: Int?
     /// The lyrics are picked on the video (tap the words): a drag on the video moves them.
     var lyricsPicked = false
-    /// Music added on the edit page (nil: none). It plays under everything.
-    var music: SavedMusic?
-    /// The music row is picked: its tools show (move it to the playhead, delete).
-    var musicPicked = false
-    @ObservationIgnored private var musicTrack: AVAssetTrack?
-    /// Where the music file's sound starts (usually 0).
-    @ObservationIgnored private var musicTrackStart: Double = 0
+    /// Music and sound effects added with the + under the tracks, each on an audio row. They play
+    /// under everything.
+    var sounds: [SavedMusic] = []
+    /// The music or sound effect picked: its tools show (start it at the playhead, delete).
+    var soundPick: UUID?
+    /// Each added sound's file track, and where its sound starts in the file (usually 0).
+    @ObservationIgnored private var soundTracks: [UUID: (track: AVAssetTrack, start: Double)] = [:]
     /// Where the words sit while a finger moves them (percent), nil otherwise.
     private(set) var lyricMoveSpot: CGPoint?
     @ObservationIgnored private var lyricMoveStart: CGPoint?
@@ -555,7 +555,7 @@ final class EditorModel {
         problem = nil
         notice = nil
         wide = pendingWide
-        clearMusic()
+        clearSounds()
         overlays = []
         trackKeys = []
         splits = []
@@ -1243,7 +1243,8 @@ final class EditorModel {
         project.splits = splits.isEmpty ? nil : splits
         project.order = order.isEmpty ? nil : order
         project.wide = wide ? true : nil
-        project.music = music
+        project.music = nil
+        project.sounds = sounds.isEmpty ? nil : sounds
         return project
     }
 
@@ -1316,17 +1317,24 @@ final class EditorModel {
             }
             songAsset = asset
         }
-        // Added music: left out (with a note) if its file is gone.
-        clearMusic()
-        if let added = saved.music {
+        // Added music and sound effects: any whose file is gone are left out (with a note).
+        clearSounds()
+        var missing = 0
+        for added in saved.sounds ?? saved.music.map({ [$0] }) ?? [] {
             if let asset = await PhotosLoader.open(added.source, project: saved.id),
                let audio = try? await asset.loadTracks(withMediaType: .audio).first {
-                musicTrackStart = (try? await audio.load(.timeRange))?.start.seconds ?? 0
-                musicTrack = audio
-                music = added
+                let start = (try? await audio.load(.timeRange))?.start.seconds ?? 0
+                soundTracks[added.id] = (audio, start)
+                sounds.append(added)
             } else {
-                notice = "The music added to \u{201C}\(saved.name)\u{201D} is missing, so it's left out."
+                missing += 1
             }
+        }
+        packSoundLanes()
+        if missing > 0 {
+            notice = missing == 1
+                ? "A sound added to \u{201C}\(saved.name)\u{201D} is missing, so it's left out."
+                : "\(missing) sounds added to \u{201C}\(saved.name)\u{201D} are missing, so they're left out."
         }
 
         // 2. Picture details, and the sounds for the waveforms.
@@ -1439,7 +1447,7 @@ final class EditorModel {
         lastAuto = nil
         currentProject = nil
         wide = false
-        clearMusic()
+        clearSounds()
         refreshProjects()
         pause()
         player.replaceCurrentItem(with: nil)
@@ -1652,7 +1660,7 @@ final class EditorModel {
         if index != nil {
             overlayPick = nil
             lyricsPicked = false
-            musicPicked = false
+            soundPick = nil
             titlePick = nil
         }
         selected = nil
@@ -2182,7 +2190,7 @@ final class EditorModel {
             editPick = nil
             selected = nil
             lyricsPicked = false
-            musicPicked = false
+            soundPick = nil
             titlePick = nil
         }
         notice = nil
@@ -2995,7 +3003,7 @@ final class EditorModel {
             overlayBoard.update(overlays, media: overlayMedia, track: trackKeys)
             let built = try TimelineBuilder.build(layers: layers, soundtrack: soundtrack, duration: duration,
                                                   length: timelineEnd, videoSound: kind == .video,
-                                                  music: musicPlay, overlays: overlays, media: overlayMedia)
+                                                  music: soundsPlay, overlays: overlays, media: overlayMedia)
             self.built = built
             segments = Program.segments(cuts: cuts, layers: layers, duration: duration)
             let item = AVPlayerItem(asset: built.composition)
@@ -3435,7 +3443,7 @@ final class EditorModel {
         // Picked even while hidden, so its tools can show them again.
         lyricsPicked = on && hasLyrics
         guard lyricsPicked else { return }
-        musicPicked = false
+        soundPick = nil
         titlePick = nil
         overlayPick = nil
         editPick = nil
@@ -3866,7 +3874,7 @@ final class EditorModel {
         piecePick = nil
         selected = nil
         lyricsPicked = false
-        musicPicked = false
+        soundPick = nil
         notice = nil
     }
 
@@ -4690,38 +4698,48 @@ final class EditorModel {
         return whole < 60 ? "\(whole) seconds" : String(format: "%d:%02d", whole / 60, whole % 60)
     }
 
-    // MARK: Music
+    // MARK: Music and sound effects
 
-    /// Added music, ready for the timeline (nil: none, or its file couldn't be read).
-    private var musicPlay: TimelineBuilder.Music? {
-        guard let music, let musicTrack else { return nil }
-        return TimelineBuilder.Music(track: musicTrack, from: musicTrackStart + music.from,
-                                     at: music.at, length: music.length)
+    /// The most audio rows (music and sound effects together).
+    static let maxSoundLanes = 3
+
+    /// How many audio rows there are (rows stay packed: A1, A2, ...).
+    var soundLaneCount: Int { (sounds.map(\.lane).max() ?? -1) + 1 }
+
+    func sound(_ id: UUID) -> SavedMusic? { sounds.first { $0.id == id } }
+
+    /// Added sounds, ready for the timeline (any whose file couldn't be read are left out).
+    private var soundsPlay: [TimelineBuilder.Music] {
+        sounds.compactMap { sound in
+            guard let file = soundTracks[sound.id] else { return nil }
+            return TimelineBuilder.Music(track: file.track, from: file.start + sound.from,
+                                         at: sound.at, length: sound.length)
+        }
     }
 
-    private func clearMusic() {
-        music = nil
-        musicTrack = nil
-        musicTrackStart = 0
-        musicPicked = false
+    private func clearSounds() {
+        sounds = []
+        soundTracks = [:]
+        soundPick = nil
     }
 
-    /// The + on the edit page: a song from Files, from the playhead on.
-    func addMusicFile(_ url: URL) async {
+    /// The + under the tracks: music or a sound effect from Files, from the playhead on.
+    func addSoundFile(_ url: URL, effect: Bool) async {
         guard let id = currentProject?.id else { return }
         let allowed = url.startAccessingSecurityScopedResource()
         defer { if allowed { url.stopAccessingSecurityScopedResource() } }
-        guard let source = Self.keepMusic(url, in: id) else {
-            problem = "Couldn't open that file. Try another song."
+        guard let source = Self.keepSound(url, in: id) else {
+            problem = "Couldn't open that file. Try another one."
             return
         }
-        await placeMusic(source, name: url.deletingPathExtension().lastPathComponent, from: 0, length: nil)
+        await placeSound(source, name: url.deletingPathExtension().lastPathComponent, from: 0, length: nil,
+                         effect: effect)
     }
 
-    /// The + on the edit page: a creatrr song, or just one of its sections, from the playhead on.
+    /// The + under the tracks: a creatrr song, or just one of its sections, from the playhead on.
     func addMusic(_ song: CreatrrSong, part: CreatrrPart?) async {
         guard let id = currentProject?.id else { return }
-        guard let url = CreatrrLibrary.audioURL(song), let source = Self.keepMusic(url, in: id) else {
+        guard let url = CreatrrLibrary.audioURL(song), let source = Self.keepSound(url, in: id) else {
             problem = "Couldn't open that song from creatrr. Check it has a track, then try again."
             return
         }
@@ -4735,11 +4753,11 @@ final class EditorModel {
             }
             name = "\(song.name) · \(part.name)"
         }
-        await placeMusic(source, name: name, from: from, length: length)
+        await placeSound(source, name: name, from: from, length: length, effect: false)
     }
 
-    /// A copy of the file in the project's folder, so the music stays with the project.
-    private static func keepMusic(_ url: URL, in id: UUID) -> MediaSource? {
+    /// A copy of the file in the project's folder, so the sound stays with the project.
+    private static func keepSound(_ url: URL, in id: UUID) -> MediaSource? {
         let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
         let name = "music-" + UUID().uuidString + "." + ext
         let to = ProjectStore.folder(for: id).appendingPathComponent(name)
@@ -4751,63 +4769,97 @@ final class EditorModel {
         return .file(name)
     }
 
-    /// Puts the music on the timeline at the playhead (it takes the place of any music added before).
-    private func placeMusic(_ source: MediaSource, name: String, from: Double, length: Double?) async {
+    /// The first audio row with room from `at` for `length` (nil: none, and no room for a new row).
+    private func soundLane(at: Double, length: Double, skipping id: UUID? = nil, prefer: Int? = nil) -> Int? {
+        func free(_ lane: Int) -> Bool {
+            !sounds.contains { $0.id != id && $0.lane == lane && $0.at < at + length - 0.001 && at < $0.at + $0.length - 0.001 }
+        }
+        if let prefer, free(prefer) { return prefer }
+        let used = sounds.filter { $0.id != id }.map(\.lane)
+        let rows = (used.max() ?? -1) + 1
+        if let lane = (0..<rows).first(where: free) { return lane }
+        return rows < Self.maxSoundLanes ? rows : nil
+    }
+
+    /// Puts the music or sound effect on the timeline at the playhead, on the first audio row with
+    /// room (or a new row).
+    private func placeSound(_ source: MediaSource, name: String, from: Double, length: Double?, effect: Bool) async {
         guard let id = currentProject?.id else { return }
         pause()
         problem = nil
-        busy = "Adding the music…"
+        busy = effect ? "Adding the sound…" : "Adding the music…"
         defer { busy = nil }
+        func dropFile() {
+            if let url = ProjectStore.url(of: source, in: id) { try? FileManager.default.removeItem(at: url) }
+        }
         guard let asset = await PhotosLoader.open(source, project: id),
               let audio = try? await asset.loadTracks(withMediaType: .audio).first,
-              let range = try? await audio.load(.timeRange), range.duration.seconds > 0.1 else {
-            if let url = ProjectStore.url(of: source, in: id) { try? FileManager.default.removeItem(at: url) }
+              let range = try? await audio.load(.timeRange), range.duration.seconds > 0.05 else {
+            dropFile()
             problem = "That file has no sound to add."
             return
         }
         let fileLength = range.duration.seconds
-        let start = min(max(0, from), max(0, fileLength - 0.1))
+        let start = min(max(0, from), max(0, fileLength - 0.05))
         let plays = min(length ?? fileLength - start, fileLength - start)
         let at = min(max(time, loopStart), max(loopStart, loopEnd - 0.1))
-        // The music it takes the place of goes, file and all.
-        if let old = music, old.source != source, let url = ProjectStore.url(of: old.source, in: id) {
-            try? FileManager.default.removeItem(at: url)
+        guard let lane = soundLane(at: at, length: plays) else {
+            dropFile()
+            notice = "\(Self.maxSoundLanes) audio rows is the most. Move the playhead to where an audio row is free."
+            return
         }
-        musicTrack = audio
-        musicTrackStart = range.start.seconds
-        music = SavedMusic(source: source, name: name, from: start, at: at, length: plays)
-        overlayPick = nil
-        editPick = nil
-        lyricsPicked = false
-        musicPicked = true
+        let added = SavedMusic(source: source, name: name, from: start, at: at, length: plays, lane: lane, effect: effect)
+        soundTracks[added.id] = (audio, range.start.seconds)
+        sounds.append(added)
+        pickSound(added.id)
         rebuildAll()
     }
 
-    func pickMusic(_ on: Bool) {
-        musicPicked = on && music != nil
-        guard musicPicked else { return }
+    /// Picks a piece of music or a sound effect (nil lets go): its tools.
+    func pickSound(_ id: UUID?) {
+        soundPick = id.flatMap { sound($0) != nil ? $0 : nil }
+        guard soundPick != nil else { return }
         overlayPick = nil
         editPick = nil
         lyricsPicked = false
         titlePick = nil
     }
 
-    /// The music starts at the playhead instead.
-    func moveMusicHere() {
-        guard var moved = music else { return }
-        moved.at = min(max(time, loopStart), max(loopStart, loopEnd - 0.1))
-        guard abs(moved.at - (music?.at ?? 0)) > 0.001 else { return }
-        music = moved
+    /// The picked sound starts at the playhead instead (on another row if its own is taken there).
+    func moveSoundHere(_ id: UUID) {
+        guard let index = sounds.firstIndex(where: { $0.id == id }) else { return }
+        let at = min(max(time, loopStart), max(loopStart, loopEnd - 0.1))
+        guard abs(at - sounds[index].at) > 0.001 else { return }
+        guard let lane = soundLane(at: at, length: sounds[index].length, skipping: id, prefer: sounds[index].lane) else {
+            notice = "Every audio row is taken there. Move the playhead, or delete a sound first."
+            return
+        }
+        sounds[index].at = at
+        sounds[index].lane = lane
+        packSoundLanes()
+        notice = nil
         rebuildAll()
     }
 
-    /// Takes the added music off (the song or the videos' own sound stays).
-    func deleteMusic() {
-        if let old = music, let id = currentProject?.id, let url = ProjectStore.url(of: old.source, in: id) {
+    /// Takes the music or sound effect off (the song or the videos' own sound stays).
+    func deleteSound(_ id: UUID) {
+        guard let gone = sound(id) else { return }
+        if let project = currentProject?.id, let url = ProjectStore.url(of: gone.source, in: project) {
             try? FileManager.default.removeItem(at: url)
         }
-        clearMusic()
+        sounds.removeAll { $0.id == id }
+        soundTracks[id] = nil
+        if soundPick == id { soundPick = nil }
+        packSoundLanes()
         rebuildAll()
+    }
+
+    /// Audio rows stay A1, A2, ... with none left empty.
+    private func packSoundLanes() {
+        let used = Array(Set(sounds.map(\.lane))).sorted()
+        for index in sounds.indices {
+            sounds[index].lane = used.firstIndex(of: sounds[index].lane) ?? 0
+        }
     }
 
     // MARK: Exporting
