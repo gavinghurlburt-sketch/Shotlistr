@@ -2587,6 +2587,8 @@ struct FXSheet: View {
     /// Effects added while the page is open keep their card, even turned all the way down.
     @State private var kept: [FXKind] = []
     @State private var picking = false
+    /// Tapped the dimmed Transition tile on the first cut: say why, under the tiles.
+    @State private var noTransitionWhy = false
 
     private var shown: [FXKind] {
         FXKind.onFxPage.filter { model.effectOn($0) || kept.contains($0) }
@@ -2691,6 +2693,7 @@ struct FXSheet: View {
     /// Every effect, as a tile showing what it does to a ✨.
     private var picker: some View {
         ScrollView {
+          VStack(alignment: .leading, spacing: 10) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
                 ForEach(FXKind.onFxPage) { kind in
                     let on = model.effectOn(kind)
@@ -2711,21 +2714,26 @@ struct FXSheet: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(blocked)
                     .opacity(blocked ? 0.35 : 1)
                     .accessibilityLabel(on ? "\(kind.name), on" : kind.name)
                 }
             }
-            if !model.canTransitionHere {
+            if noTransitionWhy && !model.canTransitionHere {
                 note("The first cut has nothing before it to come in from, so it has no transition.")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 10)
+                    .transition(.opacity)
             }
+          }
         }
         .padding(.horizontal, 20)
+        .onChange(of: model.canTransitionHere) { _, _ in noTransitionWhy = false }
     }
 
     private func choose(_ kind: FXKind) {
+        if kind == .transition && !model.canTransitionHere {
+            withAnimation { noTransitionWhy = true }
+            return
+        }
         if !model.effectOn(kind) { model.addEffect(kind) }
         // One custom shader at a time: the other one's card goes.
         if let id = kind.customID {
