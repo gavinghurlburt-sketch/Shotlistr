@@ -44,7 +44,7 @@ EDITS
 - Editing happens on your iPhone; your videos are never uploaded
 
 SUBSCRIPTION
-creatrr is free to download. creatrr Artist is needed to use it: $1.99 per month, with a 7-day free trial for new subscribers.
+creatrr is free to download. creatrr Artist is needed to use it: $4.99 per month, with a 7-day free trial for new subscribers.
 
 Payment is charged to your Apple ID at confirmation of purchase (or at the end of the free trial). The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel any time in Settings > your name > Subscriptions. Prices are in USD and may vary by region.
 
@@ -103,4 +103,4 @@ Contact: apps@gavingeddes.art
 - [ ] App Privacy answers (table above)
 
 ## RevenueCat (already live)
-`scripts/subs.config.json` has `"live": true` and the public Apple key. Product IDs: `creatrr_artist_monthly` ($1.99, 7-day free trial), `creatrr_plus_monthly` ($9.99), `creatrr_pro_monthly` ($29.99). Entitlements `artist`, `plus`, `pro` in the default Offering.
+`scripts/subs.config.json` has `"live": true` and the public Apple key. Product IDs: `creatrr_artist_monthly` ($4.99, 1-week free trial), `creatrr_plus_monthly` ($9.99), `creatrr_pro_monthly` ($29.99). Entitlements `artist`, `plus`, `pro` in the default Offering.
