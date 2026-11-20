@@ -104,15 +104,24 @@ final class LyricsOverlay: @unchecked Sendable {
                 count += style.textCase.apply(word.text).filter { !$0.isWhitespace }.count
             }
         }
-        func glyph(_ s: String, _ size: Double, _ fill: CGColor, word: Int? = nil) -> Glyph {
+        /// A word's own size against the look's (1 when it has none).
+        func scale(_ i: Int) -> Double {
+            guard words.indices.contains(i), let own = words[i].scale else { return 1 }
+            return min(3, max(0.3, own))
+        }
+        /// `size` is the look's size; a word with its own size, font or outline draws with those.
+        func glyph(_ s: String, _ size: Double, _ fill: CGColor, word: Int? = nil, rainbow: Bool = true) -> Glyph {
             var colors: [CGColor] = []
             var offset = 0
-            if let word, !palette.isEmpty, letterStarts.indices.contains(word), ownColor(word) == nil {
+            if rainbow, let word, !palette.isEmpty, letterStarts.indices.contains(word), ownColor(word) == nil {
                 colors = palette
                 offset = letterStarts[word] % palette.count
             }
-            return self.glyph(s, size: size, postScript: style.postScript, color: fill, stroke: style.stroke,
-                              strokeColor: stroke, tracking: style.tracking * k, palette: colors, offset: offset)
+            let own = word.flatMap { words.indices.contains($0) ? words[$0] : nil }
+            let outline = own?.strokeColor.flatMap { LyricColor.cg($0) } ?? stroke
+            return self.glyph(s, size: size * (word.map(scale) ?? 1), postScript: own?.postScript(style) ?? style.postScript,
+                              color: fill, stroke: own?.stroke ?? style.stroke,
+                              strokeColor: outline, tracking: style.tracking * k, palette: colors, offset: offset)
         }
         // Words sit centered on their spot (Lyric Sync's default).
         func alignShift(_ width: Double) -> Double { 0 }
@@ -128,7 +137,7 @@ final class LyricsOverlay: @unchecked Sendable {
                     size *= maxW / g.width
                     g = glyph(text(state.index), size, own, word: state.index)
                 }
-                layer = place(g, state: state, x: cx + alignShift(g.width), y: cy - state.dy * size)
+                layer = place(g, state: state, x: cx + alignShift(g.width), y: cy - state.dy * size * scale(state.index))
                     .composited(over: layer)
             } else {
                 let texts = item.line.map(text)
@@ -162,7 +171,8 @@ final class LyricsOverlay: @unchecked Sendable {
                     for j in r.words {
                         let state = item.words[j]
                         if !state.hidden {
-                            let g = state.active && active != nil ? glyph(texts[j], size, active!) : glyphs[j]
+                            let g = state.active && active != nil
+                                ? glyph(texts[j], size, active!, word: item.line[j], rainbow: false) : glyphs[j]
                             layer = place(g, state: state, x: x + glyphs[j].width / 2, y: y - state.dy * size)
                                 .composited(over: layer)
                         }

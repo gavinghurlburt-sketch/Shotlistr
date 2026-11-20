@@ -10,6 +10,8 @@ struct LyricsLane: View {
     @State private var dragStartTime: Double = 0
     @State private var zoomStart: Double?
     @State private var rulerHeld = false
+    /// The last word tapped and when, to catch a double tap.
+    @State private var lastTap: (index: Int, at: Date)?
 
     static let rowHeight: CGFloat = 38
     static let wordsTop: CGFloat = LaneMetrics.songHeight
@@ -241,7 +243,16 @@ struct LyricsLane: View {
             },
             swipeEnded: { model.endScrub() },
             tapped: { point in
-                model.pickLyric(word(at: point, width: width, slop: 4))
+                let hit = word(at: point, width: width, slop: 4)
+                // Two quick taps on the same word open its words to change.
+                let now = Date()
+                if let hit, lastTap?.index == hit, let at = lastTap?.at, now.timeIntervalSince(at) < 0.35 {
+                    lastTap = nil
+                    model.editLyricText(hit)
+                    return
+                }
+                lastTap = hit.map { (index: $0, at: now) }
+                model.pickLyric(hit)
             },
             pinchBegan: { zoomStart = model.lyricPixelsPerSecond },
             pinched: { scale in
@@ -319,6 +330,12 @@ struct LyricsToolbar: View {
         // Names under no icon to guess at: each button says what it does.
         .labelStyle(.titleAndIcon)
         .lineLimit(1)
+        // A double tap on a word on the lyrics timeline opens its words to change.
+        .onChange(of: model.lyricTextEditRequest) { _, index in
+            guard let index else { return }
+            model.lyricTextEditRequest = nil
+            begin(.change(index))
+        }
         .alert(alertTitle, isPresented: Binding(get: { typing != nil }, set: { if !$0 { typing = nil } })) {
             TextField("Word", text: $text)
                 .textInputAutocapitalization(.never)
@@ -330,57 +347,25 @@ struct LyricsToolbar: View {
         }
     }
 
-    /// One word's own color: the picked word, else the one at the playhead.
+    /// One word's own style (the brush): the picked word, else the one at the playhead. The Aa at
+    /// the top right is the look for every word; this makes one word pop.
     private var wordColorButton: some View {
         let target = model.lyricColorTarget
-        let own = target.flatMap { model.lyrics.indices.contains($0) ? model.lyrics[$0].color : nil }
+        let own = target.flatMap { model.lyrics.indices.contains($0) ? model.lyrics[$0] : nil }
         return Button { coloring = target } label: {
-            Label("Word color", systemImage: own == nil ? "paintbrush.pointed" : "paintbrush.pointed.fill")
-                .foregroundStyle(own.map { LyricsSheet.swatch($0) } ?? Color.white.opacity(0.9))
+            Label("Word style", systemImage: own?.hasOwnStyle == true ? "paintbrush.pointed.fill" : "paintbrush.pointed")
+                .foregroundStyle(own?.color.map { LyricsSheet.swatch($0) } ?? Color.white.opacity(0.9))
         }
         .buttonStyle(GlassButtonStyle())
         .disabled(target == nil)
         .opacity(target == nil ? 0.35 : 1)
-        .popover(isPresented: Binding(get: { coloring != nil }, set: { if !$0 { coloring = nil } })) {
+        .sheet(isPresented: Binding(get: { coloring != nil }, set: { if !$0 { coloring = nil } })) {
             if let index = coloring, model.lyrics.indices.contains(index) {
-                wordColors(index)
-                    .presentationCompactAdaptation(.popover)
+                WordStyleSheet(model: model, index: index)
+                    .presentationDetents([.medium, .large])
+                    .frostedSheet()
             }
         }
-    }
-
-    /// The color picker for one word: the look's colors, or back to the look's own color.
-    private func wordColors(_ index: Int) -> some View {
-        let current = model.lyrics[index].color
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("Color for \u{201C}\(model.lyrics[index].text)\u{201D}")
-                .font(.subheadline.weight(.bold))
-                .lineLimit(1)
-            HStack(spacing: 8) {
-                ForEach(LyricsSheet.colors, id: \.self) { hex in
-                    Button { model.setLyricColor(index, hex) } label: {
-                        Corner.chip
-                            .fill(LyricsSheet.swatch(hex))
-                            .frame(width: 30, height: 30)
-                            .overlay(Corner.chip.strokeBorder(.white.opacity(current == hex ? 0.95 : 0.3),
-                                                           lineWidth: current == hex ? 3 : 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            Button {
-                model.setLyricColor(index, nil)
-            } label: {
-                Label("Same as the look", systemImage: "arrow.uturn.backward")
-                    .font(.footnote.weight(.semibold))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(current == nil ? Color.white.opacity(0.4) : Tint.accent)
-            .disabled(current == nil)
-        }
-        .labelStyle(.titleAndIcon)
-        .foregroundStyle(.white)
-        .padding(16)
     }
 
     @ViewBuilder private func picked(_ index: Int) -> some View {
@@ -454,5 +439,126 @@ struct LyricsToolbar: View {
         case .none: break
         }
         typing = nil
+    }
+}
+
+/// One word's own style, over the look (Aa): color, font, size and outline. Anything left alone
+/// stays the look's, and "Back to the look" undoes them all.
+struct WordStyleSheet: View {
+    let model: EditorModel
+    let index: Int
+    private var library: FontLibrary { FontLibrary.shared }
+
+    var body: some View {
+        if model.lyrics.indices.contains(index) {
+            let word = model.lyrics[index]
+            let look = model.lyricStyle
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Style for \u{201C}\(word.text)\u{201D}")
+                            .font(.title3.weight(.bold))
+                            .lineLimit(1)
+                        Text("Only this word changes. Aa at the top right is the look for all of them.")
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+
+                    part("Color") {
+                        swatches(selected: word.color) { hex in model.setLyricColor(index, hex) }
+                    }
+
+                    part("Size") {
+                        FXSlider(value: word.scale ?? 1, range: 0.5...2.5, ends: ("Smaller", "Bigger")) { value in
+                            model.setLyricWordStyle(index) { $0.scale = abs(value - 1) < 0.03 ? nil : value }
+                        }
+                    }
+
+                    part("Font") {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                Button { model.setLyricWordStyle(index) { $0.font = nil } } label: {
+                                    Text("Same as the look")
+                                }
+                                .buttonStyle(GlassButtonStyle(tint: Tint.accent, selected: word.font == nil))
+                                ForEach(LyricFont.allCases, id: \.self) { font in
+                                    Button { model.setLyricWordStyle(index) { $0.font = font.rawValue } } label: {
+                                        Text(font.name)
+                                            .font(font.postScript.map { Font.custom($0, size: 17) }
+                                                  ?? .system(size: 17, weight: .black))
+                                    }
+                                    .buttonStyle(GlassButtonStyle(tint: Tint.accent, selected: word.font == font.rawValue))
+                                }
+                                ForEach(library.fonts) { entry in
+                                    Button { model.setLyricWordStyle(index) { $0.font = entry.postScript } } label: {
+                                        Text(entry.name).font(.custom(entry.postScript, size: 17))
+                                    }
+                                    .buttonStyle(GlassButtonStyle(tint: Tint.accent, selected: word.font == entry.postScript))
+                                }
+                            }
+                        }
+                    }
+
+                    part("Outline") {
+                        FXSlider(value: word.stroke ?? look.stroke, range: 0...14, ends: ("None", "Thick")) { value in
+                            model.setLyricWordStyle(index) { $0.stroke = value }
+                        }
+                        swatches(selected: word.strokeColor) { hex in
+                            model.setLyricWordStyle(index) {
+                                $0.strokeColor = hex
+                                // Picking an outline color with no outline yet gives it one to see.
+                                if hex != nil, ($0.stroke ?? look.stroke) < 1 { $0.stroke = 4 }
+                            }
+                        }
+                    }
+
+                    Button {
+                        model.clearLyricWordStyle(index)
+                    } label: {
+                        Label("Back to the look", systemImage: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(GlassButtonStyle(tint: Tint.accent, selected: word.hasOwnStyle))
+                    .disabled(!word.hasOwnStyle)
+                    .opacity(word.hasOwnStyle ? 1 : 0.4)
+                }
+                .padding(20)
+            }
+            .foregroundStyle(.white)
+            .labelStyle(.titleAndIcon)
+        }
+    }
+
+    private func part<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.subheadline.weight(.semibold))
+            content()
+        }
+    }
+
+    /// The look's colors, and "Same as the look" (nil).
+    private func swatches(selected: String?, pick: @escaping (String?) -> Void) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button { pick(nil) } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.footnote.weight(.bold))
+                        .frame(width: 30, height: 30)
+                        .overlay(Corner.chip.strokeBorder(.white.opacity(selected == nil ? 0.95 : 0.3),
+                                                       lineWidth: selected == nil ? 3 : 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Same as the look")
+                ForEach(LyricsSheet.colors, id: \.self) { hex in
+                    Button { pick(hex) } label: {
+                        Corner.chip
+                            .fill(LyricsSheet.swatch(hex))
+                            .frame(width: 30, height: 30)
+                            .overlay(Corner.chip.strokeBorder(.white.opacity(selected == hex ? 0.95 : 0.3),
+                                                           lineWidth: selected == hex ? 3 : 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }

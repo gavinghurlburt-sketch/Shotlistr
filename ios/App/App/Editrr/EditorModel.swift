@@ -3524,7 +3524,7 @@ final class EditorModel {
         for (i, part) in parts.enumerated() {
             pieces.append(LyricWord(text: part, start: word.start + step * Double(i),
                                     end: word.start + step * Double(i + 1),
-                                    br: i == parts.count - 1 ? word.br : false, color: word.color))
+                                    br: i == parts.count - 1 ? word.br : false).styled(like: word))
         }
         editLyrics { lyrics.replaceSubrange(index...index, with: pieces) }
     }
@@ -3567,6 +3567,31 @@ final class EditorModel {
     func setLyricColor(_ index: Int, _ hex: String?) {
         guard lyrics.indices.contains(index), lyrics[index].color != hex else { return }
         editLyrics { lyrics[index].color = hex }
+    }
+
+    /// One word's own style (font, size, outline), over the look.
+    func setLyricWordStyle(_ index: Int, _ change: (inout LyricWord) -> Void) {
+        guard lyrics.indices.contains(index) else { return }
+        var word = lyrics[index]
+        change(&word)
+        guard word != lyrics[index] else { return }
+        editLyrics { lyrics[index] = word }
+    }
+
+    /// Takes a word back to the look: no color, font, size or outline of its own.
+    func clearLyricWordStyle(_ index: Int) {
+        guard lyrics.indices.contains(index), lyrics[index].hasOwnStyle else { return }
+        editLyrics { lyrics[index] = LyricWord(text: lyrics[index].text, start: lyrics[index].start,
+                                               end: lyrics[index].end, br: lyrics[index].br) }
+        notice = "Back to the look."
+    }
+
+    /// A double tap on a word asks the lyrics tools to open its text.
+    var lyricTextEditRequest: Int?
+    func editLyricText(_ index: Int) {
+        guard lyrics.indices.contains(index) else { return }
+        if lyricSelected != index { selectLyric(index) }
+        lyricTextEditRequest = index
     }
 
     func toggleLyricBreak(_ index: Int) {
@@ -4110,14 +4135,14 @@ final class EditorModel {
             let keep = min(parts.count - 1, max(1, Int((Double(parts.count) * share).rounded())))
             first.text = parts[..<keep].joined(separator: " ")
             second = [LyricWord(text: parts[keep...].joined(separator: " "), start: at, end: word.end,
-                                br: word.br, color: word.color)]
+                                br: word.br).styled(like: word)]
         } else {
             let typed = (after ?? "").split(whereSeparator: { $0.isWhitespace }).map(String.init)
             guard !typed.isEmpty else { return }
             let step = (word.end - at) / Double(typed.count)
             for (i, text) in typed.enumerated() {
                 second.append(LyricWord(text: text, start: at + step * Double(i), end: at + step * Double(i + 1),
-                                        br: i == typed.count - 1 ? word.br : false, color: word.color))
+                                        br: i == typed.count - 1 ? word.br : false).styled(like: word))
             }
         }
         editLyrics { lyrics.replaceSubrange(index...index, with: [first] + second) }

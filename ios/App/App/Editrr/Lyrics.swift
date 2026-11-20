@@ -15,6 +15,34 @@ struct LyricWord: Codable, Equatable, Sendable {
     var br: Bool = false
     /// This word's own color ("#ff3b8d"); nil uses the look's color.
     var color: String? = nil
+    /// This word's own style, over the look (Aa) for a word that should pop. nil: the look's.
+    /// The font is a built-in font's name (LyricFont) or one of your own fonts' PostScript name.
+    var font: String? = nil
+    /// Size against the look's size (1.4 = 40% bigger).
+    var scale: Double? = nil
+    var stroke: Double? = nil
+    var strokeColor: String? = nil
+
+    /// Has a style of its own beyond the look.
+    var hasOwnStyle: Bool { color != nil || font != nil || scale != nil || stroke != nil || strokeColor != nil }
+
+    /// The same text and times with `other`'s own style, for words made out of it.
+    func styled(like other: LyricWord) -> LyricWord {
+        var word = self
+        word.color = other.color
+        word.font = other.font
+        word.scale = other.scale
+        word.stroke = other.stroke
+        word.strokeColor = other.strokeColor
+        return word
+    }
+
+    /// The font to draw this word with, given the look's.
+    func postScript(_ style: LyricStyle) -> String? {
+        guard let font else { return style.postScript }
+        if let built = LyricFont(rawValue: font) { return built.postScript }
+        return font
+    }
 }
 
 enum LyricMode: String, Codable, CaseIterable, Sendable {
