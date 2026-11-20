@@ -826,8 +826,6 @@ struct EditingView: View {
                 .presentationBackground(.ultraThinMaterial)
                 .presentationBackgroundInteraction(.enabled(upThrough: .height(380)))
         }
-        // The first time a project opens: three short tips, then never again.
-        .overlay { FirstTips() }
         // Tapping out the lyrics takes the whole screen: the song and words on top, big pads below.
         .overlay {
             ZStack {
@@ -841,6 +839,14 @@ struct EditingView: View {
             }
             .animation(.easeInOut(duration: 0.25), value: model.tapTiming)
         }
+        // A feature's tip: the first time it's used, or from the ? beside its title. (Over the Mask
+        // sheet, the sheet shows it instead.)
+        .overlay {
+            if let tip = model.tip, !masking {
+                TipCard(tip: tip) { model.tip = nil }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.tip)
     }
 
     /// A problem or a notice, over the bottom of the video only while there is one (notices fade
@@ -1557,8 +1563,11 @@ struct TapBeatPanel: View {
                 Button("Cancel") { Task { await model.finishTapBeat(keep: false) } }
                     .foregroundStyle(.white.opacity(0.75))
                 Spacer()
-                Text(model.beatTaps.isEmpty ? "Tap along while it plays" : "\(model.beatTaps.count) cuts")
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                HStack(spacing: 0) {
+                    Text(model.beatTaps.isEmpty ? "Tap along while it plays" : "\(model.beatTaps.count) cuts")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                    TipButton { model.tip = .tapBeat }
+                }
                 Spacer()
                 Button("Done") { Task { await model.finishTapBeat(keep: true) } }
                     .font(.body.weight(.bold))
@@ -1621,6 +1630,8 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
     let model: Model
     /// The song's waveform and the word blocks.
     @ViewBuilder let top: Top
+    /// Its tip: the first time by itself, then from the ? in the header.
+    @State private var showTip = false
 
     var body: some View {
         let checking = model.tapChecking
@@ -1650,7 +1661,12 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
             .foregroundStyle(.white)
+            if showTip {
+                TipCard(tip: .lyricTap) { showTip = false }
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: showTip)
+        .onAppear { if EditorTip.lyricTap.firstTime() { showTip = true } }
     }
 
     private func header(count: Int) -> some View {
@@ -1658,11 +1674,14 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
             Button("Cancel") { model.finishTapTiming(keep: false) }
                 .foregroundStyle(.white.opacity(0.75))
             Spacer()
-            Text(model.tapChecking ? "Checking your timing" : (model.tapCleanNote ?? TapQueueLook.timedText(count)))
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(model.tapCleaned && !model.tapChecking ? Tint.accent : Color.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            HStack(spacing: 0) {
+                Text(model.tapChecking ? "Checking your timing" : (model.tapCleanNote ?? TapQueueLook.timedText(count)))
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(model.tapCleaned && !model.tapChecking ? Tint.accent : Color.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                TipButton { showTip = true }
+            }
             Spacer()
             Button("Done") { model.finishTapTiming(keep: true) }
                 .font(.body.weight(.bold))
@@ -2050,75 +2069,6 @@ struct FullScreenPreview: View {
             .padding(.bottom, 24)
         }
         .statusBarHidden()
-    }
-}
-
-/// Three short tips the first time the editor opens. Next steps through them; Skip or the last
-/// one's Got it puts them away for good.
-struct FirstTips: View {
-    @AppStorage("firstTipsSeen") private var seen = false
-    @State private var step = 0
-
-    private struct Tip {
-        let icon: String
-        let title: String
-        let text: String
-    }
-
-    private let tips = [
-        Tip(icon: "wand.and.stars", title: "Start with Auto edit",
-            text: "On the Performance page, it makes a whole cut from your takes in one tap. Change anything you like after."),
-        Tip(icon: "hand.tap", title: "Double tap the performance",
-            text: "Pick which take shows at each moment. Done brings you back here."),
-        Tip(icon: "plus.square", title: "Tap anything to edit it",
-            text: "Its tools show along the bottom. The + at the end of the track adds a photo or video after the performance."),
-    ]
-
-    var body: some View {
-        if !seen {
-            let tip = tips[min(step, tips.count - 1)]
-            let last = step >= tips.count - 1
-            ZStack {
-                Color.black.opacity(0.55).ignoresSafeArea()
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack {
-                        Image(systemName: tip.icon)
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(Tint.accent)
-                        Spacer()
-                        Text("\(step + 1) of \(tips.count)")
-                            .font(.caption.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                    Text(tip.title).font(.title3.weight(.bold))
-                    Text(tip.text)
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        if !last {
-                            Button("Skip") { seen = true }
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        Spacer()
-                        Button(last ? "Got it" : "Next") {
-                            if last { seen = true } else { step += 1 }
-                        }
-                        .font(.body.weight(.bold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 10)
-                        .background(Color.white)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .foregroundStyle(.white)
-                .padding(22)
-                .background(Tint.surface, in: Corner.card)
-                .padding(28)
-            }
-            .transition(.opacity)
-        }
     }
 }
 
@@ -2990,6 +2940,7 @@ struct FXSheet: View {
             }
         }
         .foregroundStyle(.white)
+        .onAppear { model.firstTip(.fx) }
     }
 
     private var header: some View {
@@ -3005,7 +2956,10 @@ struct FXSheet: View {
                 .accessibilityLabel("Back")
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(picking ? "Add an effect" : "Fx").font(.title3.weight(.bold))
+                HStack(spacing: 2) {
+                    Text(picking ? "Add an effect" : "Fx").font(.title3.weight(.bold))
+                    TipButton { model.tip = .fx }
+                }
                 Text(model.fxCutName).font(.footnote).foregroundStyle(.white.opacity(0.65))
             }
             Spacer(minLength: 0)
@@ -3679,7 +3633,12 @@ struct MaskSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Mask").font(.headline)
+                    HStack(spacing: 0) {
+                        Text("Mask").font(.headline)
+                        Spacer(minLength: 0)
+                        // The mask can be animated: the keyframes tip.
+                        TipButton { model.tip = .keyframes }
+                    }
                     Text(hint(mask.shape))
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.65))
@@ -3741,6 +3700,12 @@ struct MaskSheet: View {
         }
         .scrollIndicators(.hidden)
         .foregroundStyle(.white)
+        // The keyframes tip, here while the sheet is open (it covers the editor's own).
+        .overlay {
+            if let tip = model.tip {
+                TipCard(tip: tip) { model.tip = nil }
+            }
+        }
     }
 
     private func hint(_ shape: MaskShape) -> String {

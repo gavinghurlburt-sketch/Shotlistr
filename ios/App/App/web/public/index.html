@@ -1846,7 +1846,7 @@ bitsperframe:             %d
       <p class="modal-hint" style="margin:16px 0 8px">Backups</p>
       <label for="importProjectInput" class="btn small file-label">Import a backup file</label>
       <p class="modal-hint" style="margin:16px 0 8px">Help</p>
-      <button type="button" id="tourReplayBtn" class="btn small">Show the quick tour again</button>
+      <button type="button" id="tourReplayBtn" class="btn small">Show the quick tour</button>
       <div class="modal-actions"><span></span><button id="settingsDone" class="btn primary">Done</button></div>
     </div>
   </div>
@@ -8471,7 +8471,7 @@ var TOUR = (function () {
   async function start(from) {
     build();
     if (BAND_CODE) { idx = from || 0; save(); scrolledFor = -1; clearInterval(timer); timer = setInterval(tick, 450); tick(); return; }
-    try { if (!from) await resetDemo(); await ensureDemo(); } catch (e) { console.error("Tour demo failed:", e); showNotice("Couldn't load the demo songs (" + String((e && e.message) || e).slice(0, 80) + "). Open Settings and tap Show the quick tour again to retry."); clearInterval(timer); if (layer) layer.classList.add("hidden"); return; }   // not marked done, so it retries
+    try { if (!from) await resetDemo(); await ensureDemo(); } catch (e) { console.error("Tour demo failed:", e); showNotice("Couldn't load the demo songs (" + String((e && e.message) || e).slice(0, 80) + "). Open Settings and tap Show the quick tour to retry."); clearInterval(timer); if (layer) layer.classList.add("hidden"); return; }   // not marked done, so it retries
     idx = from || 0; save(); scrolledFor = -1;
     await renderProjectsList();
     clearInterval(timer); timer = setInterval(tick, 450); tick();
@@ -8485,7 +8485,19 @@ var TOUR = (function () {
     if (st === "done") return;
     if (/^\d+$/.test(st)) { setTimeout(() => start(Math.min(+st, STEPS.length - 1)), 600); return; }
     try { if (mine(await listProjects()).length) { put("done"); return; } } catch (e) { return; }
-    setTimeout(() => start(0), 900);
+    setTimeout(offer, 900);   // first launch: offered, not started, so they can poke around
+  }
+  /* First launch: a small pill offers the tour once. Show me starts it; the x or a tap anywhere else
+     puts it away for good (it's in Settings, under Help, any time). */
+  function offer() {
+    put("done");
+    const p = document.createElement("div"); p.className = "tour-pill"; p.id = "tourOffer"; p.style.zIndex = "9000";
+    p.innerHTML = '<span>New to creatrr? Take the quick tour.</span><button type="button" data-t="go">Show me</button><button type="button" class="x" data-t="no" aria-label="No thanks">\u00d7</button>';
+    document.body.appendChild(p);
+    const away = e => { if (!p.contains(e.target)) gone(); };
+    function gone() { p.remove(); document.removeEventListener("click", away, true); }
+    p.addEventListener("click", e => { const t = e.target.closest("[data-t]"); if (!t) return; gone(); if (t.dataset.t === "go") start(0); });
+    setTimeout(() => document.addEventListener("click", away, true), 0);
   }
   function replay() { if (BAND_CODE) { build(); start(0); return; } ["settingsModal", "accountModal"].forEach(m => { const el = $(m); if (el) el.classList.add("hidden"); }); if (project) goToProjects().then(() => start(0)); else start(0); }
   return { boot, replay };

@@ -1129,6 +1129,14 @@ final class EditorModel {
     // MARK: Tap the beat
 
     /// Tap the beat is open: the song plays from Start and each tap drops a cut.
+    /// A tip shown over the editor (the first time its feature is used, or from its ?).
+    var tip: EditorTip?
+
+    /// Shows a feature's tip the first time only.
+    func firstTip(_ which: EditorTip) {
+        if which.firstTime() { tip = which }
+    }
+
     var tapBeatOn = false
     /// The taps so far (timeline seconds).
     var beatTaps: [Double] = []
@@ -1139,6 +1147,7 @@ final class EditorModel {
         beatTaps = []
         tapBeatOn = true
         notice = nil
+        firstTip(.tapBeat)
     }
 
     /// Plays from Start so you can tap along (again: starts over, taps cleared).
@@ -5231,6 +5240,7 @@ final class EditorModel {
         keys.sort { $0.time < $1.time }
         fx.fishKeys = keys
         setFXHere(fx)
+        firstTip(.keyframes)
         notice = keys.count == 1
             ? "Keyframing the circle from here. Move the playhead and drag the circle: each move makes a keyframe there."
             : "Circle keyframe \(keys.count) at \(Self.clock(at))."
@@ -5327,6 +5337,7 @@ final class EditorModel {
         } else {
             keys.append(FXValueKey(time: at, value: shown))
             keys.sort { $0.time < $1.time }
+            firstTip(.keyframes)
             notice = keys.count == 1
                 ? "Keyframing \(name) from here. Move the playhead and the slider: each change makes a keyframe there."
                 : "\(name) keyframe \(keys.count) at \(Self.clock(at))."
@@ -5517,6 +5528,7 @@ final class EditorModel {
             keys.sort { $0.time < $1.time }
         }
         setFrameKeys(index, keys)
+        firstTip(.keyframes)
         notice = keys.count == 1
             ? "Keyframe set on \(frameName(index)). Move the playhead, frame it again and set another to animate."
             : "Keyframe \(keys.count) on \(frameName(index)) at \(Self.clock(playheadFrame))."
@@ -5716,6 +5728,7 @@ final class EditorModel {
                 return "Move the playhead over this overlay to keyframe it."
             }
             overlay = overlay.addingKey(list, overlay.posed(at: at).pose, at: at)
+            self.firstTip(.keyframes)
             let count = overlay[keyPath: list]?.count ?? 0
             let what = mask ? "the mask" : "the overlay"
             return count == 1
