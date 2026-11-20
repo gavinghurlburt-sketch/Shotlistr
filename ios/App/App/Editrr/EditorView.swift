@@ -715,8 +715,7 @@ struct EditingView: View {
                 }) {
                     // creatrr's dark frosted glass, like the Fx panel (was the plain light material,
                     // which showed as flat grey).
-                    ExportSheet(model: model)
-                        .presentationDetents([.medium])
+                    ExportSheet(model: model)   // sizes itself to fit, with the pull-down bar
                         .frostedSheet()
                         .interactiveDismissDisabled(model.exportState.isWorking)
                 }
@@ -1396,9 +1395,11 @@ extension EditorModel.ExportState {
 struct ExportSheet: View {
     let model: EditorModel
     @Environment(\.dismiss) private var dismiss
+    /// The sheet's height: just what its content needs (measured), so there's no empty space.
+    @State private var fit: CGFloat = 300
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             // Once it's saved the sheet is on its way out (the share sheet follows).
             if case .saved = model.exportState {
                 EmptyView()
@@ -1435,8 +1436,15 @@ struct ExportSheet: View {
             }
         }
         .foregroundStyle(.white)
-        .padding(24)
+        .padding(.horizontal, 24)
+        .padding(.top, 30)      // room for the pull-down bar
+        .padding(.bottom, 8)    // the sheet adds the phone's own bottom space under this
         .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fit = $0 }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .presentationDetents([.height(fit)])
+        .presentationDragIndicator(.visible)
         .onChange(of: model.exportState) { _, state in
             if case .saved = state { dismiss() }
         }
