@@ -3191,7 +3191,10 @@ struct BottomPanel<Content: View>: View {
         .frame(height: height)
         .frame(maxWidth: .infinity)
         .background {
-            FrostSheet().ignoresSafeArea(edges: [.bottom, .horizontal])
+            // Rounded at the top like creatrr's pop-ups, square where it meets the screen's bottom.
+            FrostSheet()
+                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous))
+                .ignoresSafeArea(edges: [.bottom, .horizontal])
         }
         .environment(\.colorScheme, .dark)
         .offset(y: pulled)
