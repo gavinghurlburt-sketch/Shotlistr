@@ -582,9 +582,11 @@ struct EditTimeline: View {
         let pps = model.pixelsPerSecond
         let shown = model.lyricStyle.show
         let picked = model.lyricsPicked
-        // From the first word to the last, inside the clip (In to Out).
-        let first = max(model.loopStart, model.lyrics.map(\.start).min() ?? model.loopStart)
-        let last = min(model.loopEnd, model.lyrics.map(\.end).max() ?? model.loopEnd)
+        let held = model.lyricsTrimming
+        // From where they come in to where they go out (the first word to the last unless trimmed),
+        // inside the clip (In to Out).
+        let span = model.lyricsSpan
+        let first = span.from, last = span.to
 
         return Canvas { context, size in
             let middle = size.width / 2
@@ -601,7 +603,17 @@ struct EditTimeline: View {
                             .font(.caption2.weight(.bold)).foregroundStyle(.white),
                         at: CGPoint(x: max(band.minX, 0) + 8, y: band.midY), anchor: .leading)
             if picked {
+                // Yellow ends, like a clip's: drag them to change where the lyrics come in and go out.
                 context.stroke(Path(band.insetBy(dx: -1.5, dy: -1.5)), with: .color(Tint.accent), lineWidth: 3)
+                for which in [EditorModel.Grip.trimStart, .trimEnd] {
+                    let width: CGFloat = held == which ? 14 : 11
+                    let handle = CGRect(x: which == .trimStart ? band.minX - 1.5 : band.maxX + 1.5 - width,
+                                        y: band.minY - 1.5, width: width, height: band.height + 3)
+                    context.fill(Path(handle), with: .color(Tint.accent))
+                    context.draw(Text(Image(systemName: which == .trimStart ? "chevron.compact.left" : "chevron.compact.right"))
+                                    .font(.system(size: 12, weight: .heavy)).foregroundStyle(.black.opacity(0.8)),
+                                 at: CGPoint(x: handle.midX, y: handle.midY))
+                }
             }
         }
     }
@@ -746,6 +758,19 @@ struct EditTimeline: View {
         return toStart <= toEnd ? .trimStart : .trimEnd
     }
 
+    /// Takes hold of an end of the picked lyrics block: where they come in, or where they go out.
+    private func grabLyricsEnd(at point: CGPoint, width: CGFloat) -> Bool {
+        guard model.lyricsPicked else { return false }
+        let span = model.lyricsSpan
+        let middle = width / 2
+        let startX = middle + CGFloat((span.from - model.time) * model.pixelsPerSecond)
+        let endX = middle + CGFloat((span.to - model.time) * model.pixelsPerSecond)
+        let toStart = abs(point.x - startX), toEnd = abs(point.x - endX)
+        guard min(toStart, toEnd) <= 26 else { return false }
+        model.beginLyricsTrim(toStart <= toEnd ? .trimStart : .trimEnd)
+        return model.lyricsTrimming != nil
+    }
+
     /// Takes hold of the picked clip's end: In or Out for a performance, a trim for a video.
     private func grabEnd(at point: CGPoint, width: CGFloat) -> Bool {
         guard let end = pickedEnd(at: point, width: width), let picked = model.editPick else { return false }
@@ -821,6 +846,7 @@ struct EditTimeline: View {
                     model.beginOverlayDrag(overlayID, grip: grip)
                     return model.draggingOverlay == overlayID
                 }
+                if row == .lyrics { return grabLyricsEnd(at: point, width: width) }
                 guard video else { return false }
                 // The picked added clip's ends, then the performance's ends, then hold an added clip to move it.
                 if let hit = cutawayGrip(at: point, width: width, ends: true), hit.grip != .move {
@@ -835,7 +861,9 @@ struct EditTimeline: View {
                 return false
             },
             liftMoved: { travel in
-                if model.titleDrag != nil {
+                if model.lyricsTrimming != nil {
+                    model.dragLyricsTrim(by: Double(travel) / model.pixelsPerSecond)
+                } else if model.titleDrag != nil {
                     model.dragTitle(by: Double(travel) / model.pixelsPerSecond)
                 } else {
                     model.drag(by: Double(travel) / model.pixelsPerSecond)
@@ -854,6 +882,7 @@ struct EditTimeline: View {
                     model.beginOverlayDrag(overlayID, grip: grip)
                     return model.draggingOverlay == overlayID
                 }
+                if row == .lyrics { return grabLyricsEnd(at: point, width: width) }
                 guard video else { return false }
                 if let hit = cutawayGrip(at: point, width: width, ends: true), hit.grip != .move {
                     model.beginOverlayDrag(hit.id, grip: hit.grip)
@@ -862,7 +891,13 @@ struct EditTimeline: View {
                 return grabEnd(at: point, width: width)
             },
             dropped: {
-                if model.titleDrag != nil { model.endTitleDrag() } else { model.endDrag() }
+                if model.lyricsTrimming != nil {
+                    model.endLyricsTrim()
+                } else if model.titleDrag != nil {
+                    model.endTitleDrag()
+                } else {
+                    model.endDrag()
+                }
             },
             swipeBegan: {
                 dragStartTime = model.time

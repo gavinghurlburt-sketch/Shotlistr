@@ -3590,6 +3590,64 @@ final class EditorModel {
         return lyricsLive.lyricsBox(at: playheadFrame, canvas: TimelineBuilder.canvas)
     }
 
+    // MARK: Where the lyrics come in and go out (the edit page)
+
+    /// An end of the lyrics block is held: where they come in, or where they go out.
+    var lyricsTrimming: Grip?
+    @ObservationIgnored private var lyricsTrimStart: (from: Double, to: Double, before: EditState)?
+
+    /// The words' own reach on the timeline: the first word to the last, inside the clip.
+    private var lyricsReach: (first: Double, last: Double) {
+        let first = max(loopStart, lyrics.map(\.start).min() ?? loopStart)
+        let last = min(loopEnd, lyrics.map(\.end).max() ?? loopEnd)
+        return (first, max(first, last))
+    }
+
+    /// Where the lyrics come in and go out: trimmed, or the first word to the last.
+    var lyricsSpan: (from: Double, to: Double) {
+        let reach = lyricsReach
+        let from = min(max(reach.first, lyricStyle.from ?? reach.first), reach.last)
+        let to = max(min(reach.last, lyricStyle.to ?? reach.last), from)
+        return (from, to)
+    }
+
+    func beginLyricsTrim(_ end: Grip) {
+        guard end != .move, hasLyrics else { return }
+        pause()
+        let span = lyricsSpan
+        lyricsTrimming = end
+        lyricsTrimStart = (span.from, span.to, snapshot())
+        notice = nil
+    }
+
+    /// Moves the held end. Pulled back out to the first or last word, it's untrimmed again.
+    func dragLyricsTrim(by seconds: Double) {
+        guard let end = lyricsTrimming, let start = lyricsTrimStart else { return }
+        let reach = lyricsReach
+        let frames = { (value: Double) in (value * 30).rounded() / 30 }
+        switch end {
+        case .trimStart:
+            let at = min(max(frames(start.from + seconds), reach.first), start.to - 0.3)
+            lyricStyle.from = at <= reach.first + 0.02 ? nil : at
+        case .trimEnd:
+            let at = max(min(frames(start.to + seconds), reach.last), start.from + 0.3)
+            lyricStyle.to = at >= reach.last - 0.02 ? nil : at
+        case .move:
+            return
+        }
+        lyricsLive.update(words: lyrics, style: lyricStyle)
+        redraw()
+    }
+
+    func endLyricsTrim() {
+        guard lyricsTrimming != nil else { return }
+        lyricsTrimming = nil
+        if let before = lyricsTrimStart?.before, before.lyricStyle != lyricStyle { history.append(before) }
+        lyricsTrimStart = nil
+        syncLyrics()
+        scheduleSave()
+    }
+
     /// A tap on the words picks them (true), a tap away lets go (false).
     func pickLyrics(_ on: Bool) {
         // Picked even while hidden, so its tools can show them again.

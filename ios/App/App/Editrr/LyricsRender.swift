@@ -15,7 +15,7 @@ final class LyricsOverlay: @unchecked Sendable {
     private var titles: [TitleClip]
 
     init(words: [LyricWord] = [], style: LyricStyle = LyricStyle(), titles: [TitleClip] = []) {
-        self.words = words
+        self.words = Self.shown(words, style)
         self.style = style
         self.titles = titles
     }
@@ -47,9 +47,16 @@ final class LyricsOverlay: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// The words inside where the lyrics come in and go out (all of them when they aren't trimmed).
+    static func shown(_ words: [LyricWord], _ style: LyricStyle) -> [LyricWord] {
+        guard style.from != nil || style.to != nil else { return words }
+        let from = style.from ?? -.infinity, to = style.to ?? .infinity
+        return words.filter { $0.start >= from - 0.001 && $0.start < to }
+    }
+
     func update(words: [LyricWord], style: LyricStyle) {
         lock.lock()
-        self.words = words
+        self.words = Self.shown(words, style)
         self.style = style
         lock.unlock()
     }
