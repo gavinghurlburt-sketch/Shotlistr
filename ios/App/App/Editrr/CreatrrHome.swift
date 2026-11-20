@@ -62,6 +62,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         content?.add(messages, name: "creatrrEditrr")
         content?.add(messages, name: "creatrrHome")
         content?.add(messages, name: "creatrrShoot")
+        content?.add(messages, name: "creatrrLyrics")
         nav.backTitle = artistTier ? "Artist" : "Artists"
         view.addGestureRecognizer(toEditor)
         view.addGestureRecognizer(toArtist)
@@ -129,6 +130,32 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         } else {
             show(editor: true)
         }
+    }
+
+    /// A song's Lyrics button: the song's lyrics page opens over everything, to time the words to
+    /// the whole song. Every edit that uses the song then gets them.
+    func lyricsFromWeb(key: String, name: String) {
+        guard !key.isEmpty, presentedViewController == nil, !panning else { return }
+        pauseArtistSong()
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        // The song (and its audio) goes to the shared folder first; the page waits for it.
+        EditrrShare.run(webView, now: true)
+        _ = FontLibrary.shared
+        let model = SongLyricsModel(key: key, name: name)
+        model.saved = { [weak self] count in self?.tellLyrics(key: key, count: count) }
+        let page = SongLyricsView(model: model, done: { [weak self] in self?.dismiss(animated: true) })
+        let host = UIHostingController(rootView: page)
+        host.overrideUserInterfaceStyle = .dark
+        host.modalPresentationStyle = .fullScreen
+        host.view.backgroundColor = UIColor(red: 0x12 / 255.0, green: 0x12 / 255.0, blue: 0x12 / 255.0, alpha: 1)
+        present(host, animated: true)
+    }
+
+    /// Tells the song's page how many timed words the song has (0: none yet).
+    func tellLyrics(key: String, count: Int) {
+        guard let data = try? JSONEncoder().encode(key), let quoted = String(data: data, encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("try { window.creatrrSongLyrics && window.creatrrSongLyrics(\(quoted), \(count)); } catch (e) {}")
     }
 
     /// Projects, Artists, the bell or your account was tapped in the header while Edits was open.
@@ -304,6 +331,14 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
                     home?.shootFromWeb(key: key, time: (info["time"] as? NSNumber).map { $0.doubleValue },
                                        end: (info["end"] as? NSNumber).map { $0.doubleValue },
                                        name: info["name"] as? String)
+                }
+            case "creatrrLyrics":
+                if let info = message.body as? [String: Any], let key = info["key"] as? String {
+                    if (info["ask"] as? Bool) == true {
+                        home?.tellLyrics(key: key, count: SongLyricsStore.load(key)?.words.count ?? 0)
+                    } else {
+                        home?.lyricsFromWeb(key: key, name: info["name"] as? String ?? "Song")
+                    }
                 }
             case "creatrrHome":
                 if let info = message.body as? [String: Any], let place = info["place"] as? String {

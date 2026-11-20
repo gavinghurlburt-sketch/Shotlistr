@@ -311,6 +311,8 @@ final class EditorModel {
     @ObservationIgnored private(set) var captureParts: [CreatrrPart] = []
     /// The tempo of a song picked from creatrr, for Record's count-in and click.
     @ObservationIgnored private(set) var captureTempo: CaptureTempo?
+    /// The creatrr song picked as the song, to bring in its timed lyrics.
+    @ObservationIgnored private var pendingSongKey: String?
 
     // MARK: Shoot
 
@@ -405,6 +407,7 @@ final class EditorModel {
         await chooseSongFile(url)
         guard pendingSong != nil, problem == nil else { return }
         songName = song.name
+        pendingSongKey = song.key
         captureParts = song.parts
         captureTempo = song.tempo
     }
@@ -510,6 +513,7 @@ final class EditorModel {
 
     func chooseSongFile(_ url: URL) async {
         problem = nil
+        pendingSongKey = nil
         busy = "Opening the song…"
         defer { busy = nil }
         do {
@@ -543,6 +547,7 @@ final class EditorModel {
             let audio = try await asset.loadTracks(withMediaType: .audio)
             guard !audio.isEmpty else { throw EditorError.noSound }
             pendingSong = asset
+            pendingSongKey = nil
             captureParts = []
             captureTempo = nil
             pendingSongLength = try? await asset.load(.duration).seconds
@@ -556,6 +561,7 @@ final class EditorModel {
 
     func chooseNoSong() {
         pendingSong = nil
+        pendingSongKey = nil
         captureParts = []
         captureTempo = nil
         pendingSongLength = nil
@@ -824,6 +830,16 @@ final class EditorModel {
         kind = .performance
         enterEditor()
         performancePage = true   // a new performance starts on its own page, to sync and cut
+        // A creatrr song with its lyrics timed on its page: they come in already timed.
+        var broughtLyrics = false
+        if let key = pendingSongKey, let track, lyrics.isEmpty {
+            let words = SongLyricsStore.words(key, at: track.shift)
+            if !words.isEmpty {
+                lyrics = words
+                syncLyrics()
+                broughtLyrics = true
+            }
+        }
         createProject()
 
         let unsure = made.filter { $0.sync == .unsure }.count
@@ -849,6 +865,7 @@ final class EditorModel {
         if let name = currentProject?.name {
             notes.insert("Saved as \u{201C}\(name)\u{201D}. Every change saves.", at: 0)
         }
+        if broughtLyrics { notes.append("The song's lyrics came in, already timed.") }
         if !notes.isEmpty { notice = notes.joined(separator: " ") }
     }
 
@@ -5714,7 +5731,16 @@ final class EditorModel {
             }
             name = "\(song.name) · \(part.name)"
         }
+        let before = sounds.count
         await placeSound(source, name: name, from: from, length: length, effect: false)
+        // The song's lyrics timed on its page in creatrr come in with it (the section's words, for a
+        // section), unless the edit already has words.
+        guard sounds.count > before, let placed = sounds.last, lyrics.isEmpty else { return }
+        let words = SongLyricsStore.words(song.key, from: placed.from, to: placed.from + placed.length, at: placed.at)
+        guard !words.isEmpty else { return }
+        editLyrics { lyrics = words }
+        scheduleSave()
+        notice = "The song's lyrics came in, already timed."
     }
 
     /// A copy of the file in the project's folder, so the sound stays with the project.

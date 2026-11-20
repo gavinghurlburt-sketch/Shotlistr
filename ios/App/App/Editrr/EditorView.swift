@@ -817,8 +817,11 @@ struct EditingView: View {
         .overlay {
             ZStack {
                 if model.lyricTimeline && model.tapTiming {
-                    LyricTapScreen(model: model)
-                        .transition(.move(edge: .bottom))
+                    LyricTapScreen(model: model) {
+                        LyricsLane(model: model)
+                            .frame(height: LyricsLane.height)
+                    }
+                    .transition(.move(edge: .bottom))
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: model.tapTiming)
@@ -1552,11 +1555,28 @@ struct TapBeatPanel: View {
     }
 }
 
+/// What the tap screen drives: an edit's lyrics, or a creatrr song's lyrics for the whole song.
+@MainActor
+protocol LyricTapping: AnyObject {
+    var lyrics: [LyricWord] { get }
+    var tapNext: Int { get }
+    var isPlaying: Bool { get }
+    var lyricTapCount: Int { get }
+    func lyricTap()
+    func lyricTapBack()
+    func lyricTapRestart()
+    func finishTapTiming(keep: Bool)
+}
+
+extension EditorModel: LyricTapping {}
+
 /// Tap the lyrics' timing, full screen: the song's waveform and the word blocks on top (they
 /// move as you tap), the next word big in the middle with the ones after it lined up, and a tall
 /// pad for each thumb at the bottom. Back takes the last tap off; Start over takes them all off.
-struct LyricTapScreen: View {
-    let model: EditorModel
+struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
+    let model: Model
+    /// The song's waveform and the word blocks.
+    @ViewBuilder let top: Top
 
     var body: some View {
         let playing = model.isPlaying
@@ -1566,8 +1586,7 @@ struct LyricTapScreen: View {
             Color.black.ignoresSafeArea()
             VStack(spacing: 12) {
                 header(count: count)
-                LyricsLane(model: model)
-                    .frame(height: LyricsLane.height)
+                top
                     .padding(.horizontal, -12)
                 Spacer(minLength: 8)
                 queue
@@ -1592,7 +1611,7 @@ struct LyricTapScreen: View {
             Button("Cancel") { model.finishTapTiming(keep: false) }
                 .foregroundStyle(.white.opacity(0.75))
             Spacer()
-            Text(Self.timedText(count))
+            Text(TapQueueLook.timedText(count))
                 .font(.subheadline.weight(.semibold).monospacedDigit())
             Spacer()
             Button("Done") { model.finishTapTiming(keep: true) }
@@ -1632,7 +1651,10 @@ struct LyricTapScreen: View {
     }
 }
 
-extension LyricTapScreen {
+/// The tap screen's word queue: how words fade and move (kept outside the screen, since a generic
+/// view can't hold stored statics).
+@MainActor
+enum TapQueueLook {
     /// Words further down the queue fade: 0.8 for the one after next, then less, 0.25 at least.
     static func fade(_ ahead: Int) -> Double {
         let step: Double = Double(ahead - 1) * 0.18
@@ -1653,6 +1675,9 @@ extension LyricTapScreen {
         if count == 0 { return "Tap as each word starts" }
         return count == 1 ? "1 word timed" : "\(count) words timed"
     }
+}
+
+extension LyricTapScreen {
 
     /// The words lined up: the one just tapped (small, green), the next one big in yellow, and the
     /// next few under it, so you can see each word coming. Each tap moves them up.
@@ -1670,7 +1695,7 @@ extension LyricTapScreen {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(Tint.good.opacity(0.8))
                         .id("w\(next - 1)")
-                        .transition(Self.tappedGoes)
+                        .transition(TapQueueLook.tappedGoes)
                 }
             }
             .frame(height: 30)
@@ -1680,7 +1705,7 @@ extension LyricTapScreen {
                         .font(.system(size: 56, weight: .heavy))
                         .foregroundStyle(Tint.accent)
                         .id("w\(next)")
-                        .transition(Self.nextComes)
+                        .transition(TapQueueLook.nextComes)
                 } else {
                     Text("All done. Tap Done to keep it.")
                         .font(.title2.weight(.heavy))
@@ -1692,9 +1717,9 @@ extension LyricTapScreen {
                 ForEach(ahead, id: \.self) { i in
                     Text(words[i].text)
                         .font(.title2.weight(.bold))
-                        .foregroundStyle(Color.white.opacity(Self.fade(i - next)))
+                        .foregroundStyle(Color.white.opacity(TapQueueLook.fade(i - next)))
                         .id("w\(i)")
-                        .transition(Self.slideIn)
+                        .transition(TapQueueLook.slideIn)
                 }
             }
             .frame(height: 34)

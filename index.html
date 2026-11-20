@@ -1823,6 +1823,11 @@ body.art-inline #artistSheet .grab, body.art-inline #artistScrim, body.art-inlin
           <div style="margin:2px 0 0;padding-left:2px"><button type="button" id="suggestBtn" class="suggest-link hidden" data-c="suggest">Suggest sections</button></div>
           <p class="muted small" id="partsHint" style="margin:8px 0 0"></p>
         </div>
+        <div class="panel hidden" id="lyricsPanel">
+          <div class="panel-head"><h2>Lyrics</h2></div>
+          <p class="muted small" id="lyricsHint" style="margin:0 0 10px">Time the words to the whole song once. Every edit that uses this song gets them, already timed.</p>
+          <button type="button" id="lyricsBtn" class="btn primary" data-c="song-lyrics">Sync lyrics</button>
+        </div>
       </div>
     </div>
     </div>
@@ -3651,7 +3656,27 @@ function paintTempo() {
   el.textContent = currentTrackUrl ? (tempoMsg || "") : ""; el.className = "tempo-status" + (tempoMsg ? " bad" : " hidden");
   mb.classList.toggle("hidden", !currentTrackUrl);
   mb.textContent = tp.bpm && tp.offset != null ? "Tempo " + Math.round(tp.bpm) + " BPM · change" : "Set tempo";
+  paintLyricsPanel();
   const sb = $("suggestBtn"); if (sb) sb.classList.toggle("hidden", !(isContent() && (audioBuffer || currentTrackUrl) && tp.bpm && tp.offset != null));
+}
+/* Lyrics (iPhone app): a song's words are timed once, on a page the app opens, and kept with the
+   song. The app says how many words are timed; the panel shows it. */
+var songLyricCounts = {};
+window.creatrrSongLyrics = function (key, count) { songLyricCounts[key] = Number(count) || 0; paintLyricsPanel(); };
+function paintLyricsPanel() {
+  const el = $("lyricsPanel"); if (!el) return;
+  if (!songLyricCounts) songLyricCounts = {};
+  const show = isNativeApp() && isContent() && !!currentTrackUrl && !!activeSong();
+  el.classList.toggle("hidden", !show);
+  if (!show) return;
+  const key = trackKey(), n = songLyricCounts[key];
+  if (n === undefined) {
+    songLyricCounts[key] = null;
+    try { window.webkit.messageHandlers.creatrrLyrics.postMessage({ key: key, ask: true }); } catch (e) {}
+  }
+  $("lyricsHint").textContent = n ? `${n} word${n === 1 ? "" : "s"} timed to the song. Every edit that uses this song gets them.`
+    : "Time the words to the whole song once. Every edit that uses this song gets them, already timed.";
+  $("lyricsBtn").textContent = n ? "Edit lyrics" : "Sync lyrics";
 }
 function runTempoDetect() {
   if (!audioBuffer) return;
@@ -6872,6 +6897,15 @@ document.addEventListener("click", e => {
     case "sug-dismiss": { const sg = activeSong(); if (sg) delete suggestMap[sg.id]; renderSuggest(); break; }
     case "part-ref-add": { if (!sec) return; partRefTarget = sec.id; $("partRefInput").click(); break; }
     case "part-hook": { if (sec) openHooks(sec.id); break; }
+    case "song-lyrics": {
+      const sg = activeSong(); if (!sg || !currentTrackUrl) return;
+      const key = trackKey();
+      /* saved first, so the app gets this song and its track as they are now */
+      Promise.resolve().then(() => persistNow()).catch(() => {}).then(() => {
+        try { window.webkit.messageHandlers.creatrrLyrics.postMessage({ key: key, name: String(sg.name || "Song") }); } catch (e) {}
+      });
+      break;
+    }
     case "part-shoot": {
       if (!sec || !currentTrackUrl) return;
       const toSec = raw => { const m = String(raw == null ? "" : raw).match(/(\d+):(\d{1,2}(?:\.\d+)?)/);
