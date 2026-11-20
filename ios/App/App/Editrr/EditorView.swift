@@ -2118,6 +2118,8 @@ struct VideoStage: View {
     /// The fingers are moving the fisheye circle (the effects sheet is open on a Fisheye cut).
     @State private var fishMoving = false
     @State private var framing = false
+    /// A drag on the lyrics page that started off the words: it does nothing.
+    @State private var ignoring = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -2155,7 +2157,15 @@ struct VideoStage: View {
 
     /// A tap on the words picks the lyrics; a tap away from them lets go. A tap on an overlay picks it.
     private func tapped(_ at: CGPoint) {
-        guard !model.lyricTimeline else { return }
+        // The lyrics page: a tap on the words picks them (their box); anywhere else lets go.
+        if model.lyricTimeline {
+            if let box = model.lyricsBox(), box.insetBy(dx: -0.04, dy: -0.03).contains(at) {
+                model.pickLyrics(true)
+            } else {
+                model.letGoOfAll()
+            }
+            return
+        }
         // The effects sheet is open on a Fisheye cut: a tap puts the circle there.
         if model.fishEditing {
             model.placeFish(at: at)
@@ -2201,7 +2211,16 @@ struct VideoStage: View {
             model.beginMaskMove()
             return
         }
-        // The lyrics page, or the lyrics picked: the fingers move the words.
+        // The lyrics page with the words not picked: a drag that starts on them picks and moves
+        // them; anywhere else it does nothing (the video isn't framed from here).
+        if model.lyricTimeline, !model.lyricsActive {
+            guard let box = model.lyricsBox(), box.insetBy(dx: -0.04, dy: -0.03).contains(at) else {
+                ignoring = true
+                return
+            }
+            model.pickLyrics(true)
+        }
+        // The lyrics picked: the fingers move the words.
         if model.lyricsActive {
             lyricMoving = true
             model.beginLyricMove()
@@ -2228,6 +2247,7 @@ struct VideoStage: View {
     }
 
     private func changed(_ scale: Double, _ moved: CGSize) {
+        if ignoring { return }
         if fishMoving {
             model.moveFish(by: moved)
             return
@@ -2250,6 +2270,10 @@ struct VideoStage: View {
     }
 
     private func ended() {
+        if ignoring {
+            ignoring = false
+            return
+        }
         if fishMoving {
             fishMoving = false
             model.endFishMove()
@@ -2603,7 +2627,7 @@ struct MaskHandles: View {
 
 /// The picked lyrics' transform handles, as on a picked layer in other editors: a yellow box, a
 /// square at each corner (pull it away from the middle to make the words bigger, in to make them
-/// smaller) and a move handle in the middle. Anywhere else on the video still drags them too.
+/// smaller). A drag anywhere else on the video moves them.
 struct LyricsHandles: View {
     let model: EditorModel
     /// Where the words are, in fractions of the frame.
@@ -2611,7 +2635,6 @@ struct LyricsHandles: View {
     private static let space = "lyricsHandles"
     /// A corner's drag: the box's middle and the finger's distance from it when it started.
     @State private var resizing: (center: CGPoint, distance: CGFloat)?
-    @State private var moving = false
 
     var body: some View {
         GeometryReader { stage in
@@ -2636,16 +2659,6 @@ struct LyricsHandles: View {
                         .position(x: i % 2 == 0 ? frame.minX : frame.maxX, y: i < 2 ? frame.minY : frame.maxY)
                         .accessibilityLabel("Size the lyrics")
                 }
-                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(Tint.accent))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                    .gesture(move(width: w, height: h))
-                    .position(middle)
-                    .accessibilityLabel("Move the lyrics")
             }
         }
         .coordinateSpace(name: Self.space)
@@ -2666,23 +2679,6 @@ struct LyricsHandles: View {
             }
             .onEnded { _ in
                 resizing = nil
-                model.endLyricMove()
-            }
-    }
-
-    /// The middle handle: drags the words.
-    private func move(width: CGFloat, height: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.space))
-            .onChanged { value in
-                if !moving {
-                    moving = true
-                    model.beginLyricMove()
-                }
-                model.moveLyrics(CGSize(width: value.translation.width / width,
-                                        height: value.translation.height / height))
-            }
-            .onEnded { _ in
-                moving = false
                 model.endLyricMove()
             }
     }

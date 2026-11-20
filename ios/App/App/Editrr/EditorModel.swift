@@ -3739,7 +3739,11 @@ final class EditorModel {
     // MARK: Placing the lyrics on the video
 
     /// The fingers on the video move the words: on the lyrics page, or with the lyrics picked.
-    var lyricsActive: Bool { hasLyrics && (lyricTimeline || (lyricsPicked && lyricStyle.show)) }
+    /// The words are picked (on the lyrics page, also a word picked on its timeline): their box and
+    /// handles show and the fingers on the video move them. Nothing picked, no box.
+    var lyricsActive: Bool {
+        hasLyrics && lyricStyle.show && (lyricsPicked || (lyricTimeline && lyricSelected != nil))
+    }
 
     /// Where the words show at the playhead (fractions of the frame from the top left).
     func lyricsBox() -> CGRect? {
@@ -4344,7 +4348,8 @@ final class EditorModel {
     /// Picks a word on the lyrics timeline (nil lets go). The video shows that word.
     func pickLyric(_ index: Int?) {
         guard let index, lyrics.indices.contains(index) else {
-            lyricSelected = nil
+            // Empty space on the words' timeline: lets go of everything (the box on the video too).
+            letGoOfAll()
             return
         }
         selectLyric(index)
