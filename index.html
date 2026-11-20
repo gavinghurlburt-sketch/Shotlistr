@@ -1282,12 +1282,12 @@ details.more > :not(summary) { margin-top: 8px; }
 #homeSlider { display: flex; width: 100%; }
 .home-pane { flex: 0 0 100%; min-width: 0; }
 .home-pane.off { display: none; }
-/* creatrr Artist: home is just your artist (no Projects, calendar or shoots); editrr is one swipe away in the iPhone app */
-body.tier-artist .home-tabs .ht[data-home="projects"], body.tier-artist #paneProjects, body.tier-artist #artistShoots, body.tier-artist #artistChips { display: none !important; }
-body.tier-artist .home-tabs .ht + .ht { margin-left: 0; }
+/* creatrr Artist: one artist, so no artist chips. Its tabs go Songs, Projects, Edits (Plus and Pro: Projects, Artists, Edits) */
+body.tier-artist #artistChips { display: none !important; }
 /* Edits (editrr) is a third home tab in the iPhone app only */
 body:not(.native-app) .home-tabs .ht[data-home="edits"] { display: none; }
-body.native-app:not(.tier-artist) .projects-title.home-tabs { font-size: 28px; }   /* three tabs fit a phone */
+body.native-app .projects-title.home-tabs { font-size: 28px; }   /* three tabs fit a phone */
+body.tier-artist:not(.native-app) .projects-title.home-tabs .ht + .ht { margin-left: auto; }
 .home-tabs .ht { white-space: nowrap; }
 .cover.init { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 26px; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
 .loose-row { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 10px; border-radius: 20px; background-color: var(--surface); margin-bottom: 8px; }
@@ -4765,7 +4765,7 @@ const byArtistName = (a, b) => (a.docTitle || "").localeCompare(b.docTitle || ""
    creatrr Artist: one artist, simplified. creatrr Plus: up to 10 artists. creatrr Pro: up to 50.
    For now the plan is picked in Settings; later the App Store subscription sets it. */
 var TIERS = { artist: { name: "creatrr Artist", limit: 1 }, plus: { name: "creatrr Plus", limit: 10 }, pro: { name: "creatrr Pro", limit: 50 } };
-var TIER = (function () { try { const t = localStorage.getItem("producrr_tier"); return TIERS[t] ? t : "plus"; } catch (e) { return "plus"; } })();
+var TIER = (function () { try { const t = localStorage.getItem("producrr_tier"); return TIERS[t] ? t : "artist"; } catch (e) { return "artist"; } })();
 function isArtistTier() { return TIER === "artist"; }
 function isNativeApp() { try { return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()); } catch (e) { return false; } }
 /* the iPhone app shows editrr beside the artist page on the Artist plan */
@@ -4891,32 +4891,47 @@ function renderArtists(recs, projects) {
       </div>${withCover ? `<div class="ac-photo" style="background-image:url(${withCover.cover})"></div><div class="ac-glass"></div>` : ""}</div></div>`;
   }).join("");
 }
-var homeMode = "projects", artistTotal = 0;
+var homeMode = "projects", artistTotal = 0, homeTier = null;
+/* the home tabs left to right (Edits, in the iPhone app, comes after these) */
+function homeOrder() { return isArtistTier() ? ["artists", "projects"] : ["projects", "artists"]; }
+/* puts the tabs and the two panes in the plan's order */
+function arrangeHome() {
+  const [first, second] = homeOrder(), pane = m => m === "artists" ? $("paneArtists") : $("paneProjects");
+  const slider = $("homeSlider"); if (slider.firstElementChild !== pane(first)) slider.insertBefore(pane(first), pane(second));
+  const tabs = document.querySelector(".projects-title.home-tabs"), tab = m => tabs.querySelector(`.ht[data-home="${m}"]`);
+  if (tabs.firstElementChild !== tab(first)) tabs.insertBefore(tab(first), tab(second));
+}
 if (window.MutationObserver) { const mo = new MutationObserver(() => tellNativeHome()); mo.observe(document.body, { attributes: true, attributeFilter: ["class"] }); if ($("projectsView")) mo.observe($("projectsView"), { attributes: true, attributeFilter: ["class"] }); if ($("songPage")) mo.observe($("songPage"), { attributes: true, attributeFilter: ["class"] }); }
 function paintHomeMode() {
   document.body.classList.toggle("tier-artist", isArtistTier());
   document.body.classList.toggle("native-app", isNativeApp());
-  if (isArtistTier() && homeMode !== "artists") { homeMode = "artists"; $("paneProjects").classList.add("off"); $("paneArtists").classList.remove("off"); $("homeSlider").style.transform = ""; }
+  arrangeHome();
+  /* a new plan (or the first look) starts on its first tab: Songs on creatrr Artist */
+  if (homeTier !== TIER) {
+    homeTier = TIER;
+    const first = homeOrder()[0];
+    if (homeMode !== first) { homeMode = first; $("paneProjects").classList.toggle("off", first !== "projects"); $("paneArtists").classList.toggle("off", first !== "artists"); $("homeSlider").style.transform = ""; }
+  }
   tellNativeTier(); tellNativeHome();
   paintHomeTabs();
   $("brandTier").textContent = " " + TIER;
   document.querySelector('.home-tabs .ht[data-home="artists"]').textContent = isArtistTier() ? "Songs" : "Artists";
   if (!isArtistTier() && document.body.classList.contains("art-inline")) goToProjects();   /* left the Artist plan: back to the usual home */
-  $("artistsHint").textContent = isArtistTier() ? (isNativeApp() ? "Your photo, songs and sections. Tap to open your artist page. Swipe in from the right edge, or tap Edits, to edit videos." : "Your photo, songs and sections. Tap to open your artist page.") : "Everyone you shoot for. Tap an artist to see their projects.";
+  $("artistsHint").textContent = isArtistTier() ? (isNativeApp() ? "Your photo, songs and sections. Plan and film videos in Projects, then cut them in Edits." : "Your photo, songs and sections. Tap to open your artist page.") : "Everyone you shoot for. Tap an artist to see their projects.";
   $("newBtn").textContent = homeMode === "artists" ? "New artist…" : "New…";
   $("newBtn").classList.toggle("hidden", homeMode === "artists" && isArtistTier() && artistTotal >= 1);
 }
 function setHomeMode(m, instant) {
   if (m === homeMode && !instant) return;
-  const slider = $("homeSlider"), pp = $("paneProjects"), pa = $("paneArtists"), toA = m === "artists";
-  homeMode = m; paintHomeMode(); closeSwipedCards();
+  const slider = $("homeSlider"), pp = $("paneProjects"), pa = $("paneArtists"), toA = m === "artists", toIdx = homeOrder().indexOf(m);
+  homeMode = m; homeTier = TIER; paintHomeMode(); closeSwipedCards();   /* a tab picked on purpose beats the plan's first tab */
   try { window.nativeHaptic && window.nativeHaptic("select"); } catch (x) {}
   const done = () => { (toA ? pp : pa).classList.add("off"); slider.style.transform = ""; slider.style.willChange = ""; };
   if (instant || !slider.animate || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { pp.classList.toggle("off", toA); pa.classList.toggle("off", !toA); slider.style.transform = ""; return; }
   const cur = homeDragX(slider);
   pp.classList.remove("off"); pa.classList.remove("off");
-  const W = $("homeClip").clientWidth, to = toA ? -W : 0;
-  const from = cur === null ? (toA ? 0 : -W) : cur;
+  const W = $("homeClip").clientWidth, to = -W * toIdx;
+  const from = cur === null ? -W * (1 - toIdx) : cur;
   slider.style.willChange = "transform";
   slider.style.transform = `translate3d(${to}px,0,0)`;
   slider.animate([{ transform: `translate3d(${from}px,0,0)` }, { transform: `translate3d(${to}px,0,0)` }], { duration: 300, easing: "cubic-bezier(.22,.8,.2,1)" }).finished.then(done, done);
@@ -4931,7 +4946,7 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false;
     const card = e.target.closest && e.target.closest(".project-card, .sr-card");
     onCard = !!card;
-    ok = e.touches.length === 1 && (!isArtistTier() || isNativeApp()) && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
+    ok = e.touches.length === 1 && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
     if (ok && onCard && homeMode === "projects") ok = false; /* on a project card, swipe-left is Delete */
   }, { passive: true });
   document.addEventListener("touchmove", e => {
@@ -4941,15 +4956,16 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
       if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { ok = false; return; }
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         if (onCard && dx < 0) { ok = false; return; } /* artist card: swipe-left is Remove */
-        /* past Artists comes Edits (iPhone app only) */
-        if (homeMode === "artists" && dx < 0) { ok = false; if (isNativeApp() && (!document.body.classList.contains("art-sheet") || document.body.classList.contains("art-inline"))) openEditrr(); return; }
-        if (isArtistTier() || (homeMode === "projects" && dx > 0)) { ok = false; return; }
+        /* past the last tab comes Edits (iPhone app only) */
+        const at = homeOrder().indexOf(homeMode);
+        if (at === 1 && dx < 0) { ok = false; if (isNativeApp() && (!document.body.classList.contains("art-sheet") || document.body.classList.contains("art-inline"))) openEditrr(); return; }
+        if (at === 0 && dx > 0) { ok = false; return; }
         locked = true; W = clip.clientWidth; pp.classList.remove("off"); pa.classList.remove("off"); slider.style.willChange = "transform";
       } else return;
     }
     if (e.cancelable) e.preventDefault();
     dxNow = dx;
-    const base = homeMode === "artists" ? -W : 0;
+    const base = -W * homeOrder().indexOf(homeMode);
     slider.style.transform = `translate3d(${base + dx}px,0,0)`;
   }, { passive: false });
   function finish(cancelled) {
@@ -4959,7 +4975,7 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
     const go = !cancelled && (Math.abs(dx) > W * 0.28 || (v > 0.45 && Math.abs(dx) > 36));
     const was = homeMode;
     if (go) { /* hand off to setHomeMode, which animates from the current finger position */ homeMode = was === "artists" ? "projects" : "artists"; const m = homeMode; homeMode = was; setHomeMode(m); return; }
-    const base = was === "artists" ? -W : 0, cur = base + dx;
+    const base = -W * homeOrder().indexOf(was), cur = base + dx;
     const done = () => { (was === "artists" ? pp : pa).classList.add("off"); slider.style.transform = ""; slider.style.willChange = ""; };
     if (!slider.animate) { done(); return; }
     slider.style.transform = `translate3d(${base}px,0,0)`;
@@ -7396,7 +7412,7 @@ var TOUR = (function () {
   ];
   /* creatrr Artist has no projects: meet the artist page, set up a song, then go edit */
   const ARTIST_STEPS = APP_STEPS.slice(1, 8).map((st, i) => i === 1 ? Object.assign({}, st, { body: "This is your artist page. Add a photo, upload your songs, and mark sections like intro, verse and chorus. For now, use our two demo songs." }) : st)
-    .concat([{ ctx: "any", target: null, title: "You're ready", body: isNativeApp() ? "Now make your video: swipe in from the right edge, or tap Edits on home. Your songs and their sections are waiting there. You can replay this tour any time from the menu at the top right, under Help." : "That's your artist page. You can replay this tour any time from the menu at the top right, under Help.", buttons: "end" }]);
+    .concat([{ ctx: "any", target: null, title: "You're ready", body: isNativeApp() ? "Plan and film a video in Projects, on your own camera or any camera you like. Then tap Edits on home to cut it. Your songs and their sections are waiting there. You can replay this tour any time from the menu at the top right, under Help." : "That's your artist page. You can replay this tour any time from the menu at the top right, under Help.", buttons: "end" }]);
   const STEPS = BAND_CODE ? BAND_STEPS : isArtistTier() ? ARTIST_STEPS : APP_STEPS;
   const ctxNow = () => !project ? "home" : project.type === "artist" ? "artist" : project.type === "content" ? "content" : "other";
   function readDemo() { try { return JSON.parse(localStorage.getItem(DKEY) || "null"); } catch (e) { return null; } }

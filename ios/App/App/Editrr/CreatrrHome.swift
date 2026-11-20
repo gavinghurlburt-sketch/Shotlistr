@@ -63,7 +63,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         content?.add(messages, name: "creatrrHome")
         content?.add(messages, name: "creatrrShoot")
         content?.add(messages, name: "creatrrLyrics")
-        nav.backTitle = artistTier ? "Artist" : "Artists"
+        nav.backTitle = artistTier ? "Projects" : "Artists"
         view.addGestureRecognizer(toEditor)
         view.addGestureRecognizer(toArtist)
         NotificationCenter.default.addObserver(self, selector: #selector(stageChanged), name: .editrrStage, object: nil)
@@ -76,10 +76,11 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         toArtist.isEnabled = showingEditor
     }
 
-    /// creatrr Artist: from anywhere in the web app. Plus and Pro: from the Artists tab, since Edits
-    /// sits after it (inside a project the edges belong to Draft, Plan, Shoot and Cut).
+    /// From the home tab just before Edits: Projects on creatrr Artist (Songs, Projects, Edits),
+    /// Artists on Plus and Pro (Projects, Artists, Edits). Inside a project the edges belong to
+    /// Draft, Plan, Shoot and Cut.
     private var canSwipeToEditor: Bool {
-        !showingEditor && (artistTier || webHome == "artists")
+        !showingEditor && webHome == (artistTier ? "projects" : "artists")
     }
 
     override func viewDidLayoutSubviews() {
@@ -102,7 +103,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     func setTier(_ tier: String) {
         UserDefaults.standard.set(tier, forKey: Self.tierKey)
         artistTier = tier == "artist"
-        nav.backTitle = artistTier ? "Artist" : "Artists"
+        nav.backTitle = artistTier ? "Projects" : "Artists"
         refreshSwipes()
     }
 
