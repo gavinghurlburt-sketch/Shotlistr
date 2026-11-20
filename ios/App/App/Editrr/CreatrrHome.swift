@@ -32,6 +32,8 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     /// editrr opened from inside a page (a song's sections, a project), where creatrr's tabs aren't
     /// on screen: it takes the whole screen and shows its own Back.
     private var bare = false
+    /// A finger on the web page is dragging Edits in from the last home tab.
+    private var webDragging = false
 
     private lazy var toEditor: UIScreenEdgePanGestureRecognizer = {
         let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(pan(_:)))
@@ -63,6 +65,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         content?.add(messages, name: "creatrrHome")
         content?.add(messages, name: "creatrrShoot")
         content?.add(messages, name: "creatrrLyrics")
+        content?.add(messages, name: "creatrrEditsDrag")
         nav.backTitle = artistTier ? "Projects" : "Artists"
         view.addGestureRecognizer(toEditor)
         view.addGestureRecognizer(toArtist)
@@ -118,8 +121,48 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
 
     /// Edits was tapped (or swiped to) in the web app.
     func openFromWeb() {
+        if webDragging {
+            // The swipe on the page went far enough: finish it from where the finger let go.
+            webDragging = false
+            show(editor: true)
+            return
+        }
         guard !panning else { return }   // a swipe in from the edge is already opening it
         show(editor: true)
+    }
+
+    /// A swipe on the page from the last home tab: Edits follows the finger (0 to 1) while the page
+    /// slides off to the left. nil: let go short, so Edits slides back out (the page puts itself back).
+    func dragFromWeb(_ progress: CGFloat?) {
+        guard !showingEditor, presentedViewController == nil else { return }
+        if let progress {
+            if !webDragging {
+                guard canSwipeToEditor, !panning else { return }
+                webDragging = true
+                panning = true
+                prepareEditor()
+            }
+            place(progress)
+        } else if webDragging {
+            webDragging = false
+            UIView.animate(withDuration: 0.24, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
+                           options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.place(0)
+            } completion: { _ in
+                guard !self.webDragging, !self.showingEditor else { return }
+                self.panning = false
+                self.editor?.view.isHidden = true
+                self.webView?.scrollView.isScrollEnabled = true
+            }
+        }
+    }
+
+    /// The page's home tab slides along with Edits, so Songs, Projects and Edits move like one strip:
+    /// 0 the tab in place, 1 pushed off to the left. ms 0 follows a finger; more animates there.
+    private func slideWeb(_ progress: CGFloat, ms: Int) {
+        guard !bare else { return }   // opened from inside a page: no home tabs on screen
+        let p = String(format: "%.4f", Double(max(0, min(1, progress))))
+        webView?.evaluateJavaScript("try { window.creatrrEditsReveal && window.creatrrEditsReveal(\(p), \(ms)); } catch (e) {}")
     }
 
     /// A section's red record button: editrr opens and films takes to that part of the song.
@@ -205,6 +248,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
             NotificationCenter.default.post(name: .editrrPause, object: nil)
         }
         tellWeb(editsShown: on)
+        slideWeb(on ? 1 : 0, ms: animated ? 340 : 0)
         // While Edits shows, the header stays put (no scrolling the page behind it).
         if on { webView?.scrollView.isScrollEnabled = false }
         let done = { [weak self] in
@@ -264,16 +308,19 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         let progress = opening ? -dx / width : 1 - dx / width
         switch g.state {
         case .began:
+            webDragging = false   // the edge swipe takes over from a drag the page had started
             panning = true
             if opening { prepareEditor() }
         case .changed:
             place(progress)
+            slideWeb(progress, ms: 0)
         case .ended, .cancelled, .failed:
             let speed = g.velocity(in: view).x
             let go = g.state == .ended && (opening ? (progress > 0.3 || speed < -500) : (progress < 0.7 || speed > 500))
             let target = opening ? go : !go
             if target == showingEditor {
                 // Not far enough: slide back to where it was.
+                slideWeb(showingEditor ? 1 : 0, ms: 300)
                 UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
                                options: [.allowUserInteraction, .beginFromCurrentState]) {
                     self.place(self.showingEditor ? 1 : 0)
@@ -340,6 +387,12 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
                     } else {
                         home?.lyricsFromWeb(key: key, name: info["name"] as? String ?? "Song")
                     }
+                }
+            case "creatrrEditsDrag":
+                if let info = message.body as? [String: Any], let p = info["p"] as? NSNumber {
+                    home?.dragFromWeb(CGFloat(truncating: p))
+                } else {
+                    home?.dragFromWeb(nil)
                 }
             case "creatrrHome":
                 if let info = message.body as? [String: Any], let place = info["place"] as? String {

@@ -1936,11 +1936,21 @@ enum SharePopUp {
         sheet.completionWithItemsHandler = { activity, completed, _, _ in
             finished(activity, completed)
         }
-        if UIDevice.current.userInterfaceIdiom == .pad, let pop = sheet.popoverPresentationController {
-            // iPad: it points at the middle of the screen. On iPhone it's the usual full-width sheet.
-            pop.sourceView = top.view
-            pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
-            pop.permittedArrowDirections = []
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // iPad: a popover pointing at the middle of the screen.
+            if let pop = sheet.popoverPresentationController {
+                pop.sourceView = top.view
+                pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
+                pop.permittedArrowDirections = []
+            }
+        } else {
+            // iPhone: the share pop up is a popover underneath, which iOS 26 draws as a narrow floating
+            // card. Asking for a page sheet gives the usual full-width sheet up from the bottom.
+            sheet.modalPresentationStyle = .pageSheet
+            if let card = sheet.sheetPresentationController {
+                card.detents = [.medium(), .large()]
+                card.prefersGrabberVisible = true
+            }
         }
         top.present(sheet, animated: true)
     }

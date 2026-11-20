@@ -5719,13 +5719,31 @@ function setHomeMode(m, instant) {
   slider.animate([{ transform: `translate3d(${from}px,0,0)` }, { transform: `translate3d(${to}px,0,0)` }], { duration: 300, easing: "cubic-bezier(.22,.8,.2,1)" }).finished.then(done, done);
 }
 function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.style.transform || ""); return m ? parseFloat(m[1]) : null; }
+/* iPhone app: Edits (editrr) slides in from the right, and the home tab slides off to the left with it,
+   so Songs, Projects and Edits move like one strip. p 0: the tab in place, 1: pushed off. ms 0 follows a finger. */
+window.creatrrEditsReveal = function (p, ms) {
+  const slider = $("homeSlider"), pp = $("paneProjects"), pa = $("paneArtists"), pv = $("projectsView");
+  if (!slider || !pv || pv.classList.contains("hidden")) return;
+  p = Math.max(0, Math.min(1, +p || 0)); ms = +ms || 0;
+  const moving = slider.getAnimations ? slider.getAnimations().length > 0 : false;
+  if (p === 0 && ms > 0 && moving) return;   /* a tab picked in the header is already sliding it home */
+  const W = $("homeClip").clientWidth, idx = Math.max(0, homeOrder().indexOf(homeMode)), to = -W * (idx + p);
+  const rest = () => { if (p > 0) return; (homeMode === "artists" ? pp : pa).classList.add("off"); slider.style.transform = ""; slider.style.willChange = ""; };
+  const cur = homeDragX(slider), from = cur === null ? -W * idx : cur;
+  pp.classList.remove("off"); pa.classList.remove("off");
+  slider.style.willChange = "transform";
+  slider.style.transform = `translate3d(${to}px,0,0)`;
+  if (!ms || !slider.animate || Math.abs(from - to) < 1) { if (p === 0) rest(); return; }
+  slider.animate([{ transform: `translate3d(${from}px,0,0)` }, { transform: `translate3d(${to}px,0,0)` }], { duration: ms, easing: "cubic-bezier(.22,.8,.2,1)" }).finished.then(rest, () => {});
+};
 /* swipe left / right between Projects and Artists; the page follows your finger */
 (function () {
   const clip = $("homeClip"), slider = $("homeSlider"), pp = $("paneProjects"), pa = $("paneArtists");
-  let sx = 0, sy = 0, st = 0, ok = false, locked = false, dxNow = 0, onCard = false, W = 1;
+  let sx = 0, sy = 0, st = 0, ok = false, locked = false, dxNow = 0, onCard = false, W = 1, toEdits = false;
+  const editsDrag = p => { try { window.webkit.messageHandlers.creatrrEditsDrag.postMessage(p === null ? { end: true } : { p: p }); } catch (e) {} };
   function blocked(el) { for (let n = el; n && n !== document.body; n = n.parentElement) { if (!n.classList) return true; if (/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName) || n.classList.contains("modal")) return true; } return false; }
   document.addEventListener("touchstart", e => {
-    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false;
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); dxNow = 0; locked = false; toEdits = false;
     const card = e.target.closest && e.target.closest(".project-card, .sr-card");
     onCard = !!card;
     ok = e.touches.length === 1 && !$("projectsView").classList.contains("hidden") && !blocked(e.target) && !(card && card.classList.contains("open"));
@@ -5740,15 +5758,20 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
         if (onCard && dx < 0) { ok = false; return; } /* artist card: swipe-left is Remove */
         /* past the last tab comes Edits (iPhone app only) */
         const at = homeOrder().indexOf(homeMode);
-        if (at === 1 && dx < 0) { ok = false; if (isNativeApp() && (!document.body.classList.contains("art-sheet") || document.body.classList.contains("art-inline"))) openEditrr(); return; }
+        if (at === 1 && dx < 0) {
+          /* the page slides off to the left while Edits follows the finger in from the right */
+          if (!isNativeApp() || editsOpen || (document.body.classList.contains("art-sheet") && !document.body.classList.contains("art-inline"))) { ok = false; return; }
+          toEdits = true; tellNativeHome();
+        }
         if (at === 0 && dx > 0) { ok = false; return; }
         locked = true; W = clip.clientWidth; pp.classList.remove("off"); pa.classList.remove("off"); slider.style.willChange = "transform";
       } else return;
     }
     if (e.cancelable) e.preventDefault();
-    dxNow = dx;
+    dxNow = toEdits ? Math.max(-W, Math.min(0, dx)) : dx;
     const base = -W * homeOrder().indexOf(homeMode);
-    slider.style.transform = `translate3d(${base + dx}px,0,0)`;
+    slider.style.transform = `translate3d(${base + dxNow}px,0,0)`;
+    if (toEdits) editsDrag(-dxNow / W);
   }, { passive: false });
   function finish(cancelled) {
     if (!ok) return; ok = false;
@@ -5756,6 +5779,12 @@ function homeDragX(slider) { const m = /translate3d\((-?[\d.]+)px/.exec(slider.s
     const dx = dxNow, v = Math.abs(dx) / Math.max(1, Date.now() - st);
     const go = !cancelled && (Math.abs(dx) > W * 0.28 || (v > 0.45 && Math.abs(dx) > 36));
     const was = homeMode;
+    if (toEdits) {
+      toEdits = false;
+      /* far enough: Edits finishes sliding in, and the app slides the page the rest of the way with it */
+      if (go) { openEditrr(); return; }
+      editsDrag(null);   /* short: Edits slides back out, and the page slides back below */
+    }
     if (go) { /* hand off to setHomeMode, which animates from the current finger position */ homeMode = was === "artists" ? "projects" : "artists"; const m = homeMode; homeMode = was; setHomeMode(m); return; }
     const base = -W * homeOrder().indexOf(was), cur = base + dx;
     const done = () => { (was === "artists" ? pp : pa).classList.add("off"); slider.style.transform = ""; slider.style.willChange = ""; };
