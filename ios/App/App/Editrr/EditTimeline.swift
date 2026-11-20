@@ -13,8 +13,15 @@ enum EditMetrics {
     static let overlayHeight: CGFloat = 32
     /// The row at the bottom with the + for music and sound effects.
     static let addHeight: CGFloat = 32
-    static func height(lyrics: Bool, overlays: Int = 0, texts: Int = 0, sounds: Int = 0, adder: Bool = false) -> CGFloat {
-        LaneMetrics.rulerHeight + videoHeight + gap + audioHeight + 6 + LaneMetrics.chrome
+    /// Editing a video: each clip's own sound, a band along the bottom of the clip (as in Edits).
+    static let clipSoundHeight: CGFloat = 18
+    /// The video track: taller when its clips carry their own sound.
+    static func videoTrackHeight(clipSound: Bool) -> CGFloat { videoHeight + (clipSound ? clipSoundHeight : 0) }
+    /// `song`: the song row under the video track (a performance). Editing a video, each clip's
+    /// sound sits in the clip instead.
+    static func height(lyrics: Bool, overlays: Int = 0, texts: Int = 0, sounds: Int = 0, adder: Bool = false,
+                       song: Bool = true) -> CGFloat {
+        LaneMetrics.rulerHeight + videoTrackHeight(clipSound: !song) + (song ? gap + audioHeight : 0) + 6 + LaneMetrics.chrome
             + (lyrics ? gap + lyricsHeight : 0)
             + CGFloat(sounds) * (gap + audioHeight)
             + (adder ? gap + addHeight : 0)
@@ -109,28 +116,30 @@ struct EditTimeline: View {
                 HStack(spacing: 0) {
                     side(icon: "film", name: "Video", hidden: model.videoHidden) { model.videoHidden.toggle() }
                     pieces
-                        .frame(width: laneWidth, height: EditMetrics.videoHeight)
+                        .frame(width: laneWidth, height: EditMetrics.videoTrackHeight(clipSound: model.kind == .video))
                         .clipped()
                         .opacity(model.videoHidden ? 0.35 : 1)
                         .overlay { touches(width: laneWidth, row: .video) }
                         .overlay(alignment: .leading) { addButton(laneWidth: laneWidth) }
                 }
-                .frame(height: EditMetrics.videoHeight)
+                .frame(height: EditMetrics.videoTrackHeight(clipSound: model.kind == .video))
                 .background(LaneMetrics.row)
 
-                Color.clear.frame(height: EditMetrics.gap)
+                // The song, under the performance. Editing a video, each clip carries its own sound.
+                if model.kind == .performance {
+                    Color.clear.frame(height: EditMetrics.gap)
 
-                HStack(spacing: 0) {
-                    side(icon: "waveform", name: model.kind == .video ? "Sound" : "Song",
-                         hidden: model.soundMuted) { model.soundMuted.toggle() }
-                    songTrack
-                        .frame(width: laneWidth, height: EditMetrics.audioHeight)
-                        .clipped()
-                        .opacity(model.soundMuted ? 0.35 : 1)
-                        .overlay { touches(width: laneWidth, row: .sound) }
+                    HStack(spacing: 0) {
+                        side(icon: "waveform", name: "Song", hidden: model.soundMuted) { model.soundMuted.toggle() }
+                        songTrack
+                            .frame(width: laneWidth, height: EditMetrics.audioHeight)
+                            .clipped()
+                            .opacity(model.soundMuted ? 0.35 : 1)
+                            .overlay { touches(width: laneWidth, row: .sound) }
+                    }
+                    .frame(height: EditMetrics.audioHeight)
+                    .background(LaneMetrics.row)
                 }
-                .frame(height: EditMetrics.audioHeight)
-                .background(LaneMetrics.row)
 
                 // Music and sound effects added with the + at the bottom, a row each under the song.
                 ForEach(0..<model.soundLaneCount, id: \.self) { lane in
@@ -382,7 +391,36 @@ struct EditTimeline: View {
                             frames(of: layers[index], in: stretch, into: &piece)
                         }
                     } else if layers.indices.contains(clip.id) {
-                        frames(of: layers[clip.id], in: rect, into: &inside)
+                        let layer = layers[clip.id]
+                        let band = EditMetrics.clipSoundHeight
+                        let pictures = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - band)
+                        frames(of: layer, in: pictures, into: &inside)
+                        // Its own sound along the bottom: the waveform, or flat with a crossed-out
+                        // speaker when it's muted.
+                        let sound = CGRect(x: rect.minX, y: pictures.maxY, width: rect.width, height: band)
+                        inside.fill(Path(sound), with: .color(ClipSoundTint.color.opacity(layer.muted ? 0.3 : 1)))
+                        if layer.muted {
+                            inside.fill(Path(CGRect(x: sound.minX, y: sound.midY - 0.5, width: sound.width, height: 1)),
+                                        with: .color(.white.opacity(0.45)))
+                            inside.draw(Text(Image(systemName: "speaker.slash.fill"))
+                                            .font(.system(size: 10, weight: .bold)).foregroundStyle(.white),
+                                        at: CGPoint(x: max(sound.minX, 0) + 18, y: sound.midY))
+                        } else if let soundPrint = layer.sound {
+                            let shift = layer.offset - layer.trackStart
+                            var wave = Path()
+                            var px = max(sound.minX, 0)
+                            let stop = min(sound.maxX, size.width)
+                            while px < stop {
+                                let at = time + Double(px - middle) / pps
+                                let frame = Int(((at - shift) - soundPrint.start) * SoundPrint.rate)
+                                if frame >= 0, frame < soundPrint.loudness.count {
+                                    let tall = max(1, CGFloat(soundPrint.loudness[frame]) * (sound.height - 4))
+                                    wave.addRect(CGRect(x: px, y: sound.maxY - 2 - tall, width: 2, height: tall))
+                                }
+                                px += 3
+                            }
+                            inside.fill(wave, with: .color(ClipSoundTint.wave))
+                        }
                     }
                 }
                 if performance {
@@ -1022,4 +1060,10 @@ struct EditTimeline: View {
 /// The added music's color on the timeline (blue, apart from the song's grey).
 enum MusicTint {
     static let color = Color(red: 0.35, green: 0.62, blue: 1.0)
+}
+
+/// Editing a video: the band of a clip's own sound along its bottom.
+enum ClipSoundTint {
+    static let color = Color(red: 0.80, green: 0.22, blue: 0.62)
+    static let wave = Color(red: 1.0, green: 0.55, blue: 0.86)
 }

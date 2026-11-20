@@ -145,6 +145,8 @@ struct Layer: Identifiable {
     /// 1, `asset` is the video already slowed down or sped up, and `original` is the video as shot.
     var speed: Double = 1
     var original: LayerSource? = nil
+    /// Its own sound is off (editing a video).
+    var muted = false
 
     /// Timeline seconds where the kept part of the clip starts and ends (can run past 0...duration).
     var clipStart: Double { offset + trimStart }
@@ -334,7 +336,7 @@ enum TimelineBuilder {
                     CMTimeRange(start: time(layer.trackStart + skip), duration: time(range.upperBound - range.lowerBound)),
                     of: layer.track, at: time(range.lowerBound))
                 tracks[layer.id] = LayerInfo(trackID: track.trackID, orientation: layer.orientation)
-                if videoSound, let sound = layer.audio,
+                if videoSound, !layer.muted, let sound = layer.audio,
                    let audio = composition.addMutableTrack(withMediaType: .audio,
                                                            preferredTrackID: kCMPersistentTrackID_Invalid) {
                     do {

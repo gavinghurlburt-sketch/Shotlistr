@@ -23,6 +23,8 @@ struct SavedLayer: Codable, Equatable {
     var color: Int? = nil
     /// How many times longer it plays than it was shot (nil: normal speed). See Layer.speed.
     var speed: Double? = nil
+    /// Its own sound is off (nil: on).
+    var muted: Bool? = nil
 }
 
 /// A named project: the song, the videos, where each sits, and every cut, keyframe and In/Out.

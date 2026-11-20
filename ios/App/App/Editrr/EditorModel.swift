@@ -16,6 +16,7 @@ private struct EditState: Equatable {
         var sync: SyncState
         var alternatives: [Double]
         var keyframes: [Keyframe]
+        var muted = false
     }
     var cuts: [Cut]
     var places: [Place]
@@ -31,7 +32,7 @@ private struct EditState: Equatable {
 
     /// Where the clips sit (what needs a full rebuild when it changes), as one list.
     var timing: [Double] {
-        places.flatMap { [$0.offset, $0.trimStart, $0.trimEnd] }
+        places.flatMap { [$0.offset, $0.trimStart, $0.trimEnd, $0.muted ? 1 : 0] }
             + overlays.flatMap { [$0.start, $0.length, $0.trimStart] }
             + order.map(Double.init)
             + (range ?? [])
@@ -226,7 +227,9 @@ final class EditorModel {
     /// The music or sound effect picked: its tools show (start it at the playhead, delete).
     var soundPick: UUID?
     /// Each added sound's file track, and where its sound starts in the file (usually 0).
-    @ObservationIgnored private var soundTracks: [UUID: (track: AVAssetTrack, start: Double)] = [:]
+    /// The file is kept too: a track only holds its file weakly, and once the file is let go the
+    /// track adds no sound (added music went quiet after reopening a project).
+    @ObservationIgnored private var soundTracks: [UUID: (asset: AVAsset, track: AVAssetTrack, start: Double)] = [:]
     /// Where the words sit while a finger moves them (percent), nil otherwise.
     private(set) var lyricMoveSpot: CGPoint?
     @ObservationIgnored private var lyricMoveStart: CGPoint?
@@ -1232,7 +1235,7 @@ final class EditorModel {
         project.layers = layers.map {
             SavedLayer(video: $0.video, offset: $0.offset, trimStart: $0.trimStart, trimEnd: $0.trimEnd,
                        sync: $0.sync, alternatives: $0.alternatives, keyframes: $0.keyframes, color: $0.color,
-                       speed: abs($0.speed - 1) > 0.001 ? $0.speed : nil)
+                       speed: abs($0.speed - 1) > 0.001 ? $0.speed : nil, muted: $0.muted ? true : nil)
         }
         project.cuts = cuts
         project.duration = duration
@@ -1332,7 +1335,7 @@ final class EditorModel {
             if let asset = await PhotosLoader.open(added.source, project: saved.id),
                let audio = try? await asset.loadTracks(withMediaType: .audio).first {
                 let start = (try? await audio.load(.timeRange))?.start.seconds ?? 0
-                soundTracks[added.id] = (audio, start)
+                soundTracks[added.id] = (asset, audio, start)
                 sounds.append(added)
             } else {
                 missing += 1
@@ -1381,6 +1384,7 @@ final class EditorModel {
                 layer.trimStart = place.trimStart
                 layer.trimEnd = place.trimEnd
             }
+            layer.muted = place.muted ?? false
             made.append(layer)
         }
         guard !made.isEmpty else {
@@ -1736,6 +1740,16 @@ final class EditorModel {
             guard performancePieces.count > 1, let piece = pickedPiece else { return false }
             return abs(piece.start - loopStart) < 0.001 || abs(piece.end - performanceEnd) < 0.001
         }
+    }
+
+    /// Editing a video: turns a clip's own sound off or back on.
+    func toggleMute(_ index: Int) {
+        guard kind == .video, layers.indices.contains(index) else { return }
+        pause()
+        history.append(snapshot())
+        future = []
+        layers[index].muted.toggle()
+        rebuildAll()
     }
 
     /// Deletes the picked clip: the rest close up behind it (Undo brings it back).
@@ -2741,7 +2755,8 @@ final class EditorModel {
     private func snapshot(range: Bool = false) -> EditState {
         EditState(cuts: cuts, places: layers.map {
             EditState.Place(offset: $0.offset, trimStart: $0.trimStart, trimEnd: $0.trimEnd,
-                            sync: $0.sync, alternatives: $0.alternatives, keyframes: $0.keyframes)
+                            sync: $0.sync, alternatives: $0.alternatives, keyframes: $0.keyframes,
+                            muted: $0.muted)
         }, lyrics: lyrics, lyricStyle: lyricStyle, titles: titles, overlays: overlays, trackKeys: trackKeys,
            splits: splits, order: order, range: range ? [inPoint, outPoint] : nil)
     }
@@ -2795,6 +2810,7 @@ final class EditorModel {
             layers[index].sync = place.sync
             layers[index].alternatives = place.alternatives
             layers[index].keyframes = place.keyframes
+            layers[index].muted = place.muted
         }
         if let pick = editPick, kind == .video, !layers.indices.contains(pick) { editPick = nil }
         // Editing a video: they stay back to back after an undo.
@@ -2842,7 +2858,7 @@ final class EditorModel {
               trimStart: original.trimStart, trimEnd: original.trimEnd,
               alternatives: original.alternatives, keyframes: original.keyframes,
               video: original.video, color: original.color, audio: original.audio,
-              speed: original.speed, original: original.original)
+              speed: original.speed, original: original.original, muted: original.muted)
     }
 
     /// A finger took hold of a clip: held it to move it, or grabbed an edge to trim it.
@@ -4893,7 +4909,7 @@ final class EditorModel {
             return
         }
         let added = SavedMusic(source: source, name: name, from: start, at: at, length: plays, lane: lane, effect: effect)
-        soundTracks[added.id] = (audio, range.start.seconds)
+        soundTracks[added.id] = (asset, audio, range.start.seconds)
         sounds.append(added)
         pickSound(added.id)
         rebuildAll()

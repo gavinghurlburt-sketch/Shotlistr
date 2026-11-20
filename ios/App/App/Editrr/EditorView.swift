@@ -708,7 +708,7 @@ struct EditingView: View {
                 }
                     .frame(height: EditMetrics.height(lyrics: model.hasLyrics, overlays: model.onTop.count,
                                                       texts: model.textLaneCount, sounds: model.soundLaneCount,
-                                                      adder: true))
+                                                      adder: true, song: model.kind == .performance))
                     // The grey rows run edge to edge of the screen, as in Edits.
                     .padding(.horizontal, -12)
                     .transition(.opacity)
@@ -1113,6 +1113,14 @@ struct EditingView: View {
                         ToolItem(icon: "music.note.list", text: "Edit performance",
                                  spoken: "Edit the performance: every video synced to the song") {
                             withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
+                        }
+                    } else if model.layers.indices.contains(index) {
+                        // The clip's own sound off or on (its band on the track shows which).
+                        let muted = model.layers[index].muted
+                        ToolItem(icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                                 text: muted ? "Unmute" : "Mute", tint: Tint.warn, on: muted,
+                                 spoken: muted ? "Turn this clip's sound back on" : "Turn this clip's sound off") {
+                            model.toggleMute(index)
                         }
                     }
                     // Gets rid of the picked clip (a piece split off, say); the rest close up.
