@@ -81,16 +81,18 @@ enum AutoZoom: String, CaseIterable, Sendable, Codable {
         }
     }
 
-    /// How much bigger the picture gets over the cut.
+    /// How much bigger the picture gets over the cut, unless the cut sets its own amount.
     static let amount = 0.15
+    /// The range the Zoom slider covers.
+    static let amounts: ClosedRange<Double> = 0.03...0.6
 
     /// The zoom factor part way (0...1) through the cut.
-    func factor(_ progress: Double) -> Double {
+    func factor(_ progress: Double, amount: Double = AutoZoom.amount) -> Double {
         let p = Ease.smooth.apply(progress)
         switch self {
         case .off: return 1
-        case .zoomIn: return 1 + Self.amount * p
-        case .zoomOut: return 1 + Self.amount * (1 - p)
+        case .zoomIn: return 1 + amount * p
+        case .zoomOut: return 1 + amount * (1 - p)
         }
     }
 }
@@ -188,10 +190,15 @@ struct Soundtrack {
 
 /// From this time on, show this layer.
 struct Cut: Equatable, Codable {
+    /// How far this cut's slow zoom goes.
+    var zoomBy: Double { zoomAmount ?? AutoZoom.amount }
+
     var time: Double
     var layer: Int
     /// A slow zoom across this cut only (each cut has its own).
     var zoom: AutoZoom = .off
+    /// How far the slow zoom goes (nil: the usual amount).
+    var zoomAmount: Double?
     /// How this cut comes in from the one before (nil: a plain cut).
     var transition: Transition?
     /// Effects on this cut (nil: none).
@@ -452,7 +459,8 @@ enum TimelineBuilder {
                     Keyframe(time: $0.time + layer.offset, framing: $0.framing, ease: $0.ease)
                 },
                 zoom: cuts.indices.contains(section) ? cuts[section].zoom : .off,
-                sectionStart: sectionStart, sectionEnd: sectionEnd)
+                sectionStart: sectionStart, sectionEnd: sectionEnd,
+                zoomAmount: cuts.indices.contains(section) ? cuts[section].zoomBy : AutoZoom.amount)
             info.fx = cuts.indices.contains(section) ? cuts[section].fx : nil
             info.layer = index
             return info

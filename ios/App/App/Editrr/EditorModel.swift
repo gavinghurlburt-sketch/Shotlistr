@@ -4425,7 +4425,23 @@ final class EditorModel {
         let start = cuts[index].time
         let end = index + 1 < cuts.count ? cuts[index + 1].time : duration
         guard end - start > 0.05 else { return 1 }
-        return cuts[index].zoom.factor((playheadFrame - start) / (end - start))
+        return cuts[index].zoom.factor((playheadFrame - start) / (end - start), amount: cuts[index].zoomBy)
+    }
+
+    /// How far the slow zoom goes on the cut the Fx page is on.
+    var zoomAmountHere: Double {
+        fxIndex.map { cuts[$0].zoomBy } ?? AutoZoom.amount
+    }
+
+    /// Sets how far the slow zoom goes on the cut the Fx page is on.
+    func setZoomAmountHere(_ amount: Double) {
+        guard let index = fxIndex else { return }
+        let amount = min(max(amount, AutoZoom.amounts.lowerBound), AutoZoom.amounts.upperBound)
+        guard abs(cuts[index].zoomBy - amount) > 0.0001 else { return }
+        pause()
+        history.append(snapshot())
+        cuts[index].zoomAmount = amount
+        redraw()
     }
 
     /// Turns the slow zoom on or off for the cut the playhead is in.
@@ -4434,6 +4450,7 @@ final class EditorModel {
         pause()
         history.append(snapshot())
         cuts[index].zoom = zoom
+        if zoom == .off { cuts[index].zoomAmount = nil }
         notice = zoom == .off ? "Auto zoom off for this cut." : "\(zoom.name) on this cut. Each cut has its own."
         redraw()
     }

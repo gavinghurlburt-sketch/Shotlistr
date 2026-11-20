@@ -899,9 +899,10 @@ struct EditingView: View {
         // Fisheye circle is moved there).
         .sheet(isPresented: $fxOpen, onDismiss: { model.endFX() }) {
             FXSheet(model: model)
+                .environment(\.colorScheme, .dark)
                 .presentationDetents([.medium])
                 .presentationContentInteraction(.scrolls)
-                .presentationBackground(.ultraThinMaterial)
+                .presentationBackground { FrostSheet() }
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         }
         // The lyrics' look (colors, font, animation...), without the word editing.
@@ -2203,8 +2204,9 @@ struct FramingControls: View {
             .accessibilityLabel("Filters for the whole video")
             .sheet(isPresented: $showingFilters) {
                 FilterSheet(model: model)
+                    .environment(\.colorScheme, .dark)
                     .presentationDetents([.height(330)])
-                    .presentationBackground(.ultraThinMaterial)
+                    .presentationBackground { FrostSheet() }
                     .presentationBackgroundInteraction(.enabled(upThrough: .height(330)))
             }
 
@@ -2450,7 +2452,7 @@ struct FXSheet: View {
                 Image(systemName: "play.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 40, height: 40)
-                    .background(Tint.surface2)
+                    .background(Color.white.opacity(0.08))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2481,7 +2483,7 @@ struct FXSheet: View {
                         .font(.system(size: 30, weight: .semibold))
                         .foregroundStyle(Tint.accent)
                         .frame(width: 76, height: 76)
-                        .background(Tint.surface2)
+                        .background(Color.white.opacity(0.08))
                     Text("Add an effect")
                         .font(.subheadline.weight(.semibold))
                 }
@@ -2514,7 +2516,7 @@ struct FXSheet: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Tint.surface2)
+                        .background(Color.white.opacity(0.08))
                         .overlay(Rectangle().strokeBorder(on ? Tint.accent : .clear, lineWidth: 1.5))
                         .contentShape(Rectangle())
                     }
@@ -2555,7 +2557,7 @@ struct FXSheet: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Tint.accent)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Tint.surface2)
+                        .background(Color.white.opacity(0.08))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -2597,7 +2599,7 @@ struct FXSheet: View {
             controls(kind)
         }
         .padding(12)
-        .background(Tint.surface2)
+        .background(Color.white.opacity(0.08))
     }
 
     @ViewBuilder private func controls(_ kind: FXKind) -> some View {
@@ -2620,6 +2622,9 @@ struct FXSheet: View {
             }
         case .zoom:
             chips([AutoZoom.zoomIn, .zoomOut], selected: model.zoomHere, name: { $0.name }) { model.setZoomHere($0) }
+            FXSlider(value: model.zoomAmountHere, range: AutoZoom.amounts, ends: ("A little", "A lot")) {
+                model.setZoomAmountHere($0)
+            }
         case .color:
             chips(ColorLook.allCases.filter { $0 != .none }, selected: fx.color, name: { $0.name }) { look in
                 var next = fx
@@ -2908,7 +2913,7 @@ struct FilterSheet: View {
                             .minimumScaleFactor(0.75)
                             .foregroundStyle(on ? Color.black : Color.white)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(on ? Tint.accent : Tint.surface2)
+                            .background(on ? Tint.accent : Color.white.opacity(0.08))
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
