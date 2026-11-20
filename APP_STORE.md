@@ -96,7 +96,8 @@ Contact: apps@gavingeddes.art
 
 ## Before submitting
 - [ ] Paid Apps agreement, bank and tax info active
-- [ ] Subscription group "creatrr": creatrr_artist_monthly "Ready to Submit" and added to version 1.0 (Plus and Pro not submitted yet)
+- [ ] Pricing and Availability: app price Free
+- [ ] Subscription group "creatrr": creatrr_artist_monthly at $4.99/month with an introductory offer (Free, 1 week, new subscribers), "Ready to Submit" and added to version 1.0 (Plus and Pro not submitted yet)
 - [ ] Demo account password set and tested
 - [ ] Screenshots
 - [ ] Age rating questionnaire
