@@ -6,7 +6,7 @@ const RC_API_KEY = "__RC_KEY__";
 const TIER_RANK = { artist: 1, plus: 2, pro: 3 };
 const TIER_PRODUCT = { artist: "creatrr_artist_monthly", plus: "creatrr_plus_monthly", pro: "creatrr_pro_monthly" };
 const TIER_BLURB = {
-  artist: "One artist. Plan every shoot for your own music.",
+  artist: "One artist. Songs, Projects and Edits for your own music.",
   plus: "Up to 10 artists. Every shoot tool, unlimited songs.",
   pro: "Up to 50 artists, plus Video production with call sheets and an on-set tracker."
 };
@@ -25,7 +25,7 @@ function previewPlan() {
 }
 function setPreviewPlan(t) {
   try { if (t && t !== subs.tier) localStorage.setItem(PREVIEW_KEY, t); else localStorage.removeItem(PREVIEW_KEY); } catch (e) {}
-  setTier(t || subs.tier || "plus");
+  setTier(t || subs.tier || "artist");
   if (t) closePaywall(true);
   paintPlanRow();
 }
@@ -84,19 +84,23 @@ function pkgFor(tier) {
 }
 function paintPaywall(msg) {
   const el = ensurePaywall();
-  const cards = ["artist", "plus", "pro"].map(t => {
+  /* Launch is creatrr Artist only. To sell Plus and Pro again, set this back to ["artist", "plus", "pro"].
+     Someone already on Plus or Pro still sees their own plan card. */
+  const SELL = ["artist"];
+  const shown = SELL.concat(subs.tier && !SELL.includes(subs.tier) ? [subs.tier] : []);
+  const cards = shown.map(t => {
     const pk = pkgFor(t), price = pk ? pk.product.priceString : TIER_PRICE_FALLBACK[t];
     const trial = !!(pk && pk.product.introPrice), cur = subs.tier === t;
     const label = cur ? "Your plan" : (trial && !subs.tier ? "Start 7-day free trial" : (subs.tier && TIER_RANK[t] < TIER_RANK[subs.tier] ? "Switch to " + TIERS[t].name.replace("creatrr ", "") : (subs.tier ? "Upgrade" : "Subscribe")));
-    return `<div class="pw-card${cur ? " cur" : t === "plus" && !subs.tier ? " pop" : ""}">
-      <div class="pw-top"><span class="pw-name">${TIERS[t].name}</span>${t === "plus" && !cur ? '<span class="pw-tag">Popular</span>' : ""}<span class="pw-price">${price}<small> /month</small></span></div>
+    return `<div class="pw-card${cur ? " cur" : shown.length > 1 && t === "plus" && !subs.tier ? " pop" : ""}">
+      <div class="pw-top"><span class="pw-name">${TIERS[t].name}</span>${shown.length > 1 && t === "plus" && !cur ? '<span class="pw-tag">Popular</span>' : ""}<span class="pw-price">${price}<small> /month</small></span></div>
       <p class="pw-blurb">${TIER_BLURB[t]}</p>
       <button type="button" class="btn ${cur ? "" : "primary"} pw-buy" data-pw-buy="${t}"${cur || pwBusy ? " disabled" : ""}>${label}</button></div>`;
   }).join("");
   el.innerHTML = `<div class="pw-in">
     ${pwBlocking ? "" : '<div style="text-align:right"><button type="button" class="btn small" data-pw="close">Close</button></div>'}
-    <h2>${subs.tier ? "Your plan" : "Pick your plan"}</h2>
-    <p class="pw-sub">${subs.tier ? "You're on " + TIERS[subs.tier].name + (subs.trial ? " (free trial)" : "") + "." : "Plan every shoot in one place. Unlimited songs on every plan."}</p>
+    <h2>${subs.tier ? "Your plan" : (shown.length > 1 ? "Pick your plan" : "Get " + TIERS[shown[0]].name)}</h2>
+    <p class="pw-sub">${subs.tier ? "You're on " + TIERS[subs.tier].name + (subs.trial ? " (free trial)" : "") + "." : (shown.length > 1 ? "Plan every shoot in one place. Unlimited songs on every plan." : "Plan, shoot and cut videos for your own music. Unlimited songs.")}</p>
     ${cards}
     <div class="pw-msg" id="pwMsg">${msg || ""}</div>
     <div class="pw-links">

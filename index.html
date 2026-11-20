@@ -4808,7 +4808,7 @@ async function artistRoom(name) {
   const arts = (await listProjects()).filter(isArtistRec), lim = TIERS[TIER].limit;
   if (name && arts.some(r => artistKey(r.docTitle) === artistKey(name))) return true;
   if (arts.length < lim) return true;
-  showNotice(isArtistTier() ? `${TIERS.artist.name} includes one artist. Upgrade to add more.` : `${TIERS[TIER].name} includes up to ${lim} artists.`);
+  showNotice(isArtistTier() ? `${TIERS.artist.name} includes one artist.` : `${TIERS[TIER].name} includes up to ${lim} artists.`);
   return false;
 }
 async function ensureArtist(name) {
