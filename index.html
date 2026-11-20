@@ -988,7 +988,7 @@ button:disabled { opacity: .4; }
 .appbar-top { flex-wrap: nowrap; gap: 8px; padding: 12px 16px 6px; }
 .brand-tier { color: var(--accent); text-transform: capitalize; }
 .brand { font-weight: 700; font-size: 19px; letter-spacing: -0.04em; text-transform: lowercase; margin-right: auto; }
-.appbar-top:has(#backToProjectsBtn:not(.hidden)) .brand { display: none; }
+body:not(.art-inline) .appbar-top:has(#backToProjectsBtn:not(.hidden)) .brand { display: none; }   /* on Artist the home holds the artist page inline, so the back button is hidden there and the creatrr Artist name stays */
 .appbar .btn, .appbar button { background-color: var(--surface-2); color: var(--text); border: 0; }
 .appbar .btn:hover, .appbar button:hover { background-color: var(--surface-3); }
 .appbar input.doc-title { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; background-color: transparent; color: var(--text); border: 1px solid transparent; border-radius: 12px; padding: 7px 10px; min-width: 0; max-width: none; flex: 1 1 auto; }
