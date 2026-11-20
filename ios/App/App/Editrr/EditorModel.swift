@@ -483,6 +483,8 @@ final class EditorModel {
     @ObservationIgnored private var tapBefore: [LyricWord]?
     /// The first word this go of tapping times.
     @ObservationIgnored private var tapFirst = 0
+    /// Where the playhead was put when tapping started (Start over goes back there).
+    @ObservationIgnored private var tapFrom: Double = 0
     @ObservationIgnored private var lyricDragStart: (state: EditState, word: LyricWord)?
 
     init() {
@@ -3958,9 +3960,24 @@ final class EditorModel {
         tapFirst = tapNext
         tapTiming = true
         let at = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
+        tapFrom = at
         time = at
         requestSeek(at)
         notice = nil
+    }
+
+    /// Start over: every tap this go comes off, the words go back to how they were, and the
+    /// playhead goes back to where tapping started, ready to try again.
+    func lyricTapRestart() {
+        guard tapTiming, let before = tapBefore else { return }
+        pause()
+        lyrics = before
+        tapNext = tapFirst
+        lyricSelected = nil
+        time = tapFrom
+        requestSeek(tapFrom)
+        notice = nil
+        lyricsLive.update(words: lyrics, style: lyricStyle)
     }
 
     /// A pad: plays from the playhead when stopped; while playing, the next word starts now.

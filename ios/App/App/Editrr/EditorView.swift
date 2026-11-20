@@ -747,8 +747,6 @@ struct EditingView: View {
 
             if model.tapBeatOn {
                 TapBeatPanel(model: model)
-            } else if model.lyricTimeline && model.tapTiming {
-                LyricTapPanel(model: model)
             } else if model.lyricTimeline {
                 LyricsToolbar(model: model) {
                     model.pause()
@@ -815,6 +813,16 @@ struct EditingView: View {
         }
         // The first time a project opens: three short tips, then never again.
         .overlay { FirstTips() }
+        // Tapping out the lyrics takes the whole screen: the song and words on top, big pads below.
+        .overlay {
+            ZStack {
+                if model.lyricTimeline && model.tapTiming {
+                    LyricTapScreen(model: model)
+                        .transition(.move(edge: .bottom))
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: model.tapTiming)
+        }
     }
 
     /// A problem or a notice, over the bottom of the video only while there is one (notices fade
@@ -1544,56 +1552,100 @@ struct TapBeatPanel: View {
     }
 }
 
-/// Tap the lyrics' timing: the song plays and you tap either pad each time a new word starts.
-/// The next word shows between the pads, with Back to take the last tap off.
-struct LyricTapPanel: View {
+/// Tap the lyrics' timing, full screen: the song's waveform and the word blocks on top (they
+/// move as you tap), the next word big in the middle with the ones after it lined up, and a tall
+/// pad for each thumb at the bottom. Back takes the last tap off; Start over takes them all off.
+struct LyricTapScreen: View {
     let model: EditorModel
 
     var body: some View {
         let playing = model.isPlaying
         let count = model.lyricTapCount
-        VStack(spacing: 8) {
-            HStack {
-                Button("Cancel") { model.finishTapTiming(keep: false) }
-                    .foregroundStyle(.white.opacity(0.75))
-                Spacer()
-                Text(Self.timedText(count))
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
-                Spacer()
-                Button("Done") { model.finishTapTiming(keep: true) }
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(count == 0 ? Color.white.opacity(0.35) : Tint.accent)
-                    .disabled(count == 0)
+        let spoken: String = playing ? "Next word starts now" : "Play"
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 12) {
+                header(count: count)
+                LyricsLane(model: model)
+                    .frame(height: LyricsLane.height)
+                    .padding(.horizontal, -12)
+                Spacer(minLength: 8)
+                queue
+                Spacer(minLength: 8)
+                tryAgainRow(count: count)
+                // A pad for each thumb: either one starts the next word.
+                HStack(spacing: 10) {
+                    TapPad(playing: playing, idle: "Play", spoken: spoken, trigger: count,
+                           height: 170) { model.lyricTap() }
+                    TapPad(playing: playing, idle: "Play", spoken: spoken, trigger: count,
+                           height: 170) { model.lyricTap() }
+                }
             }
-            .buttonStyle(.plain)
-            queue
-            // A pad for each thumb: either one starts the next word.
-            HStack(spacing: 10) {
-                TapPad(playing: playing, idle: "Play", spoken: playing ? "Next word starts now" : "Play",
-                       trigger: count) { model.lyricTap() }
-                TapPad(playing: playing, idle: "Play", spoken: playing ? "Next word starts now" : "Play",
-                       trigger: count) { model.lyricTap() }
-            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+            .foregroundStyle(.white)
         }
-        .foregroundStyle(.white)
-        .padding(.top, 4)
+    }
+
+    private func header(count: Int) -> some View {
+        HStack {
+            Button("Cancel") { model.finishTapTiming(keep: false) }
+                .foregroundStyle(.white.opacity(0.75))
+            Spacer()
+            Text(Self.timedText(count))
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+            Spacer()
+            Button("Done") { model.finishTapTiming(keep: true) }
+                .font(.body.weight(.bold))
+                .foregroundStyle(count == 0 ? Color.white.opacity(0.35) : Tint.accent)
+                .disabled(count == 0)
+        }
+        .buttonStyle(.plain)
+        .frame(height: 44)
+    }
+
+    /// Back (one tap off) on the left, Start over (all of them off) on the right.
+    private func tryAgainRow(count: Int) -> some View {
+        let dim: Color = Color.white.opacity(0.3)
+        return HStack {
+            Button { model.lyricTapBack() } label: {
+                Label("Back", systemImage: "arrow.uturn.backward")
+                    .frame(height: 44)
+                    .contentShape(Rectangle())
+            }
+            .foregroundStyle(count == 0 ? dim : Color.white)
+            .disabled(count == 0)
+            .accessibilityHint("Takes the last tap off to do it again")
+            Spacer()
+            Button { model.lyricTapRestart() } label: {
+                Label("Start over", systemImage: "arrow.counterclockwise")
+                    .frame(height: 44)
+                    .contentShape(Rectangle())
+            }
+            .foregroundStyle(count == 0 ? dim : Color.white)
+            .disabled(count == 0)
+            .accessibilityHint("Takes every tap off and goes back to the start")
+        }
+        .font(.body.weight(.semibold))
+        .labelStyle(.titleAndIcon)
+        .buttonStyle(.plain)
     }
 }
 
-extension LyricTapPanel {
-    /// Words further down the queue fade: 0.75 for the one after next, then less, 0.2 at least.
+extension LyricTapScreen {
+    /// Words further down the queue fade: 0.8 for the one after next, then less, 0.25 at least.
     static func fade(_ ahead: Int) -> Double {
         let step: Double = Double(ahead - 1) * 0.18
-        return max(0.2, 0.75 - step)
+        return max(0.25, 0.8 - step)
     }
 
-    /// The word just tapped pops in from the big one and slides off left.
+    /// The word just tapped drops up and away.
     static let tappedGoes: AnyTransition = AnyTransition.asymmetric(
-        insertion: AnyTransition.scale(scale: 1.4).combined(with: .opacity),
-        removal: AnyTransition.move(edge: .leading).combined(with: .opacity))
-    /// The next word slides in from the right and pops as it's tapped.
+        insertion: AnyTransition.scale(scale: 1.6).combined(with: .opacity),
+        removal: AnyTransition.move(edge: .top).combined(with: .opacity))
+    /// The next word comes up from the line below and pops as it's tapped.
     static let nextComes: AnyTransition = AnyTransition.asymmetric(
-        insertion: AnyTransition.move(edge: .trailing).combined(with: .opacity),
+        insertion: AnyTransition.move(edge: .bottom).combined(with: .opacity),
         removal: AnyTransition.scale(scale: 1.4).combined(with: .opacity))
     static let slideIn: AnyTransition = AnyTransition.move(edge: .trailing).combined(with: .opacity)
 
@@ -1602,8 +1654,8 @@ extension LyricTapPanel {
         return count == 1 ? "1 word timed" : "\(count) words timed"
     }
 
-    /// The words lined up: the one just tapped (fading off to the left), the next one big in
-    /// yellow, then the ones after it, so you can see each word coming. Each tap slides them along.
+    /// The words lined up: the one just tapped (small, green), the next one big in yellow, and the
+    /// next few under it, so you can see each word coming. Each tap moves them up.
     var queue: some View {
         let words = model.lyrics
         let next = model.tapNext
@@ -1611,54 +1663,49 @@ extension LyricTapPanel {
         let upTo: Int = min(words.count, next + 5)
         let ahead: [Int] = next + 1 < upTo ? Array((next + 1)..<upTo) : []
         let spoken: String = words.indices.contains(next) ? "Next word: " + words[next].text : "All words timed"
-        return HStack(spacing: 10) {
-            Button { model.lyricTapBack() } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 36, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(count == 0 ? Color.white.opacity(0.25) : Color.white)
-            .disabled(count == 0)
-            .accessibilityLabel("Back")
-            .accessibilityHint("Takes the last tap off to do it again")
-
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+        return VStack(spacing: 10) {
+            ZStack {
                 if next > 0, words.indices.contains(next - 1), count > 0 {
                     Text(words[next - 1].text)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Tint.good.opacity(0.7))
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Tint.good.opacity(0.8))
                         .id("w\(next - 1)")
                         .transition(Self.tappedGoes)
                 }
+            }
+            .frame(height: 30)
+            ZStack {
                 if words.indices.contains(next) {
                     Text(words[next].text)
-                        .font(.title2.weight(.heavy))
+                        .font(.system(size: 56, weight: .heavy))
                         .foregroundStyle(Tint.accent)
                         .id("w\(next)")
                         .transition(Self.nextComes)
                 } else {
-                    Text("All done")
-                        .font(.title3.weight(.heavy))
+                    Text("All done. Tap Done to keep it.")
+                        .font(.title2.weight(.heavy))
                         .foregroundStyle(Tint.good)
                 }
+            }
+            .frame(height: 70)
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
                 ForEach(ahead, id: \.self) { i in
                     Text(words[i].text)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.title2.weight(.bold))
                         .foregroundStyle(Color.white.opacity(Self.fade(i - next)))
                         .id("w\(i)")
                         .transition(Self.slideIn)
                 }
-                Spacer(minLength: 0)
             }
-            .lineLimit(1)
-            .frame(height: 44)
-            .clipped()
-            .animation(.spring(duration: 0.28, bounce: 0.35), value: next)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(spoken)
+            .frame(height: 34)
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.5)
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .animation(.spring(duration: 0.28, bounce: 0.35), value: next)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(spoken)
     }
 }
 
@@ -1669,13 +1716,14 @@ struct TapPad: View {
     let idle: String
     let spoken: String
     let trigger: Int
+    var height: CGFloat = 84
     let action: () -> Void
     @State private var down = false
 
     var body: some View {
         Corner.card
             .fill(playing ? (down ? Color.white : Tint.accent) : Tint.surface2)
-            .frame(height: 84)
+            .frame(height: height)
             .frame(maxWidth: .infinity)
             .overlay {
                 Text(playing ? "TAP" : idle)
