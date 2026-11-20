@@ -1951,11 +1951,17 @@ enum SharePopUp {
                 pop.permittedArrowDirections = []
             }
         } else {
-            // iPhone: the share pop up is a popover underneath, which iOS 26 draws as a narrow floating
-            // card. Asking for a page sheet gives the usual full-width sheet up from the bottom.
-            sheet.modalPresentationStyle = .pageSheet
+            // iPhone: iOS 26 floats a half-height sheet as an inset card (narrower than the screen);
+            // only a full-height sheet runs edge to edge. The share sheet is a popover underneath that
+            // turns into a sheet on iPhone, so its height is set on that sheet (and on the plain sheet
+            // in case it comes up as one).
+            let fullHeight: [UISheetPresentationController.Detent] = [.large()]
+            if let pop = sheet.popoverPresentationController {
+                pop.adaptiveSheetPresentationController.detents = fullHeight
+                pop.adaptiveSheetPresentationController.prefersGrabberVisible = true
+            }
             if let card = sheet.sheetPresentationController {
-                card.detents = [.medium(), .large()]
+                card.detents = fullHeight
                 card.prefersGrabberVisible = true
             }
         }
