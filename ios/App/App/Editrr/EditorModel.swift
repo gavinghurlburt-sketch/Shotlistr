@@ -144,6 +144,10 @@ final class EditorModel {
     private(set) var maskEditing = false
     /// The mask as it was when the fingers went down.
     @ObservationIgnored private var maskMoveStart: OverlayMask?
+    /// The fisheye circle while a finger moves it: where it started, and where it is now (drawn as
+    /// a yellow ring over the video; the picture catches up when the finger lets go).
+    @ObservationIgnored private var fishMoveStart: CGPoint?
+    private(set) var fishLive: CGPoint?
     /// The Custom mask point last tapped or added (it can be removed).
     var maskPoint: Int?
     /// The clip a finger is dragging right now.
@@ -4447,6 +4451,8 @@ final class EditorModel {
 
     func endFX() {
         fxTarget = nil
+        fishMoveStart = nil
+        fishLive = nil
     }
 
     private var fxIndex: Int? {
@@ -4523,11 +4529,179 @@ final class EditorModel {
             fx.faces = cuts[i].fx?.faces ?? []
             fx.facesLayer = cuts[i].fx?.facesLayer
             fx.followFace = source.followFace && !fx.faces.isEmpty && fx.facesLayer == cuts[i].layer
+            // The circle's keyframes belong to this cut's stretch: the others get it where it sits now.
+            if i != index, fx.fishKeys != nil {
+                let spot = source.fishSpot(at: playheadFrame)
+                fx.fishKeys = nil
+                fx.fishX = Double(spot.x)
+                fx.fishY = Double(spot.y)
+            }
             cuts[i].fx = fx == CutFX() ? nil : fx
             if i > 0, index > 0 { cuts[i].transition = transition }
         }
         notice = "Every cut has these effects now. Undo takes it back."
         redraw()
+    }
+
+    // MARK: Fisheye circle
+
+    /// The effects sheet is open on a cut with Fisheye: a drag on the video moves its circle, and a
+    /// tap puts it there.
+    var fishEditing: Bool {
+        fxTarget != nil && fxHere.custom == CustomFX.fisheye
+    }
+
+    /// Where the circle sits at the playhead (or under the finger), as fractions of the frame.
+    var fishSpotHere: CGPoint {
+        fishLive ?? fxHere.fishSpot(at: playheadFrame)
+    }
+
+    /// The cut the sheet is on, from its start to the next cut (for the playhead slider in the sheet).
+    var fxCutRange: ClosedRange<Double> {
+        guard let index = fxIndex else { return 0...max(0.1, timelineEnd) }
+        let start = min(cuts[index].time, timelineEnd)
+        let end = index + 1 < cuts.count ? cuts[index + 1].time : timelineEnd
+        return start...max(start + 0.1, min(end, timelineEnd))
+    }
+
+    /// Moves the playhead inside the cut the sheet is on (so the circle can be keyframed across it).
+    func scrubInCut(to seconds: Double) {
+        let range = fxCutRange
+        // Stops a frame short of the next cut, so the playhead stays on this one.
+        let last = max(range.lowerBound, range.upperBound - 1.0 / 30)
+        time = min(max(range.lowerBound, seconds), last)
+        requestSeek(time)
+    }
+
+    func beginFishMove() {
+        guard fishEditing else { return }
+        pause()
+        fishMoveStart = fxHere.fishSpot(at: playheadFrame)
+        fishLive = fishMoveStart
+    }
+
+    /// `move` is how far the finger went, as fractions of the frame.
+    func moveFish(by move: CGSize) {
+        guard let start = fishMoveStart else { return }
+        var x = Double(start.x) + Double(move.width)
+        var y = Double(start.y) + Double(move.height)
+        // Snaps to the middle.
+        if abs(x - 0.5) < 0.03 { x = 0.5 }
+        if abs(y - 0.5) < 0.03 { y = 0.5 }
+        fishLive = CGPoint(x: min(0.95, max(0.05, x)), y: min(0.95, max(0.05, y)))
+    }
+
+    func endFishMove() {
+        guard fishMoveStart != nil else { return }
+        let spot = fishLive
+        fishMoveStart = nil
+        fishLive = nil
+        if let spot { setFishSpot(spot) }
+    }
+
+    /// A tap on the video puts the circle's middle there.
+    func placeFish(at point: CGPoint) {
+        guard fishEditing else { return }
+        setFishSpot(CGPoint(x: min(0.95, max(0.05, point.x)), y: min(0.95, max(0.05, point.y))))
+    }
+
+    func centerFish() {
+        setFishSpot(CGPoint(x: 0.5, y: 0.5))
+    }
+
+    /// Puts the circle here. Without keyframes it sits there for the whole cut; with them, this
+    /// makes (or moves) the keyframe at the playhead.
+    private func setFishSpot(_ spot: CGPoint) {
+        var fx = fxHere
+        if var keys = fx.fishKeys, !keys.isEmpty {
+            let at = playheadFrame
+            var key = FishKey(time: at, x: Double(spot.x), y: Double(spot.y))
+            let moved: Bool
+            if let index = keys.firstIndex(where: { abs($0.time - at) < 0.5 / 30 }) {
+                key.ease = keys[index].ease
+                keys[index] = key
+                moved = true
+            } else {
+                keys.append(key)
+                keys.sort { $0.time < $1.time }
+                moved = false
+            }
+            fx.fishKeys = keys
+            setFXHere(fx)
+            notice = moved ? "Circle keyframe moved." : "Circle keyframe \(keys.count) at \(Self.clock(at))."
+        } else {
+            fx.fishX = Double(spot.x)
+            fx.fishY = Double(spot.y)
+            setFXHere(fx)
+        }
+    }
+
+    /// The circle's keyframe at the playhead, if there is one.
+    var fishKeyHere: Int? {
+        let at = playheadFrame
+        return fxHere.fishKeys?.firstIndex { abs($0.time - at) < 0.5 / 30 }
+    }
+
+    var fishKeyCount: Int { fxHere.fishKeys?.count ?? 0 }
+
+    /// Keeps where the circle is now as a keyframe at the playhead. The first one starts the
+    /// animating: after it, each move of the circle makes or updates the keyframe at the playhead.
+    func addFishKey() {
+        guard fishKeyHere == nil else { return }
+        var fx = fxHere
+        let at = playheadFrame
+        let spot = fx.fishSpot(at: at)
+        var keys = fx.fishKeys ?? []
+        keys.append(FishKey(time: at, x: Double(spot.x), y: Double(spot.y)))
+        keys.sort { $0.time < $1.time }
+        fx.fishKeys = keys
+        setFXHere(fx)
+        notice = keys.count == 1
+            ? "Keyframing the circle from here. Move the playhead and drag the circle: each move makes a keyframe there."
+            : "Circle keyframe \(keys.count) at \(Self.clock(at))."
+    }
+
+    func deleteFishKeyHere() {
+        guard let index = fishKeyHere else { return }
+        var fx = fxHere
+        let shown = fx.fishSpot(at: playheadFrame)
+        fx.fishKeys?.remove(at: index)
+        // The last one gone: the circle stays where it showed here, for the whole cut.
+        if fx.fishKeys?.isEmpty == true {
+            fx.fishKeys = nil
+            fx.fishX = Double(shown.x)
+            fx.fishY = Double(shown.y)
+            setFXHere(fx)
+            notice = "The circle isn't animated any more."
+            return
+        }
+        setFXHere(fx)
+        notice = "Circle keyframe deleted."
+    }
+
+    /// Stops animating the circle: it stays where it shows at the playhead, for the whole cut.
+    func stopFishKeys() {
+        var fx = fxHere
+        guard fx.fishKeys != nil else { return }
+        let shown = fx.fishSpot(at: playheadFrame)
+        fx.fishKeys = nil
+        fx.fishX = Double(shown.x)
+        fx.fishY = Double(shown.y)
+        setFXHere(fx)
+        notice = "The circle isn't animated any more."
+    }
+
+    func jumpToFishKey(forward: Bool) {
+        pause()
+        let times = (fxHere.fishKeys ?? []).map { $0.time }
+        let now = playheadFrame
+        let target = forward ? times.first(where: { $0 > now + 0.5 / 30 }) : times.last(where: { $0 < now - 0.5 / 30 })
+        guard let target else {
+            notice = forward ? "No later circle keyframe." : "No earlier circle keyframe."
+            return
+        }
+        time = min(max(0, target), timelineEnd)
+        requestSeek(time)
     }
 
     /// Plays from just before the cut, so its transition shows.
@@ -4657,6 +4831,11 @@ final class EditorModel {
             deleteKeyframeHere()
             return
         }
+        // The effects sheet is open on Fisheye: the diamond keyframes its circle.
+        if fishEditing {
+            addFishKey()
+            return
+        }
         if maskEditing {
             setMaskKey()
             return
@@ -4716,6 +4895,7 @@ final class EditorModel {
 
     /// The keyframe of the video on screen sitting at the playhead (within a frame), if any.
     var keyframeHere: Int? {
+        if fishEditing { return fishKeyHere }
         if let id = overlayPick {
             let list = maskEditing ? SavedOverlay.maskKeyList : SavedOverlay.placeKeys
             return overlay(id)?.keyIndex(list, at: playheadFrame)
@@ -4727,6 +4907,7 @@ final class EditorModel {
 
     /// Keyframe count of the video on screen.
     var keyframeCountHere: Int {
+        if fishEditing { return fishKeyCount }
         if maskEditing { return maskKeyCount }
         if let id = overlayPick { return overlay(id)?.keys?.count ?? 0 }
         return framedLayer.map { frameKeys($0).count } ?? 0
@@ -4734,6 +4915,10 @@ final class EditorModel {
 
     /// How the keyframe at (or just before) the playhead moves on to the next one.
     var easeHere: Ease? {
+        if fishEditing {
+            let at = playheadFrame
+            return fxHere.fishKeys?.last(where: { $0.time <= at + 0.5 / 30 })?.ease
+        }
         if let id = overlayPick, let overlay = overlay(id) {
             let at = playheadFrame - overlay.keyOrigin
             let keys = maskEditing ? overlay.maskKeys : overlay.keys
@@ -4745,6 +4930,15 @@ final class EditorModel {
     }
 
     func setEaseHere(_ ease: Ease) {
+        if fishEditing {
+            var fx = fxHere
+            let at = playheadFrame
+            guard let key = fx.fishKeys?.lastIndex(where: { $0.time <= at + 0.5 / 30 }) else { return }
+            fx.fishKeys?[key].ease = ease
+            setFXHere(fx)
+            notice = "\(ease.name) from this keyframe to the next."
+            return
+        }
         if let id = overlayPick {
             let list = maskEditing ? SavedOverlay.maskKeyList : SavedOverlay.placeKeys
             changeOverlayKeys(id) { overlay, at in
@@ -4769,6 +4963,10 @@ final class EditorModel {
     }
 
     func deleteKeyframeHere() {
+        if fishEditing {
+            deleteFishKeyHere()
+            return
+        }
         if maskEditing {
             deleteMaskKeyHere()
             return
@@ -4798,6 +4996,10 @@ final class EditorModel {
 
     /// Takes all zoom and position off the video on screen.
     func resetFramingHere() {
+        if fishEditing {
+            stopFishKeys()
+            return
+        }
         if maskEditing {
             clearMaskKeys()
             return
@@ -4820,6 +5022,10 @@ final class EditorModel {
 
     /// Moves the playhead to the previous or next keyframe of the video on screen.
     func jumpToKeyframe(forward: Bool) {
+        if fishEditing {
+            jumpToFishKey(forward: forward)
+            return
+        }
         if maskEditing {
             jumpToMaskKey(forward: forward)
             return

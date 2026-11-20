@@ -649,6 +649,12 @@ struct EditingView: View {
                             MaskHandles(model: model, id: id)
                         }
                     }
+                    // While Fisheye is open in the effects sheet: where its circle sits.
+                    .overlay {
+                        if model.fishEditing {
+                            FishRing(spot: model.fishSpotHere, keyed: model.fishKeyHere != nil)
+                        }
+                    }
                     // The lyrics, picked (or on the lyrics page): a yellow box with transform handles.
                     .overlay {
                         if model.lyricsActive, model.titleEditing == nil, let box = model.lyricsBox() {
@@ -1691,6 +1697,8 @@ struct VideoStage: View {
     @State private var maskMoving = false
     /// The fingers are moving the lyrics.
     @State private var lyricMoving = false
+    /// The fingers are moving the fisheye circle (the effects sheet is open on a Fisheye cut).
+    @State private var fishMoving = false
     @State private var framing = false
 
     var body: some View {
@@ -1707,7 +1715,7 @@ struct VideoStage: View {
                 .clipped()
                 .contentShape(Rectangle())
                 .overlay {
-                    StageTouches(quickDrag: model.overlayPick != nil || model.lyricsActive,
+                    StageTouches(quickDrag: model.overlayPick != nil || model.lyricsActive || model.fishEditing,
                                  began: { at in began(at) },
                                  changed: { scale, moved in changed(scale, moved) },
                                  ended: { ended() },
@@ -1730,6 +1738,11 @@ struct VideoStage: View {
     /// A tap on the words picks the lyrics; a tap away from them lets go. A tap on an overlay picks it.
     private func tapped(_ at: CGPoint) {
         guard !model.lyricTimeline else { return }
+        // The effects sheet is open on a Fisheye cut: a tap puts the circle there.
+        if model.fishEditing {
+            model.placeFish(at: at)
+            return
+        }
         // The Mask sheet is open: a tap adds a point to a Custom shape (and does nothing otherwise).
         if model.maskEditing {
             model.addMaskPoint(at: at)
@@ -1760,6 +1773,11 @@ struct VideoStage: View {
 
     private func began(_ at: CGPoint) {
         model.pause()
+        if model.fishEditing {
+            fishMoving = true
+            model.beginFishMove()
+            return
+        }
         if model.maskEditing {
             maskMoving = true
             model.beginMaskMove()
@@ -1792,6 +1810,10 @@ struct VideoStage: View {
     }
 
     private func changed(_ scale: Double, _ moved: CGSize) {
+        if fishMoving {
+            model.moveFish(by: moved)
+            return
+        }
         if lyricMoving {
             // One finger moves the words; a pinch sizes them too.
             model.moveLyrics(moved, scale: scale)
@@ -1810,6 +1832,11 @@ struct VideoStage: View {
     }
 
     private func ended() {
+        if fishMoving {
+            fishMoving = false
+            model.endFishMove()
+            return
+        }
         if lyricMoving {
             lyricMoving = false
             model.endLyricMove()
@@ -1830,6 +1857,38 @@ struct VideoStage: View {
         pinch = 1
         move = .zero
         model.stageFraming(scale: scale, shift: kept)
+    }
+}
+
+/// While Fisheye is open in the effects sheet: where its circle sits, in creatrr yellow (dashed
+/// between keyframes, solid on one).
+struct FishRing: View {
+    /// The circle's middle, as fractions of the frame (0,0 top left).
+    let spot: CGPoint
+    /// The playhead is on one of its keyframes.
+    let keyed: Bool
+
+    var body: some View {
+        GeometryReader { stage in
+            let size = stage.size
+            let radius = min(size.width, size.height) * 0.49
+            let middle = CGPoint(x: spot.x * size.width, y: spot.y * size.height)
+            ZStack {
+                Circle()
+                    .stroke(Tint.accent.opacity(0.9), style: StrokeStyle(lineWidth: 2, dash: keyed ? [] : [6, 5]))
+                    .frame(width: radius * 2, height: radius * 2)
+                    .position(middle)
+                Image(systemName: keyed ? "diamond.fill" : "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Tint.accent)
+                    .frame(width: 24, height: 24)
+                    .background(Color.black.opacity(0.45))
+                    .position(middle)
+            }
+        }
+        .clipped()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -2383,6 +2442,9 @@ struct FXSheet: View {
                             model.setFXHere(next)
                         }
                     }
+                    if fx.custom == CustomFX.fisheye {
+                        fishPanel
+                    }
                     if !CustomFX.isReady {
                         note("The custom shaders didn't load in this build.")
                     }
@@ -2403,6 +2465,83 @@ struct FXSheet: View {
             .padding(20)
         }
         .foregroundStyle(.white)
+    }
+
+    /// Fisheye's circle: drag or tap the video to place it, and keyframe it across the cut.
+    private var fishPanel: some View {
+        let count = model.fishKeyCount
+        let here = model.fishKeyHere != nil
+        let range = model.fxCutRange
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "hand.draw")
+                    .foregroundStyle(Tint.accent)
+                Text("Drag the video, or tap it, to move the circle.")
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Center it") { model.centerFish() }
+                    .buttonStyle(GlassButtonStyle(tint: Tint.calm))
+            }
+            // The playhead, kept inside this cut (where the effect is).
+            HStack(spacing: 8) {
+                Image(systemName: "play.square")
+                    .foregroundStyle(.white.opacity(0.6))
+                Slider(value: Binding(get: { min(max(model.time, range.lowerBound), range.upperBound) },
+                                      set: { model.scrubInCut(to: $0) }),
+                       in: range,
+                       onEditingChanged: { editing in
+                           if editing { model.beginScrub() } else { model.endScrub() }
+                       })
+                    .tint(Tint.accent)
+                    .accessibilityLabel("Playhead in this cut")
+                Text(EditorModel.clock(model.time))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            HStack(spacing: 8) {
+                if count > 0 {
+                    fishSquare("chevron.left", spoken: "Previous circle keyframe") { model.jumpToFishKey(forward: false) }
+                }
+                Button { model.addFishKey() } label: {
+                    Label(count == 0 ? "Start keyframing" : (here ? "Keyframe here" : "Add keyframe"),
+                          systemImage: here ? "diamond.fill" : "plus.diamond")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(here || count == 0 ? Tint.accent : .white)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(Tint.surface2, in: Corner.chip)
+                        .overlay(Corner.chip.strokeBorder(here ? Tint.accent : .clear, lineWidth: 1.5))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(here)
+                if count > 0 {
+                    fishSquare("chevron.right", spoken: "Next circle keyframe") { model.jumpToFishKey(forward: true) }
+                    if here {
+                        fishSquare("trash", spoken: "Delete this circle keyframe", tint: Tint.bad) { model.deleteFishKeyHere() }
+                    } else {
+                        fishSquare("xmark.diamond", spoken: "Stop animating the circle", tint: Tint.bad) { model.stopFishKeys() }
+                    }
+                }
+            }
+            note(count == 0
+                 ? "The circle stays where you put it. Start keyframing to animate it from the playhead."
+                 : "\(count == 1 ? "1 keyframe" : "\(count) keyframes"). Move the playhead and move the circle: each move makes a keyframe there.")
+        }
+    }
+
+    private func fishSquare(_ icon: String, spoken: String, tint: Color = .white, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 40, height: 40)
+                .background(Color.white.opacity(0.08))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(spoken)
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

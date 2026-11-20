@@ -75,8 +75,30 @@ struct CutFX: Codable, Equatable, Sendable {
     /// A custom shader (its id in CustomFX) and how strong.
     var custom: String?
     var customAmount: Double = 0.5
+    /// Fisheye: where the circle sits, as fractions of the frame (0,0 top left). With keyframes,
+    /// the circle moves between them instead (each at a timeline time).
+    var fishX: Double = 0.5
+    var fishY: Double = 0.5
+    var fishKeys: [FishKey]?
 
     init() {}
+
+    /// Where the fisheye circle sits at a timeline time, as fractions of the frame (0,0 top left).
+    /// Between two keyframes it moves with the first one's ease; before the first and after the last it holds.
+    func fishSpot(at time: Double) -> CGPoint {
+        guard let keys = fishKeys, let first = keys.first, let last = keys.last else {
+            return CGPoint(x: fishX, y: fishY)
+        }
+        if time <= first.time { return CGPoint(x: first.x, y: first.y) }
+        if time >= last.time { return CGPoint(x: last.x, y: last.y) }
+        for i in 1..<keys.count where keys[i].time >= time {
+            let a = keys[i - 1], b = keys[i]
+            let span = b.time - a.time
+            let t = a.ease.apply(span > 1e-6 ? (time - a.time) / span : 1)
+            return CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+        }
+        return CGPoint(x: last.x, y: last.y)
+    }
 
     var isEmpty: Bool {
         color == .none && blur < 0.01 && abs(rotate) < 0.1 && !mirror && shake < 0.01 && !followFace && custom == nil
@@ -84,6 +106,7 @@ struct CutFX: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case color, blur, rotate, mirror, shake, followFace, faces, facesLayer, custom, customAmount
+        case fishX, fishY, fishKeys
     }
 
     init(from decoder: Decoder) throws {
@@ -98,7 +121,20 @@ struct CutFX: Codable, Equatable, Sendable {
         facesLayer = try? c.decodeIfPresent(Int.self, forKey: .facesLayer)
         custom = try? c.decodeIfPresent(String.self, forKey: .custom)
         customAmount = (try? c.decodeIfPresent(Double.self, forKey: .customAmount)) ?? 0.5
+        fishX = (try? c.decodeIfPresent(Double.self, forKey: .fishX)) ?? 0.5
+        fishY = (try? c.decodeIfPresent(Double.self, forKey: .fishY)) ?? 0.5
+        fishKeys = try? c.decodeIfPresent([FishKey].self, forKey: .fishKeys)
     }
+}
+
+/// One spot the fisheye circle passes through: a timeline time and where it sits then
+/// (fractions of the frame, 0,0 top left).
+struct FishKey: Codable, Equatable, Sendable {
+    var time: Double
+    var x: Double
+    var y: Double
+    /// How it moves on to the next one.
+    var ease: Ease = .smooth
 }
 
 // MARK: - Drawing a layer with its effects
@@ -148,7 +184,7 @@ enum Effects {
         image = color(fx.color, image, rect: rect)
 
         if let id = fx.custom {
-            image = CustomFX.apply(id, to: image, amount: fx.customAmount, time: time, canvas: canvas)
+            image = CustomFX.apply(id, to: image, fx: fx, time: time, canvas: canvas)
         }
         return image.cropped(to: rect)
     }
@@ -391,17 +427,36 @@ enum CustomFX {
     struct Entry: Sendable {
         let id: String
         let name: String
-        /// Builds the picture from the shader, the frame, the amount (0...1), the time and the canvas.
-        let run: @Sendable (CIKernel, CIImage, Double, Double, CGSize) -> CIImage?
+        /// Builds the picture from the shader, the frame, the cut's effects (its amount, 0...1, is
+        /// `customAmount`), the timeline time and the canvas.
+        let run: @Sendable (CIKernel, CIImage, CutFX, Double, CGSize) -> CIImage?
     }
 
+    /// The fisheye's id (it has its own circle to move and keyframe in the effects sheet).
+    static let fisheye = "fisheye"
+
     static let all: [Entry] = [
-        Entry(id: "rgbSplit", name: "RGB split") { kernel, image, amount, _, canvas in
-            let shift = 4 + 36 * amount
+        Entry(id: "rgbSplit", name: "RGB split") { kernel, image, fx, _, canvas in
+            let shift = 4 + 36 * fx.customAmount
             let rect = CGRect(origin: .zero, size: canvas)
             return kernel.apply(extent: rect,
                                 roiCallback: { _, area in area.insetBy(dx: -CGFloat(shift) - 1, dy: -1) },
                                 arguments: [image.clampedToExtent(), Float(shift)])
+        },
+        // A round fisheye lens: the picture bulges inside a circle with a blue, out of focus rim,
+        // and a dark matte around it. The circle can be moved (and keyframed).
+        Entry(id: CustomFX.fisheye, name: "Fisheye") { kernel, image, fx, time, canvas in
+            let rect = CGRect(origin: .zero, size: canvas)
+            let spot = fx.fishSpot(at: time)
+            // Core Image counts up from the bottom; the spot counts down from the top.
+            let center = CIVector(x: spot.x * canvas.width, y: (1 - spot.y) * canvas.height)
+            let radius = min(canvas.width, canvas.height) * 0.49
+            // The look was tuned on ordinary (sRGB) colors, so the math runs on those.
+            let plain = image.clampedToExtent().applyingFilter("CILinearToSRGBToneCurve")
+            let output = kernel.apply(extent: rect,
+                                      roiCallback: { _, _ in rect.insetBy(dx: -radius * 0.2, dy: -radius * 0.2) },
+                                      arguments: [plain, center, Float(radius), Float(fx.customAmount)])
+            return output?.applyingFilter("CISRGBToneCurveToLinear").cropped(to: rect)
         }
     ]
 
@@ -423,9 +478,9 @@ enum CustomFX {
     /// True when the shaders loaded (shown in the effects sheet if not).
     static var isReady: Bool { !kernels.isEmpty }
 
-    static func apply(_ id: String, to image: CIImage, amount: Double, time: Double, canvas: CGSize) -> CIImage {
+    static func apply(_ id: String, to image: CIImage, fx: CutFX, time: Double, canvas: CGSize) -> CIImage {
         guard let entry = entry(id), let kernel = kernels[id],
-              let output = entry.run(kernel, image, amount, time, canvas) else { return image }
+              let output = entry.run(kernel, image, fx, time, canvas) else { return image }
         return output
     }
 }
