@@ -122,6 +122,10 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     var songNow: Double = 0
     var takes: [CapturedTake] = []
     var problem: String?
+    /// A take looked a lot like an earlier one in this shoot: a nudge to try another angle.
+    var lookAlike: String?
+    /// What each take looks like, to compare the next one against.
+    @ObservationIgnored private var looks: [UUID: TakeLook.Look] = [:]
     var ready = false
     /// The song's tempo, when creatrr knows it (the count-in and click need it).
     let tempo: CaptureTempo?
@@ -379,6 +383,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
             return
         }
         problem = nil
+        lookAlike = nil
         // With the count-in, the song starts right at your spot after a bar of clicks.
         playFrom = counting ? start : max(0, start - Self.leadIn * speed.songRate)
         recordStartHost = .invalid
@@ -448,8 +453,30 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         let delay = CMTimeSubtract(songStartHost, recordStartHost).seconds
         let rate = speed.songRate
         let hint = TakeHint(songTime: playFrom - delay * rate, speed: rate)
-        takes.append(CapturedTake(url: url, hint: hint, wide: takeWide))
+        let take = CapturedTake(url: url, hint: hint, wide: takeWide)
+        takes.append(take)
         Self.keepInPhotos(url)
+        compareLook(of: take)
+    }
+
+    /// Checks the new take against the earlier ones in this shoot. If it looks a lot like one,
+    /// says so (it's only a nudge: the take is kept either way).
+    private func compareLook(of take: CapturedTake) {
+        Task {
+            guard let look = await TakeLook.look(at: take.url) else { return }
+            // Thrown away (Retake, Delete) while it was being checked: nothing to say.
+            guard let number = takes.firstIndex(where: { $0.id == take.id }) else { return }
+            var closest: (number: Int, distance: Float)?
+            for (index, earlier) in takes.enumerated() where index < number {
+                guard let seen = looks[earlier.id], let distance = TakeLook.distance(look, seen) else { continue }
+                print("Take \(number + 1) vs take \(index + 1): look distance \(distance)")
+                if distance < (closest?.distance ?? .greatestFiniteMagnitude) { closest = (index + 1, distance) }
+            }
+            looks[take.id] = look
+            if let closest, closest.distance < TakeLook.alike, !recording, takes.last?.id == take.id {
+                lookAlike = "Hmm, that looked a lot like take \(closest.number). Maybe try a different angle or background?"
+            }
+        }
     }
 
     /// A copy goes to Photos too, so the take is safe even if the project is deleted.
@@ -571,12 +598,16 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     func dropLastTake() {
         guard let last = takes.popLast() else { return }
         try? FileManager.default.removeItem(at: last.url)
+        looks[last.id] = nil
+        lookAlike = nil
     }
 
     /// Throws every take away (the copies in Photos stay).
     func dropAllTakes() {
         for take in takes { try? FileManager.default.removeItem(at: take.url) }
         takes = []
+        looks = [:]
+        lookAlike = nil
     }
 
     /// Throws the last take away and films it again.
@@ -709,7 +740,7 @@ struct CaptureView: View {
                 topBar
                 takeBar
                 Spacer(minLength: 0)
-                if let message = capture.problem ?? note {
+                if let message = capture.problem ?? capture.lookAlike ?? note {
                     Text(message)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(.white)
