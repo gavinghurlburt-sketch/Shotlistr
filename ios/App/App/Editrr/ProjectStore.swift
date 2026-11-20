@@ -74,6 +74,8 @@ struct SavedProject: Codable, Equatable, Identifiable {
     var sounds: [SavedMusic]?
     /// A color filter over the whole video (nil: none).
     var filter: ColorLook?
+    /// How much of the filter shows (nil: all of it).
+    var filterAmount: Double?
 }
 
 /// Music or a sound effect added on the edit page (a file from Files, or a creatrr song or section).

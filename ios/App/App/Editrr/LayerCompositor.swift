@@ -51,12 +51,15 @@ final class LayerInstruction: NSObject, AVVideoCompositionInstructionProtocol, @
     let board: OverlayBoard?
     /// The whole video's filter (over the video and overlays, under the words).
     let filter: ColorLook
+    /// How much of the filter shows over the original (0: none, 1: all of it).
+    let filterAmount: Double
 
     init(timeRange: CMTimeRange, layers: [LayerInfo], transition: TransitionWindow? = nil,
          lyrics: LyricsOverlay? = nil, overlays: [OverlayRef] = [], board: OverlayBoard? = nil,
-         filter: ColorLook = .none) {
+         filter: ColorLook = .none, filterAmount: Double = 1) {
         self.timeRange = timeRange
         self.filter = filter
+        self.filterAmount = filterAmount
         self.layers = layers
         self.transition = transition
         self.lyrics = lyrics
@@ -190,8 +193,18 @@ final class LayerCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
             }
         }
 
-        if instruction.filter != .none {
-            picture = Effects.color(instruction.filter, picture.cropped(to: canvas), rect: canvas)
+        if instruction.filter != .none && instruction.filterAmount >= 0.01 {
+            let plain = picture.cropped(to: canvas)
+            let looked = Effects.color(instruction.filter, plain, rect: canvas)
+            if instruction.filterAmount >= 0.999 {
+                picture = looked
+            } else {
+                // Mixed with the original: 0 is the original, 1 the full look.
+                picture = plain.applyingFilter("CIDissolveTransition", parameters: [
+                    kCIInputTargetImageKey: looked,
+                    kCIInputTimeKey: min(1, instruction.filterAmount),
+                ]).cropped(to: canvas)
+            }
         }
 
         if let words = instruction.lyrics?.image(at: seconds, canvas: size) {

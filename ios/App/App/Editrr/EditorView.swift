@@ -3566,6 +3566,15 @@ struct FilterSheet: View {
                     .buttonStyle(.plain)
                 }
             }
+            if model.filter != .none {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("How much").font(.footnote.weight(.semibold)).foregroundStyle(.white.opacity(0.75))
+                    FXSlider(value: model.filterAmount, range: 0...1, ends: ("Original", "Full look")) { value in
+                        model.setFilterAmount(value)
+                    }
+                    .id(model.filter)
+                }
+            }
             Text("Effects for one clip are in Fx, in the tools under the timeline.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.6))

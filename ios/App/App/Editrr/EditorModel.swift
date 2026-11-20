@@ -622,6 +622,7 @@ final class EditorModel {
         notice = nil
         wide = pendingWide
         filter = .none
+        filterAmount = 1
         clearSounds()
         overlays = []
         trackKeys = []
@@ -1291,6 +1292,7 @@ final class EditorModel {
         project.music = nil
         project.sounds = sounds.isEmpty ? nil : sounds
         project.filter = filter == .none ? nil : filter
+        project.filterAmount = filter == .none || filterAmount >= 0.999 ? nil : filterAmount
         return project
     }
 
@@ -1346,6 +1348,7 @@ final class EditorModel {
         await PhotoAccess.ask()
         wide = saved.wide ?? false
         filter = saved.filter ?? .none
+        filterAmount = saved.filterAmount ?? 1
 
         // 1. The videos and the song, from Photos or the project's folder.
         var assets: [AVAsset] = []
@@ -1507,6 +1510,7 @@ final class EditorModel {
         currentProject = nil
         wide = false
         filter = .none
+        filterAmount = 1
         clearSounds()
         refreshProjects()
         pause()
@@ -3238,7 +3242,7 @@ final class EditorModel {
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
                                                                      media: overlayMedia, board: overlayBoard,
-                                                                     filter: filter)
+                                                                     filter: filter, filterAmount: filterAmount)
             player.replaceCurrentItem(with: item)
             watchForEnd(of: item)
             updateLoop()
@@ -3263,7 +3267,7 @@ final class EditorModel {
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
                                                                      media: overlayMedia, board: overlayBoard,
-                                                                     filter: filter)
+                                                                     filter: filter, filterAmount: filterAmount)
     }
 
     /// The cuts as the video on screen draws them: the same, except that while the Fx page shows
@@ -5103,6 +5107,17 @@ final class EditorModel {
         redraw()
     }
 
+    /// How much of the filter shows over the original (0: none, 1: all of it).
+    private(set) var filterAmount: Double = 1
+
+    func setFilterAmount(_ amount: Double) {
+        let value = min(1, max(0, amount))
+        guard abs(value - filterAmount) > 0.001 else { return }
+        pause()
+        filterAmount = value
+        redraw()
+    }
+
     // MARK: Fisheye circle
 
     /// The effects sheet is open on a cut with Fisheye: a drag on the video moves its circle, and a
@@ -6075,7 +6090,7 @@ final class EditorModel {
                                                                      cuts: cuts, layers: layers, duration: duration,
                                                                      length: timelineEnd, lyrics: words,
                                                                      overlays: overlays, media: overlayMedia, board: board,
-                                                                     filter: filter)
+                                                                     filter: filter, filterAmount: filterAmount)
         session.shouldOptimizeForNetworkUse = true
         // Only the part between Start and End, plus any clips added after the performance.
         let start = loopStart
