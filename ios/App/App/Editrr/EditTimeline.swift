@@ -398,7 +398,7 @@ struct EditTimeline: View {
                                                            style: .continuous).path(in: songRect)
                         context.drawLayer { song in
                             song.clip(to: shape)
-                            song.fill(shape, with: .color(SongTint.color.opacity(songMuted ? 0.4 : 1)))
+                            song.fill(shape, with: .color(ClipSoundTint.color.opacity(songMuted ? 0.3 : 1)))
                             if songMuted {
                                 song.fill(Path(CGRect(x: songRect.minX, y: songRect.midY - 0.5, width: songRect.width, height: 1)),
                                           with: .color(.white.opacity(0.45)))
@@ -419,7 +419,7 @@ struct EditTimeline: View {
                                         }
                                         px += 3
                                     }
-                                    song.fill(wave, with: .color(SongTint.wave))
+                                    song.fill(wave, with: .color(ClipSoundTint.wave))
                                 }
                                 song.draw(Text("\(Image(systemName: "music.note")) \(soundtrack.name)")
                                               .font(.system(size: 10, weight: .bold)).foregroundStyle(.white),
@@ -594,9 +594,7 @@ struct EditTimeline: View {
             let band = CGRect(x: left + 1, y: 2, width: max(2, right - left - 2), height: size.height - 4)
             var lane = context
             lane.opacity = shown ? 1 : 0.35
-            lane.fill(Path(band), with: .color(Color(white: 0.22)))
-            lane.fill(Path(CGRect(x: band.minX, y: band.minY, width: 2, height: band.height)),
-                      with: .color(Tint.accent))
+            lane.fill(Path(band), with: .color(LyricsTint.color))
             var inside = lane
             inside.clip(to: Path(band.insetBy(dx: 5, dy: 0)))
             inside.draw(Text("\(Image(systemName: "quote.opening")) Lyrics")
@@ -1005,7 +1003,12 @@ enum MusicTint {
     static let color = Color(red: 0.35, green: 0.62, blue: 1.0)
 }
 
-/// Editing a video: the band of a clip's own sound along its bottom.
+/// The lyrics block on the edit page.
+enum LyricsTint {
+    static let color = Color(red: 0.08, green: 0.62, blue: 0.55)
+}
+
+/// The band of a clip's own sound along its bottom (a performance's is the song).
 enum ClipSoundTint {
     static let color = Color(red: 0.80, green: 0.22, blue: 0.62)
     static let wave = Color(red: 1.0, green: 0.55, blue: 0.86)
