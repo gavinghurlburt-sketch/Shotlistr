@@ -6098,7 +6098,7 @@ final class EditorModel {
         session.timeRange = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
                                         end: CMTime(seconds: end, preferredTimescale: 600))
         let stamp = Int(Date().timeIntervalSince1970)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("editrr-\(stamp).mp4")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("creatrr-\(stamp).mp4")
         try? FileManager.default.removeItem(at: url)
 
         exportState = .working(0)

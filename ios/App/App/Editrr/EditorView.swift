@@ -706,7 +706,13 @@ struct EditingView: View {
                         .presentationDetents([.medium, .large])
                         .presentationBackground(.ultraThinMaterial)
                 }
-                .sheet(isPresented: $exporting) {
+                .sheet(isPresented: $exporting, onDismiss: {
+                    // Made it: the phone's own share pop up comes up from the edit page itself, so it
+                    // gets the full width (over the export sheet it was squeezed narrow).
+                    if case .saved(let url) = model.exportState {
+                        SharePopUp.present(url) { _, _ in }
+                    }
+                }) {
                     ExportSheet(model: model)
                         .presentationDetents([.medium])
                         .presentationBackground(.ultraThinMaterial)
@@ -1383,14 +1389,15 @@ extension EditorModel.ExportState {
     }
 }
 
-/// Export: one 1080 x 1920 (or 1920 x 1080 horizontal) video, with or without the song, then the share pop up.
+/// Export: one 1080 x 1920 (or 1920 x 1080 horizontal) video, with or without the song. Once it's made
+/// the sheet closes by itself and the phone's share pop up opens (Save Video, Messages, Instagram, …).
 struct ExportSheet: View {
     let model: EditorModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 14) {
-            // Once it's saved, the celebration takes the whole sheet.
+            // Once it's saved the sheet is on its way out (the share pop up follows).
             if case .saved = model.exportState {
                 EmptyView()
             } else {
@@ -1413,8 +1420,8 @@ struct ExportSheet: View {
                     .font(.subheadline.monospacedDigit())
                 Button("Cancel") { model.cancelExport() }
                     .buttonStyle(GlassButtonStyle())
-            case .saved(let url):
-                ReadyToPost(url: url) { dismiss() }
+            case .saved:
+                ProgressView().tint(.white)
             case .failed(let why):
                 Text("Couldn't export: \(why)")
                     .font(.footnote)
@@ -1428,6 +1435,9 @@ struct ExportSheet: View {
         .foregroundStyle(.white)
         .padding(24)
         .frame(maxWidth: .infinity)
+        .onChange(of: model.exportState) { _, state in
+            if case .saved = state { dismiss() }
+        }
     }
 
     /// What gets exported: the clip on the edit page (a performance's In to Out, or every video).
@@ -1909,92 +1919,6 @@ struct TapPad: View {
     }
 }
 
-/// After an export: a quick celebration, then the share pop up comes up by itself, where you pick
-/// Save Video, Messages, Instagram, TikTok, YouTube, Facebook or anything else on the phone. Share
-/// brings it back (closing it by mistake loses nothing). You do the posting.
-struct ReadyToPost: View {
-    let url: URL
-    let done: () -> Void
-    @State private var pop = false
-    /// What happened in the share pop up last (nil: nothing yet).
-    @State private var result: String?
-    @State private var saving = false
-    @State private var shownOnce = false
-
-    var body: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                Burst(pop: pop)
-                Image(systemName: "checkmark.square.fill")
-                    .font(.system(size: 58, weight: .bold))
-                    .foregroundStyle(Tint.good)
-                    .scaleEffect(pop ? 1 : 0.3)
-            }
-            .frame(height: 96)
-            Text("Ready to post!").font(.title2.weight(.bold))
-            Text("Save it, text it, or post it to Instagram, TikTok, YouTube Shorts or Facebook Reels.")
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.7))
-                .multilineTextAlignment(.center)
-            Button { share() } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .font(.body.weight(.bold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
-            HStack(spacing: 10) {
-                Button { save() } label: {
-                    Label(saving ? "Saving…" : "Save to Photos", systemImage: "square.and.arrow.down")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(GlassButtonStyle())
-                .disabled(saving)
-                Button(action: done) {
-                    Text("Done").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(GlassButtonStyle())
-            }
-            if let result {
-                Text(result)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .sensoryFeedback(.success, trigger: pop)
-        .onAppear {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) { pop = true }
-            guard !shownOnce else { return }
-            shownOnce = true
-            // The pop up comes up on its own once the check mark has landed.
-            Task {
-                try? await Task.sleep(for: .milliseconds(700))
-                share()
-            }
-        }
-    }
-
-    private func share() {
-        SharePopUp.present(url) { activity, completed in
-            guard completed else { return }
-            result = SharePopUp.sentLine(activity)
-        }
-    }
-
-    private func save() {
-        saving = true
-        Task {
-            do {
-                try await EditorModel.saveToPhotos(url)
-                result = "Saved to Photos, at the top."
-            } catch {
-                result = EditorError.explain(error)
-            }
-            saving = false
-        }
-    }
-}
-
 /// The phone's own share pop up for a video, over whatever is showing. It lists the apps on this
 /// phone that take a video (Instagram, TikTok, YouTube, Facebook only show when they're installed).
 @MainActor
@@ -2012,8 +1936,8 @@ enum SharePopUp {
         sheet.completionWithItemsHandler = { activity, completed, _, _ in
             finished(activity, completed)
         }
-        if let pop = sheet.popoverPresentationController {
-            // iPad: it points at the middle of the screen.
+        if UIDevice.current.userInterfaceIdiom == .pad, let pop = sheet.popoverPresentationController {
+            // iPad: it points at the middle of the screen. On iPhone it's the usual full-width sheet.
             pop.sourceView = top.view
             pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
             pop.permittedArrowDirections = []
@@ -2033,30 +1957,6 @@ enum SharePopUp {
         if lower.contains("youtube") { return "Sent to YouTube." }
         if lower.contains("facebook") { return "Sent to Facebook." }
         return "Shared."
-    }
-}
-
-/// Little colored squares that fly out from the middle once.
-struct Burst: View {
-    let pop: Bool
-    private static let colors: [Color] = [Tint.accent, Tint.good, Tint.warn, .pink, .cyan, .white]
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<18, id: \.self) { index in
-                let angle = Double(index) / 18 * 2 * .pi + (index.isMultiple(of: 2) ? 0.2 : 0)
-                let reach = 60.0 + Double(index % 3) * 18
-                Rectangle()
-                    .fill(Self.colors[index % Self.colors.count])
-                    .frame(width: 7, height: 7)
-                    .rotationEffect(.degrees(pop ? Double(index) * 40 : 0))
-                    .offset(x: pop ? cos(angle) * reach : 0, y: pop ? sin(angle) * reach : 0)
-                    .opacity(pop ? 0 : 1)
-                    .animation(.easeOut(duration: 0.9), value: pop)
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
