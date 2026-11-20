@@ -13,46 +13,45 @@ There is no separate editrr App Store record; everything ships as creatrr (bundl
 ## Store listing
 **Name:** creatrr
 **Subtitle (30 max):** Plan, film & edit music videos
-**Promotional text (170 max):** Film takes to your song and they line up on their own. Cut between them, add lyrics, and export for Reels and TikTok. Plan every shoot in one place.
+**Promotional text (170 max):** Plan the shoot, film takes to your song, and cut the video. Every take lines up with the music on its own. Export for Reels, TikTok and YouTube.
 **Keywords (100 max):** music video,video editor,shot list,lyrics,multicam,videography,storyboard,artist,call sheet
 **Category:** Photo & Video (secondary: Productivity)
 **Age rating:** 4+ (answer "None"/"No" to every question; no user-generated content shared publicly, no web browsing, no chat)
 **Copyright:** 2026 Gavin Geddes
 
 ### Description
-creatrr is the music video app for artists and the people who film them. Plan the shoot, film your takes to the song, and cut the video, all on your iPhone.
+creatrr is the music video app for artists. Plan the shoot, film your takes to the song, and cut the video, all on your iPhone.
+
+SONGS
+- Your songs with their sections, colors and tempo
+- Upload a track once and plan everything around it
+
+PROJECTS: PLAN, SHOOT, CUT
+- Plan: pick the sections, build a shot list with reference photos, notes and hooks
+- Shoot: film on your iPhone, or bring in takes from a nicer camera
+- Cut: every take lines up with the music and lands on one timeline
 
 FILM TO THE SONG
-- Pick a song and a section, hit record, and the song plays while you film
-- Every take lines up with the music on its own, up to 10 takes per section
+- Pick a section, hit record, and the song plays while you film
+- Every take lines up on its own, up to 10 takes per section
 - Count-in and click from your song's tempo, lens and zoom controls, slow motion
 
-EDIT LIKE A MULTICAM
-- All your takes stacked on one timeline, synced to the song
+EDITS
 - Tap to cut between takes, trim, move, add photos and overlays
-- Masks, keyframes and on-screen lyrics
+- Masks, keyframes, filters, effects and on-screen lyrics
 - Type what you want ("faster cuts, more close-ups") and Auto edit does it, on iPhones with Apple Intelligence
-- Export vertical 1080x1920 for Reels, TikTok and Shorts, or save to Photos
+- Export vertical 1080x1920 and share straight to Instagram, TikTok, YouTube or Photos
 - Editing happens on your iPhone; your videos are never uploaded
 
-PLAN EVERY SHOOT
-- Songs with their sections, colors and tempo
-- Shot lists per section, with reference photos, notes and hooks
-- Share a band link so your bandmates can add notes
-- Plus and Pro add artists, projects and a calendar; Pro adds call sheets and an on-set tracker
+SUBSCRIPTION
+creatrr is free to download. creatrr Artist is needed to use it: $1.99 per month, with a 7-day free trial for new subscribers.
 
-SUBSCRIPTIONS
-creatrr is free to download. A plan is needed to use it:
-- creatrr Artist: $1.99 per month, songs and edits for 1 artist, 7-day free trial for new subscribers
-- creatrr Plus: $9.99 per month, up to 10 artists
-- creatrr Pro: $29.99 per month, up to 50 artists plus video production tools
-
-Payment is charged to your Apple ID at confirmation of purchase (or at the end of the free trial). Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel any time in Settings > your name > Subscriptions. Prices are in USD and may vary by region.
+Payment is charged to your Apple ID at confirmation of purchase (or at the end of the free trial). The subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel any time in Settings > your name > Subscriptions. Prices are in USD and may vary by region.
 
 Terms of Use: https://www.creatrr.co/terms
 Privacy Policy: https://www.creatrr.co/privacy
 
-(Prices above match the live RevenueCat products; change them here and in docs/terms.html if the plan prices change.)
+(Launch is creatrr Artist only. Submit only creatrr_artist_monthly with version 1.0; leave Plus and Pro unsubmitted until they launch, and the in-app paywall must offer Artist only. Change the price here and in docs/terms.html if Artist's price changes.)
 
 ## App Privacy ("nutrition label") answers
 Tracking: **No** (no ads, no cross-app tracking, no analytics, no crash reporting SDK).
@@ -76,19 +75,20 @@ The app's PrivacyInfo.xcprivacy (ios/App/App/Editrr) lists the same six types.
 
 ## Screenshots
 Required (Apple spec page, read Nov 19, 2026): at least one "iPhone with Dynamic Island (medium display)" screenshot, 1206 x 2622 or 1179 x 2556 portrait (a regular iPhone 16/17 screenshot). Up to 10.
-Suggested set (Artist plan, home tabs are Songs and Edits):
+Suggested set (creatrr Artist, home tabs Songs, Projects, Edits):
 1. Songs: the artist page with songs and sections
-2. Shoot: camera with the song section title and the record button
-3. Edits: timeline with several synced takes
-4. Lyrics on a video
-5. Export screen
+2. Projects: a project on its Plan stage with a shot list
+3. Shoot: camera with the song section title and the record button
+4. Edits: timeline with several synced takes
+5. Lyrics on a video
+6. Export with the share pop-up
 If iPad stays supported (TARGETED_DEVICE_FAMILY 1,2), Apple also requires at least one 13" iPad screenshot (2064 x 2752 or 2048 x 2732).
 
 ## Review notes (paste in App Review Information)
 creatrr is a music video app: plan shoots, film takes to a song, and edit them. A subscription is required (Apple in-app purchase, entitlements via RevenueCat); sandbox purchases work on the paywall.
 Sign in: account button (top right) > Sign in.
 Demo account: creatrr.test.user@gmail.com / PASSWORD   <-- set the password in the app first
-Video editor: the Edits tab (swipe left from Songs). Filming: open a song, tap the red record button on a section. Camera, microphone and Photos are used only for filming and editing on the device.
+Home tabs are Songs, Projects and Edits. Video editor: the Edits tab. Projects run through Plan, Shoot and Cut stages. Filming: open a song, tap the red record button on a section. Camera, microphone and Photos are used only for filming and editing on the device.
 Lyrics from audio use Apple's on-device speech recognition. Typed Auto edit requests use Apple Intelligence's on-device model where available.
 Hook import (Import a hook) sends a few frames to Anthropic's Claude after the user agrees on a permission screen.
 Restore Purchases and Terms / Privacy links are on the paywall. Account deletion: account button > Delete account.
@@ -96,7 +96,7 @@ Contact: apps@gavingeddes.art
 
 ## Before submitting
 - [ ] Paid Apps agreement, bank and tax info active
-- [ ] Subscription group "creatrr" with the three products approved or "Ready to Submit" (submit them with the first build)
+- [ ] Subscription group "creatrr": creatrr_artist_monthly "Ready to Submit" and added to version 1.0 (Plus and Pro not submitted yet)
 - [ ] Demo account password set and tested
 - [ ] Screenshots
 - [ ] Age rating questionnaire
