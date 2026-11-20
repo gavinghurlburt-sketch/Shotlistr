@@ -33,6 +33,16 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram</string>
+		<string>instagram-reels</string>
+		<string>facebook-reels</string>
+		<string>fb</string>
+		<string>snssdk1233</string>
+		<string>tiktok</string>
+		<string>youtube</string>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
