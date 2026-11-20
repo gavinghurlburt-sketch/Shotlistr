@@ -4077,13 +4077,51 @@ final class EditorModel {
     }
 
     /// Splits a word holding several words ("let it") into one block each.
-    func splitLyric(_ index: Int) {
-        guard lyrics.indices.contains(index) else { return }
-        setLyricText(index, lyrics[index].text)
+    /// Where Split cuts a word block: the playhead when it's inside the block, else its middle.
+    private func lyricSplitPoint(_ word: LyricWord) -> Double {
+        let at = playheadFrame
+        return at > word.start + 0.05 && at < word.end - 0.05 ? at : (word.start + word.end) / 2
     }
 
-    func canSplitLyric(_ index: Int) -> Bool {
+    /// The block holds more than one word, so Split can share them out with no typing.
+    func lyricHasWords(_ index: Int) -> Bool {
         lyrics.indices.contains(index) && lyrics[index].text.split(whereSeparator: { $0.isWhitespace }).count > 1
+    }
+
+    /// Splits a word block at the playhead (its middle if the playhead isn't on it), for one word
+    /// held over words that are really sung there. A block of several words keeps the ones before
+    /// the cut and the rest go after it. A single word keeps the first part, and `after` (what's
+    /// sung in the second part) fills the rest, spread evenly when it's more than one word.
+    func splitLyric(_ index: Int, after: String? = nil) {
+        guard lyrics.indices.contains(index) else { return }
+        let word = lyrics[index]
+        guard word.end - word.start > 0.12 else {
+            notice = "That word is too short to split."
+            return
+        }
+        let at = lyricSplitPoint(word)
+        let parts = word.text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        var first = word
+        first.end = at
+        first.br = false
+        var second: [LyricWord] = []
+        if parts.count > 1 {
+            let share = (at - word.start) / (word.end - word.start)
+            let keep = min(parts.count - 1, max(1, Int((Double(parts.count) * share).rounded())))
+            first.text = parts[..<keep].joined(separator: " ")
+            second = [LyricWord(text: parts[keep...].joined(separator: " "), start: at, end: word.end,
+                                br: word.br, color: word.color)]
+        } else {
+            let typed = (after ?? "").split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            guard !typed.isEmpty else { return }
+            let step = (word.end - at) / Double(typed.count)
+            for (i, text) in typed.enumerated() {
+                second.append(LyricWord(text: text, start: at + step * Double(i), end: at + step * Double(i + 1),
+                                        br: i == typed.count - 1 ? word.br : false, color: word.color))
+            }
+        }
+        editLyrics { lyrics.replaceSubrange(index...index, with: [first] + second) }
+        notice = "Split into \(1 + second.count) at \(Self.clock(at))."
     }
 
     // MARK: Titles and text

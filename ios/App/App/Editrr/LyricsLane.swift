@@ -279,11 +279,12 @@ struct LyricsToolbar: View {
     @State private var coloring: Int?
 
     private enum TypingTarget: Identifiable {
-        case add, change(Int)
+        case add, change(Int), split(Int)
         var id: String {
             switch self {
             case .add: return "add"
             case .change(let index): return "change\(index)"
+            case .split(let index): return "split\(index)"
             }
         }
     }
@@ -311,15 +312,12 @@ struct LyricsToolbar: View {
                         Label("Add word", systemImage: "plus")
                     }
                     .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
-                    Button(action: openLook) {
-                        Label("Words & look", systemImage: "textformat")
-                    }
-                    .buttonStyle(GlassButtonStyle())
                     wordColorButton
                 }
             }
         }
-        .labelStyle(.iconOnly)
+        // Names under no icon to guess at: each button says what it does.
+        .labelStyle(.titleAndIcon)
         .lineLimit(1)
         .alert(alertTitle, isPresented: Binding(get: { typing != nil }, set: { if !$0 { typing = nil } })) {
             TextField("Word", text: $text)
@@ -399,15 +397,17 @@ struct LyricsToolbar: View {
             Label("End here", systemImage: "arrow.left.to.line")
         }
         .buttonStyle(GlassButtonStyle())
-        if model.canSplitLyric(index) {
-            Button { model.splitLyric(index) } label: {
-                Label("Split", systemImage: "scissors")
-            }
-            .buttonStyle(GlassButtonStyle())
+        // Split at the playhead: a block of several words shares them out; one word asks what's
+        // sung after the playhead.
+        Button {
+            if model.lyricHasWords(index) { model.splitLyric(index) } else { begin(.split(index)) }
+        } label: {
+            Label("Split", systemImage: "scissors")
         }
+        .buttonStyle(GlassButtonStyle())
         if index + 1 < model.lyrics.count {
             Button { model.mergeLyric(index) } label: {
-                Label("Join next", systemImage: "link")
+                Label("Join next", systemImage: "arrow.right.and.line.vertical.and.arrow.left")
             }
             .buttonStyle(GlassButtonStyle())
             Button { model.toggleLyricBreak(index) } label: {
@@ -421,21 +421,27 @@ struct LyricsToolbar: View {
         .buttonStyle(GlassButtonStyle(tint: Tint.bad))
     }
 
-    private var changing: Bool {
-        if case .some(.change) = typing { return true }
-        return false
+    private var alertTitle: String {
+        switch typing {
+        case .some(.change): return "Change word"
+        case .some(.split): return "Split here"
+        default: return "Add word"
+        }
     }
 
-    private var alertTitle: String { changing ? "Change word" : "Add word" }
-
     private var alertMessage: String {
-        changing ? "Spaces make more than one word." : "Goes in at the playhead. Spaces make more than one word."
+        switch typing {
+        case .some(.change): return "Spaces make more than one word."
+        case .some(.split): return "Type what's sung from the playhead to the end of this word. Spaces make more than one word."
+        default: return "Goes in at the playhead. Spaces make more than one word."
+        }
     }
 
     private func begin(_ target: TypingTarget) {
         switch target {
         case .add: text = ""
         case .change(let index): text = model.lyrics.indices.contains(index) ? model.lyrics[index].text : ""
+        case .split: text = ""
         }
         typing = target
     }
@@ -444,6 +450,7 @@ struct LyricsToolbar: View {
         switch typing {
         case .some(.add): model.addLyric(text)
         case .some(.change(let index)): model.setLyricText(index, text)
+        case .some(.split(let index)): model.splitLyric(index, after: text)
         case .none: break
         }
         typing = nil

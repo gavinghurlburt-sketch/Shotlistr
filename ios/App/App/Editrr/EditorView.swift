@@ -680,10 +680,12 @@ struct EditingView: View {
 
                 // As tall as the video (a horizontal one is short, so its tools can run past it),
                 // top-aligned beside it.
-                FramingControls(model: model) {
+                FramingControls(model: model, openFilters: {
                     closeFX()
                     withAnimation(.spring(duration: 0.35)) { filtersOpen = true }
-                }
+                }, openLyricLook: {
+                    lyricsOpen = true
+                })
                     .frame(width: 36)
                     .frame(height: model.wide ? max(videoWidth / ratio, geo.size.height) : videoWidth / ratio,
                            alignment: .top)
@@ -2373,17 +2375,30 @@ struct FramingControls: View {
     let model: EditorModel
     /// Opens the Filters panel (it sits at the bottom of the editor, edge to edge).
     let openFilters: () -> Void
+    /// On the lyrics page: opens the words and their look (Aa) in place of Filters.
+    let openLyricLook: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
-            // Filters: a color look over the whole video. (Each clip's own effects are Fx, below.)
-            Button {
-                model.pause()
-                openFilters()
-            } label: {
-                SideTile(icon: "camera.filters", text: "Filters", lit: model.filter != .none)
+            if model.lyricTimeline {
+                // The lyrics page: their words and look, there whether or not a word is picked.
+                Button {
+                    model.pause()
+                    openLyricLook()
+                } label: {
+                    SideTile(icon: "textformat", text: "Words & look")
+                }
+                .accessibilityLabel("The lyrics' words and look")
+            } else {
+                // Filters: a color look over the whole video. (Each clip's own effects are Fx, below.)
+                Button {
+                    model.pause()
+                    openFilters()
+                } label: {
+                    SideTile(icon: "camera.filters", text: "Filters", lit: model.filter != .none)
+                }
+                .accessibilityLabel("Filters for the whole video")
             }
-            .accessibilityLabel("Filters for the whole video")
 
             // On a keyframe, the diamond takes it off; anywhere else it sets one.
             Button { model.setKeyframe() } label: {
