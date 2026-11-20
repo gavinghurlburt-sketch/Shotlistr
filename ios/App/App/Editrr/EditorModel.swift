@@ -264,7 +264,7 @@ final class EditorModel {
     @ObservationIgnored private var lyricSizeStart: Double?
     /// The word showing at the playhead (changes only when the word does, so the list stays light).
     var lyricNow: Int?
-    /// Tap to time: hold for each word while the song plays.
+    /// Tap the timing: the song plays and you tap each time a new word starts.
     var tapTiming = false
 
     // Titles and other text, each on a text lane under the videos.
@@ -280,7 +280,7 @@ final class EditorModel {
     var textLaneCount: Int { (titles.map(\.lane).max() ?? -1) + 1 }
     /// Every lane under the song: videos, then text.
     var laneCount: Int { layers.count + textLaneCount }
-    /// The next word a hold will time.
+    /// The next word a tap will time.
     var tapNext = 0
 
     let player: AVPlayer = {
@@ -479,8 +479,10 @@ final class EditorModel {
     @ObservationIgnored private var titleEditStart: EditState?
     @ObservationIgnored private var titleDragStart: (state: EditState?, clip: TitleClip)?
     @ObservationIgnored private var titleRedrawn = Date.distantPast
-    @ObservationIgnored private var tapHeld: Int?
-    @ObservationIgnored private var tapStarted = false
+    /// The words as they were when tapping started (Cancel puts them back; Back restores one).
+    @ObservationIgnored private var tapBefore: [LyricWord]?
+    /// The first word this go of tapping times.
+    @ObservationIgnored private var tapFirst = 0
     @ObservationIgnored private var lyricDragStart: (state: EditState, word: LyricWord)?
 
     init() {
@@ -3357,8 +3359,7 @@ final class EditorModel {
         lyricNow = nil
         tapTiming = false
         tapNext = 0
-        tapHeld = nil
-        tapStarted = false
+        tapBefore = nil
     }
 
     private func updateLyricNow(at seconds: Double) {
@@ -3493,7 +3494,11 @@ final class EditorModel {
     func selectLyric(_ index: Int) {
         guard lyrics.indices.contains(index) else { return }
         lyricSelected = index
-        if tapTiming { tapNext = index }
+        if tapTiming {
+            // Tapping a word while tapping out the timing: the next tap times that word.
+            tapNext = index
+            tapFirst = min(tapFirst, index)
+        }
         pause()
         let word = lyrics[index]
         let at = min(max(0, word.start + min(0.1, (word.end - word.start) / 2)), duration)
@@ -3931,67 +3936,117 @@ final class EditorModel {
         previewHome = nil
     }
 
-    // Tap to time (Lyric Sync's tap sync): play the song and hold for each word while it's sung.
+    // Tap the timing: the song plays and you tap a pad each time a new word starts. A word lasts
+    // until the next tap (3 seconds at most, so it doesn't hang over a gap in the singing).
 
+    /// The longest a tapped word stays up before the next tap.
+    static let tapLongest = 3.0
+
+    /// Starts tapping out the words (off keeps what was tapped). It starts from the picked word,
+    /// else the next word at the playhead, with the playhead a few seconds before it.
     func setTapTiming(_ on: Bool) {
-        if !on, tapHeld != nil { tapUp() }
-        tapTiming = on
-        tapHeld = nil
-        tapStarted = false
-        guard on else { return }
-        if let index = lyricSelected {
-            tapNext = index
-        } else {
-            tapNext = lyrics.firstIndex(where: { $0.start >= time - 0.05 }) ?? 0
-        }
-    }
-
-    func tapDown() {
-        guard tapTiming, !lyrics.isEmpty else { return }
-        guard isPlaying else {
-            // The first press starts the song a moment before the next word.
-            let index = min(tapNext, lyrics.count - 1)
-            let at = max(0, lyrics[index].start - 2)
-            time = at
-            requestSeek(at)
-            play()
-            notice = "Hold the pad while each word is sung, and let go when it ends."
+        if !on {
+            if tapTiming { finishTapTiming(keep: true) }
             return
         }
-        let at = min(max(0, player.currentTime().seconds), duration)
-        if !tapStarted {
-            history.append(snapshot())
-            tapStarted = true
+        guard !lyrics.isEmpty, !tapTiming else { return }
+        pause()
+        if lyricDrag != nil { endLyricDrag() }
+        tapBefore = lyrics
+        let from = lyricSelected ?? (lyrics.firstIndex(where: { $0.start >= time - 0.05 }) ?? 0)
+        tapNext = min(max(0, from), lyrics.count - 1)
+        tapFirst = tapNext
+        tapTiming = true
+        let at = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
+        time = at
+        requestSeek(at)
+        notice = nil
+    }
+
+    /// A pad: plays from the playhead when stopped; while playing, the next word starts now.
+    func lyricTap() {
+        guard tapTiming, !lyrics.isEmpty else { return }
+        guard isPlaying else {
+            play()
+            return
         }
-        if tapHeld != nil { tapUp() }
+        let now = player.currentTime().seconds
+        guard now.isFinite, lyrics.indices.contains(tapNext) else { return }
         let i = tapNext
-        guard i < lyrics.count else { return }
-        let length = max(0.1, lyrics[i].end - lyrics[i].start)
+        let at = min(max(0, now), duration)
+        // Two taps closer than a couple of frames are one tap (both thumbs at once).
+        if i > tapFirst, at < lyrics[i - 1].start + 0.06 { return }
+        let length = lyrics[i].end - lyrics[i].start
         lyrics[i].start = at
-        if lyrics[i].end <= at { lyrics[i].end = at + length }
-        if i > 0, lyrics[i - 1].end > at { lyrics[i - 1].end = max(lyrics[i - 1].start + 0.03, at) }
-        tapHeld = i
+        lyrics[i].end = at + min(max(0.3, length), Self.tapLongest)
+        if i > 0 {
+            if i > tapFirst {
+                // The word before ends where this one starts (or sooner, after a long gap).
+                lyrics[i - 1].end = max(lyrics[i - 1].start + 0.04, min(at, lyrics[i - 1].start + Self.tapLongest))
+            } else if lyrics[i - 1].end > at {
+                lyrics[i - 1].end = max(lyrics[i - 1].start + 0.04, at)
+            }
+        }
         tapNext = i + 1
         lyricSelected = i
         lyricsLive.update(words: lyrics, style: lyricStyle)
+        if tapNext >= lyrics.count {
+            notice = "That's every word. Tap Done to keep it."
+        }
     }
 
-    func tapUp() {
-        guard let i = tapHeld, lyrics.indices.contains(i) else {
-            tapHeld = nil
+    /// Back: takes the last tap off and goes a little before it, to tap it again.
+    func lyricTapBack() {
+        guard tapTiming, tapNext > tapFirst, let before = tapBefore else { return }
+        pause()
+        tapNext -= 1
+        let i = tapNext
+        if before.indices.contains(i), lyrics.indices.contains(i) {
+            lyrics[i] = before[i]
+        }
+        let from = i > tapFirst ? lyrics[i - 1].start : lyrics[i].start - 2
+        let at = max(0, from - 1)
+        time = at
+        requestSeek(at)
+        lyricSelected = i > tapFirst ? i - 1 : nil
+        lyricsLive.update(words: lyrics, style: lyricStyle)
+    }
+
+    /// How many words have been tapped this go.
+    var lyricTapCount: Int { tapTiming ? max(0, tapNext - tapFirst) : 0 }
+
+    /// Done keeps the tapped times (one Undo takes them all back); Cancel puts the words back.
+    func finishTapTiming(keep: Bool) {
+        pause()
+        guard tapTiming else { return }
+        tapTiming = false
+        guard let before = tapBefore else { return }
+        tapBefore = nil
+        var timed = lyrics
+        lyrics = before
+        guard keep, tapNext > tapFirst else {
+            lyricsLive.update(words: lyrics, style: lyricStyle)
             return
         }
-        let at = min(max(0, player.currentTime().seconds), duration)
-        lyrics[i].end = max(lyrics[i].start + 0.04, at)
-        if i + 1 < lyrics.count, lyrics[i + 1].start < lyrics[i].end, lyrics[i + 1].end > lyrics[i].end + 0.05 {
-            lyrics[i + 1].start = lyrics[i].end
+        // The last tapped word ends before the next untapped one starts.
+        let last = tapNext - 1
+        if timed.indices.contains(last), timed.indices.contains(last + 1), timed[last].end > timed[last + 1].start {
+            if timed[last + 1].start > timed[last].start + 0.04 {
+                timed[last].end = timed[last + 1].start
+            } else {
+                // The next word's old time is behind the tapped ones: it moves just after them.
+                let length = min(max(0.3, timed[last + 1].end - timed[last + 1].start), Self.tapLongest)
+                timed[last + 1].start = timed[last].end
+                timed[last + 1].end = timed[last + 1].start + length
+            }
         }
-        tapHeld = nil
-        lyricsLive.update(words: lyrics, style: lyricStyle)
+        let count = tapNext - tapFirst
+        editLyrics { lyrics = timed }
         scheduleSave()
+        notice = count == 1 ? "Timed 1 word." : "Timed \(count) words."
     }
 
-    /// The next word a hold will time (for the pad's label).
+    /// The next word a tap will time (for the pads).
     var tapNextWord: String? {
         lyrics.indices.contains(tapNext) ? lyrics[tapNext].text : nil
     }
@@ -4004,7 +4059,7 @@ final class EditorModel {
         guard on != lyricTimeline else { return }
         pause()
         if lyricDrag != nil { endLyricDrag() }
-        tapTiming = false
+        if tapTiming { finishTapTiming(keep: true) }
         lyricTimeline = on
         lyricSelected = nil
         notice = nil

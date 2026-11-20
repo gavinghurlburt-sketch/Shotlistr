@@ -747,6 +747,8 @@ struct EditingView: View {
 
             if model.tapBeatOn {
                 TapBeatPanel(model: model)
+            } else if model.lyricTimeline && model.tapTiming {
+                LyricTapPanel(model: model)
             } else if model.lyricTimeline {
                 LyricsToolbar(model: model) {
                     model.pause()
@@ -1508,8 +1510,6 @@ struct ExportSheet: View {
 /// Done turns the taps into cuts, each to the best-looking take.
 struct TapBeatPanel: View {
     let model: EditorModel
-    /// A finger is down on the square (one tap per touch, on the touch down, for timing).
-    @State private var down = false
 
     var body: some View {
         let playing = model.isPlaying
@@ -1527,27 +1527,13 @@ struct TapBeatPanel: View {
                     .disabled(model.beatTaps.isEmpty)
             }
             .buttonStyle(.plain)
-            Corner.card
-                .fill(playing ? (down ? Color.white : Tint.accent) : Tint.surface2)
-                .frame(height: 84)
-                .overlay {
-                    Text(playing ? "TAP" : (model.beatTaps.isEmpty ? "Play and tap along" : "Start over"))
-                        .font(playing ? Font.title.weight(.heavy) : Font.headline)
-                        .foregroundStyle(playing ? Color.black : Color.white)
-                }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard !down else { return }
-                        down = true
-                        press()
-                    }
-                    .onEnded { _ in down = false })
-                .sensoryFeedback(.impact(weight: .light), trigger: model.beatTaps.count)
-                .accessibilityElement()
-                .accessibilityLabel(playing ? "Tap for a cut" : "Play and tap along")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { press() }
+            // A pad for each thumb: either one taps.
+            HStack(spacing: 10) {
+                TapPad(playing: playing, idle: model.beatTaps.isEmpty ? "Play" : "Start over",
+                       spoken: playing ? "Tap for a cut" : "Play and tap along", trigger: model.beatTaps.count) { press() }
+                TapPad(playing: playing, idle: model.beatTaps.isEmpty ? "Play" : "Start over",
+                       spoken: playing ? "Tap for a cut" : "Play and tap along", trigger: model.beatTaps.count) { press() }
+            }
         }
         .foregroundStyle(.white)
         .padding(.top, 4)
@@ -1555,6 +1541,138 @@ struct TapBeatPanel: View {
 
     private func press() {
         if model.isPlaying { model.tapBeat() } else { model.startTapBeat() }
+    }
+}
+
+/// Tap the lyrics' timing: the song plays and you tap either pad each time a new word starts.
+/// The next word shows between the pads, with Back to take the last tap off.
+struct LyricTapPanel: View {
+    let model: EditorModel
+
+    var body: some View {
+        let playing = model.isPlaying
+        let count = model.lyricTapCount
+        VStack(spacing: 8) {
+            HStack {
+                Button("Cancel") { model.finishTapTiming(keep: false) }
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer()
+                Text(count == 0 ? "Tap as each word starts" : (count == 1 ? "1 word timed" : "\(count) words timed"))
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                Spacer()
+                Button("Done") { model.finishTapTiming(keep: true) }
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(count == 0 ? Color.white.opacity(0.35) : Tint.accent)
+                    .disabled(count == 0)
+            }
+            .buttonStyle(.plain)
+            queue
+            // A pad for each thumb: either one starts the next word.
+            HStack(spacing: 10) {
+                TapPad(playing: playing, idle: "Play", spoken: playing ? "Next word starts now" : "Play",
+                       trigger: count) { model.lyricTap() }
+                TapPad(playing: playing, idle: "Play", spoken: playing ? "Next word starts now" : "Play",
+                       trigger: count) { model.lyricTap() }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.top, 4)
+    }
+}
+
+extension LyricTapPanel {
+    /// The words lined up: the one just tapped (fading off to the left), the next one big in
+    /// yellow, then the ones after it, so you can see each word coming. Each tap slides them along.
+    var queue: some View {
+        let words = model.lyrics
+        let next = model.tapNext
+        let count = model.lyricTapCount
+        return HStack(spacing: 10) {
+            Button { model.lyricTapBack() } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 36, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(count == 0 ? Color.white.opacity(0.25) : Color.white)
+            .disabled(count == 0)
+            .accessibilityLabel("Back")
+            .accessibilityHint("Takes the last tap off to do it again")
+
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if next > 0, words.indices.contains(next - 1), count > 0 {
+                    Text(words[next - 1].text)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Tint.good.opacity(0.7))
+                        .id("w\(next - 1)")
+                        .transition(.asymmetric(insertion: .scale(scale: 1.4).combined(with: .opacity),
+                                                removal: .move(edge: .leading).combined(with: .opacity)))
+                }
+                if words.indices.contains(next) {
+                    Text(words[next].text)
+                        .font(.title2.weight(.heavy))
+                        .foregroundStyle(Tint.accent)
+                        .id("w\(next)")
+                        .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
+                                                removal: .scale(scale: 1.4).combined(with: .opacity)))
+                } else {
+                    Text("All done")
+                        .font(.title3.weight(.heavy))
+                        .foregroundStyle(Tint.good)
+                }
+                ForEach(Array(stride(from: next + 1, to: min(words.count, next + 5), by: 1)), id: \.self) { i in
+                    Text(words[i].text)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(max(0.2, 0.75 - Double(i - next - 1) * 0.18)))
+                        .id("w\(i)")
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+                Spacer(minLength: 0)
+            }
+            .lineLimit(1)
+            .frame(height: 44)
+            .clipped()
+            .animation(.spring(duration: 0.28, bounce: 0.35), value: next)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(words.indices.contains(next) ? "Next word: \(words[next].text)" : "All words timed")
+        }
+    }
+}
+
+/// One tap pad: yellow with TAP while the song plays, a Play button while it doesn't. It fires on
+/// the touch down (not the lift), so the timing is where the thumb lands.
+struct TapPad: View {
+    let playing: Bool
+    let idle: String
+    let spoken: String
+    let trigger: Int
+    let action: () -> Void
+    @State private var down = false
+
+    var body: some View {
+        Corner.card
+            .fill(playing ? (down ? Color.white : Tint.accent) : Tint.surface2)
+            .frame(height: 84)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                Text(playing ? "TAP" : idle)
+                    .font(playing ? Font.title.weight(.heavy) : Font.headline)
+                    .foregroundStyle(playing ? Color.black : Color.white)
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !down else { return }
+                    down = true
+                    action()
+                }
+                .onEnded { _ in down = false })
+            .sensoryFeedback(.impact(weight: .light), trigger: trigger)
+            .accessibilityElement()
+            .accessibilityLabel(spoken)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { action() }
     }
 }
 

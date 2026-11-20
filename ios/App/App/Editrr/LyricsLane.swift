@@ -323,6 +323,7 @@ struct LyricsToolbar: View {
                         Label("Add word", systemImage: "plus")
                     }
                     .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
+                    tapTimingButton
                     wordColorButton
                 }
             }
@@ -368,12 +369,22 @@ struct LyricsToolbar: View {
         }
     }
 
+    /// Tap the timing: the song plays and you tap each time a new word starts (from the picked
+    /// word, else the next one at the playhead).
+    private var tapTimingButton: some View {
+        Button { model.setTapTiming(true) } label: {
+            Label("Tap the timing", systemImage: "hand.tap")
+        }
+        .buttonStyle(GlassButtonStyle())
+    }
+
     @ViewBuilder private func picked(_ index: Int) -> some View {
         Button { begin(.change(index)) } label: {
             Label("Change", systemImage: "pencil")
         }
         .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
         wordColorButton
+        tapTimingButton
         Button { model.setLyricEdge(index, start: true) } label: {
             Label("Start here", systemImage: "arrow.right.to.line")
         }
@@ -391,10 +402,6 @@ struct LyricsToolbar: View {
         }
         .buttonStyle(GlassButtonStyle())
         if index + 1 < model.lyrics.count {
-            Button { model.mergeLyric(index) } label: {
-                Label("Join next", systemImage: "arrow.right.and.line.vertical.and.arrow.left")
-            }
-            .buttonStyle(GlassButtonStyle())
             Button { model.toggleLyricBreak(index) } label: {
                 Label(model.lyrics[index].br ? "Join lines" : "New line", systemImage: "return")
             }
