@@ -149,6 +149,8 @@ struct Layer: Identifiable {
     /// Timeline seconds where the kept part of the clip starts and ends (can run past 0...duration).
     var clipStart: Double { offset + trimStart }
     var clipEnd: Double { offset + length - trimEnd }
+    /// Deleted on the edit page: no length left (kept, so Undo can bring it back).
+    var gone: Bool { clipEnd - clipStart < 0.001 }
 
     /// The part of the timeline this video covers, inside 0...duration.
     func footage(in duration: Double) -> ClosedRange<Double>? {

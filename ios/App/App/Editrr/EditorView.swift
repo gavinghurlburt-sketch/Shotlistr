@@ -793,8 +793,9 @@ struct EditingView: View {
         }
     }
 
+    /// Which video shows, on the performance page only (the edit page doesn't need it).
     @ViewBuilder private var showingBadge: some View {
-        if let index = model.showing {
+        if onPerformancePage, let index = model.showing {
             SideTile(icon: model.previewing == index ? "eye" : "video",
                      text: model.previewing == index ? "Preview \(index + 1)" : "Video \(index + 1)",
                      tint: model.layers.indices.contains(index) ? LayerTint.color(model.layers[index]) : LayerTint.color(index),
@@ -1113,24 +1114,12 @@ struct EditingView: View {
                                  spoken: "Edit the performance: every video synced to the song") {
                             withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
                         }
-                    } else {
-                        VStack(spacing: 3) {
-                            Text("\(index + 1)")
-                                .font(.headline.weight(.heavy).monospacedDigit())
-                                .foregroundStyle(model.layers.indices.contains(index)
-                                                 ? LayerTint.color(model.layers[index]) : LayerTint.color(index))
-                            Text("Video").font(.caption2)
-                        }
-                        .frame(width: 52, height: 52)
-                        .accessibilityElement(children: .combine)
                     }
-                    Text(model.kind == .performance ? "Drag the yellow ends to move Start and End."
-                                                    : "Drag the yellow ends to trim it.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.65))
-                        .lineLimit(2)
-                        .frame(maxWidth: 190, alignment: .leading)
-                        .padding(.horizontal, 8)
+                    // Gets rid of the picked clip (a piece split off, say); the rest close up.
+                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                             enabled: model.canDeleteClip, spoken: "Delete this clip") {
+                        model.deleteClip()
+                    }
                 }
             }
         }

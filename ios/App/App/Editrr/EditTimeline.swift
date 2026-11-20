@@ -302,7 +302,7 @@ struct EditTimeline: View {
         if model.kind == .performance {
             return [Clip(id: 0, start: model.loopStart, end: model.performanceEnd)]
         }
-        return model.playOrder.map { index in
+        return model.shownOrder.map { index in
             Clip(id: index, start: model.layers[index].clipStart, end: model.layers[index].clipEnd)
         }
     }
@@ -463,12 +463,22 @@ struct EditTimeline: View {
             }
             if let clip = outline {
                 let rect = CGRect(x: x(clip.start), y: top, width: max(2, x(clip.end) - x(clip.start)), height: height)
-                context.stroke(Path(rect.insetBy(dx: -1.5, dy: -1.5)), with: .color(Tint.accent), lineWidth: 3)
+                // Rounded outside corners, matching the clips' soft corners.
+                let corner = min(5, rect.width / 2, rect.height / 2)
+                context.stroke(Path(roundedRect: rect.insetBy(dx: -1.5, dy: -1.5), cornerRadius: corner + 1.5,
+                                    style: .continuous),
+                               with: .color(Tint.accent), lineWidth: 3)
                 for which in clip.grips {
                     let width: CGFloat = draggingEnd == which || cutawayDragged ? 16 : 13
                     let handle = CGRect(x: which == .trimStart ? rect.minX : rect.maxX - width, y: rect.minY,
                                         width: width, height: rect.height)
-                    context.fill(Path(handle), with: .color(Tint.accent))
+                    let start = which == .trimStart
+                    let shape = UnevenRoundedRectangle(topLeadingRadius: start ? corner : 0,
+                                                       bottomLeadingRadius: start ? corner : 0,
+                                                       bottomTrailingRadius: start ? 0 : corner,
+                                                       topTrailingRadius: start ? 0 : corner,
+                                                       style: .continuous)
+                    context.fill(shape.path(in: handle), with: .color(Tint.accent))
                     context.draw(Text(Image(systemName: which == .trimStart ? "chevron.compact.left" : "chevron.compact.right"))
                                     .font(.system(size: 15, weight: .heavy)).foregroundStyle(.black.opacity(0.8)),
                                  at: CGPoint(x: handle.midX, y: handle.midY))

@@ -26,12 +26,15 @@ private struct EditState: Equatable {
     var trackKeys: [Keyframe] = []
     var splits: [Double] = []
     var order: [Int] = []
+    /// The performance's In and Out, kept only for a step that moved them (nil: left as they are).
+    var range: [Double]?
 
     /// Where the clips sit (what needs a full rebuild when it changes), as one list.
     var timing: [Double] {
         places.flatMap { [$0.offset, $0.trimStart, $0.trimEnd] }
             + overlays.flatMap { [$0.start, $0.length, $0.trimStart] }
             + order.map(Double.init)
+            + (range ?? [])
     }
 }
 
@@ -1716,6 +1719,59 @@ final class EditorModel {
     /// Where a new clip goes, next to the picked piece.
     enum ClipSide { case before, after }
 
+    /// Editing a video: the videos on the track, in order (a deleted one left out).
+    var shownOrder: [Int] { playOrder.filter { !layers[$0].gone } }
+
+    /// Editing a video: room for one more video (a deleted one doesn't count).
+    private var videoRoom: Bool { layers.filter { !$0.gone }.count + textLaneCount < Self.maxLayers }
+
+    /// The picked clip can be deleted: a video while another stays, or the first or last piece of
+    /// a split performance (its middle stays in time with the song).
+    var canDeleteClip: Bool {
+        switch kind {
+        case .video:
+            guard let pick = editPick, layers.indices.contains(pick), !layers[pick].gone else { return false }
+            return shownOrder.contains { $0 != pick }
+        case .performance:
+            guard performancePieces.count > 1, let piece = pickedPiece else { return false }
+            return abs(piece.start - loopStart) < 0.001 || abs(piece.end - performanceEnd) < 0.001
+        }
+    }
+
+    /// Deletes the picked clip: the rest close up behind it (Undo brings it back).
+    func deleteClip() {
+        guard canDeleteClip else { return }
+        pause()
+        switch kind {
+        case .video:
+            guard let pick = editPick else { return }
+            history.append(snapshot())
+            future = []
+            // No length left, so it drops off the track; the videos after it move up.
+            layers[pick].trimEnd = layers[pick].length - layers[pick].trimStart
+            layOutSequence()
+            pickOnEdit(nil)
+            rebuildAll()
+        case .performance:
+            guard let piece = pickedPiece else { return }
+            history.append(snapshot(range: true))
+            future = []
+            // The first piece: Start moves to its end. The last: End moves to its start.
+            if abs(piece.start - loopStart) < 0.001 {
+                inPoint = piece.end
+            } else {
+                outPoint = piece.start
+            }
+            splits.removeAll { $0 <= loopStart + 0.001 || $0 >= performanceEnd - 0.001 }
+            pickOnEdit(nil)
+            updateLoop()
+            redraw()
+        }
+        keepInRange()
+        scheduleSave()
+        notice = nil
+    }
+
     /// Editing a video: the order the videos play in (every video once).
     var playOrder: [Int] {
         var seen = Set<Int>()
@@ -1767,14 +1823,14 @@ final class EditorModel {
     var canAddClip: Bool {
         if kind == .video {
             guard let pick = editPick, layers.indices.contains(pick) else { return false }
-            return laneCount < Self.maxLayers
+            return videoRoom
         }
         return clipAnchor != nil && cutaways.count < Self.maxCutaways
     }
 
     /// The + at the end of the video track can add one more.
     var canAddToEnd: Bool {
-        kind == .video ? laneCount < Self.maxLayers : cutaways.count < Self.maxCutaways
+        kind == .video ? videoRoom : cutaways.count < Self.maxCutaways
     }
 
     /// Split at the playhead: the picked overlay or clip there, else whatever is on the main track
@@ -1825,7 +1881,7 @@ final class EditorModel {
                 notice = "Move the playhead inside a clip to split it there."
                 return
             }
-            guard laneCount < Self.maxLayers else {
+            guard videoRoom else {
                 notice = "\(Self.maxLayers) videos is the most, so it can't be split again."
                 return
             }
@@ -1951,7 +2007,7 @@ final class EditorModel {
         guard let item = items.first, busy == nil else { return }
         pause()
         if kind == .video {
-            guard let last = playOrder.last else { return }
+            guard let last = shownOrder.last else { return }
             pickOnEdit(last)
             await addVideoClip(item, .after)
             return
@@ -2020,7 +2076,7 @@ final class EditorModel {
             notice = "Tap a clip first, then Before or After."
             return
         }
-        guard laneCount < Self.maxLayers else {
+        guard videoRoom else {
             notice = "\(Self.maxLayers) videos is the most."
             return
         }
@@ -2038,7 +2094,7 @@ final class EditorModel {
         let prints = await Self.readSounds(videos: [picked.asset], song: nil)
         // Things may have moved while it opened.
         guard stage == .editing, kind == .video, layers.indices.contains(pick),
-              laneCount < Self.maxLayers else { return }
+              videoRoom else { return }
         problem = nil
         layer.sound = prints[0]
         layer.sync = .manual
@@ -2603,7 +2659,7 @@ final class EditorModel {
         titleEditStart = nil
         defer { if editing && titleEditing != nil { titleEditStart = snapshot() } }
         guard let previous = history.popLast() else { return }
-        let now = snapshot()
+        let now = snapshot(range: previous.range != nil)
         future.append(now)
         let moved = previous.timing != now.timing
         restore(previous)
@@ -2620,7 +2676,7 @@ final class EditorModel {
             return
         }
         if titleEditStart != nil { titleEditStart = nil }
-        let now = snapshot()
+        let now = snapshot(range: next.range != nil)
         redoing = true
         history.append(now)
         redoing = false
@@ -2681,18 +2737,25 @@ final class EditorModel {
         return Filmstrip(step: step, frames: frames)
     }
 
-    private func snapshot() -> EditState {
+    /// `range`: also keep In and Out, for a step that moves them.
+    private func snapshot(range: Bool = false) -> EditState {
         EditState(cuts: cuts, places: layers.map {
             EditState.Place(offset: $0.offset, trimStart: $0.trimStart, trimEnd: $0.trimEnd,
                             sync: $0.sync, alternatives: $0.alternatives, keyframes: $0.keyframes)
         }, lyrics: lyrics, lyricStyle: lyricStyle, titles: titles, overlays: overlays, trackKeys: trackKeys,
-           splits: splits, order: order)
+           splits: splits, order: order, range: range ? [inPoint, outPoint] : nil)
     }
 
     private func restore(_ state: EditState) {
         cuts = state.cuts
         splits = state.splits
         order = state.order
+        if let range = state.range, range.count == 2 {
+            inPoint = range[0]
+            outPoint = range[1]
+            updateLoop()
+            keepInRange()
+        }
         if let pick = piecePick, !performancePieces.indices.contains(pick) { piecePick = nil }
         if overlays != state.overlays || trackKeys != state.trackKeys {
             trackKeys = state.trackKeys
