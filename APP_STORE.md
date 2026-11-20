@@ -14,7 +14,7 @@ There is no separate editrr App Store record; everything ships as creatrr (bundl
 **Name:** creatrr
 **Subtitle (30 max):** Plan, film & edit music videos
 **Promotional text (170 max):** Plan the shoot, film takes to your song, and cut the video. Every take lines up with the music on its own. Export for Reels, TikTok and YouTube.
-**Keywords (100 max):** music video,video editor,shot list,lyrics,multicam,videography,storyboard,artist,call sheet
+**Keywords (100 max):** music video,video editor,shot list,lyrics,multicam,videography,storyboard,artist,film
 **Category:** Photo & Video (secondary: Productivity)
 **Age rating:** 4+ (answer "None"/"No" to every question; no user-generated content shared publicly, no web browsing, no chat)
 **Copyright:** 2026 Gavin Geddes
