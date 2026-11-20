@@ -713,9 +713,11 @@ struct EditingView: View {
                         SharePopUp.present(url) { _, _ in }
                     }
                 }) {
+                    // creatrr's dark frosted glass, like the Fx panel (was the plain light material,
+                    // which showed as flat grey).
                     ExportSheet(model: model)
                         .presentationDetents([.medium])
-                        .presentationBackground(.ultraThinMaterial)
+                        .frostedSheet()
                         .interactiveDismissDisabled(model.exportState.isWorking)
                 }
 
