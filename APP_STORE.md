@@ -97,6 +97,7 @@ Contact: apps@gavingeddes.art
 ## Before submitting
 - [ ] Paid Apps agreement, bank and tax info active
 - [ ] Subscription group "creatrr": creatrr_artist_monthly "Ready to Submit" and added to version 1.0 (Plus and Pro not submitted yet)
+- [ ] Paywall offers Artist only: Plus and Pro cards removed (kept in for now on Gavin's word; the Settings plan picker already hides itself in TestFlight and App Store builds)
 - [ ] Demo account password set and tested
 - [ ] Screenshots
 - [ ] Age rating questionnaire
