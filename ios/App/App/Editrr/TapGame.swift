@@ -389,9 +389,26 @@ struct TapGameView: View {
             Text("Get ready… \(game.count)")
                 .font(.title2.weight(.bold).monospacedDigit())
         case .playing:
-            TimelineView(.animation) { _ in
-                Text(TapGameView.clock(max(0, game.shownTime() - game.start), hundredths: true))
-                    .font(.system(size: 44, weight: .bold, design: .monospaced))
+            VStack(spacing: 6) {
+                // The score: cuts so far, bumping up with each one.
+                VStack(spacing: 0) {
+                    Text("\(game.taps.count)")
+                        .font(.system(size: 64, weight: .heavy, design: .rounded).monospacedDigit())
+                        .foregroundStyle(game.taps.isEmpty ? Tint.calm : Tint.accent)
+                        .contentTransition(.numericText(value: Double(game.taps.count)))
+                        .animation(.spring(duration: 0.25, bounce: 0.4), value: game.taps.count)
+                    Text(game.taps.count == 1 ? "CUT" : "CUTS")
+                        .font(.caption.weight(.bold))
+                        .tracking(2)
+                        .foregroundStyle(Tint.calm)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(game.taps.count) cuts")
+                TimelineView(.animation) { _ in
+                    Text(TapGameView.clock(max(0, game.shownTime() - game.start), hundredths: true))
+                        .font(.system(size: 20, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Tint.calm)
+                }
             }
             .allowsHitTesting(false)
         case .done, .applying:
