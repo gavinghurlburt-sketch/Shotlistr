@@ -549,10 +549,6 @@ struct EditingView: View {
     @AppStorage("safeZone") private var safeZone: SafeZone = .off
     @State private var fullScreen = false
     @State private var exporting = false
-    /// The export sheet's height: tall while choosing, a short row of share icons once it's made.
-    @State private var exportDetent: PresentationDetent = .medium
-    /// More was tapped: the phone's full share sheet opens once the export sheet is gone.
-    @State private var shareMore = false
     @State private var autoEditing = false
     @State private var lyricsOpen = false
     /// The lyrics' look on its own (from the lyrics track's Look tool).
@@ -711,15 +707,14 @@ struct EditingView: View {
                         .presentationBackground(.ultraThinMaterial)
                 }
                 .sheet(isPresented: $exporting, onDismiss: {
-                    // More: the phone's own share sheet comes up from the edit page itself, so it gets
-                    // the full width (over the export sheet it was squeezed narrow).
-                    if shareMore, case .saved(let url) = model.exportState {
+                    // Made it: the phone's own share sheet comes up from the edit page itself, so it
+                    // gets the full width (over the export sheet it was squeezed narrow).
+                    if case .saved(let url) = model.exportState {
                         SharePopUp.present(url) { _, _ in }
                     }
-                    shareMore = false
                 }) {
-                    ExportSheet(model: model, detent: $exportDetent, more: $shareMore)
-                        .presentationDetents([.medium, SocialRow.detent], selection: $exportDetent)
+                    ExportSheet(model: model)
+                        .presentationDetents([.medium])
                         .presentationBackground(.ultraThinMaterial)
                         .interactiveDismissDisabled(model.exportState.isWorking)
                 }
@@ -1038,8 +1033,6 @@ struct EditingView: View {
             // Export last, after every other tool.
             ToolItem(icon: "square.and.arrow.up", text: "Export", on: true) {
                 model.resetExport()
-                exportDetent = .medium
-                shareMore = false
                 exporting = true
             }
         }
@@ -1397,17 +1390,14 @@ extension EditorModel.ExportState {
 }
 
 /// Export: one 1080 x 1920 (or 1920 x 1080 horizontal) video, with or without the song. Once it's made
-/// the sheet shrinks to a row of icons: Instagram, TikTok, YouTube, Facebook, and More for the phone's
-/// own share sheet (Save Video, Messages, AirDrop, …).
+/// the sheet closes by itself and the phone's share sheet opens (Save Video, Messages, Instagram, …).
 struct ExportSheet: View {
     let model: EditorModel
-    @Binding var detent: PresentationDetent
-    @Binding var more: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 14) {
-            // Once it's saved, the sheet is just the row of share icons.
+            // Once it's saved the sheet is on its way out (the share sheet follows).
             if case .saved = model.exportState {
                 EmptyView()
             } else {
@@ -1430,11 +1420,8 @@ struct ExportSheet: View {
                     .font(.subheadline.monospacedDigit())
                 Button("Cancel") { model.cancelExport() }
                     .buttonStyle(GlassButtonStyle())
-            case .saved(let url):
-                SocialRow(url: url) {
-                    more = true
-                    dismiss()
-                }
+            case .saved:
+                ProgressView().tint(.white)
             case .failed(let why):
                 Text("Couldn't export: \(why)")
                     .font(.footnote)
@@ -1449,7 +1436,7 @@ struct ExportSheet: View {
         .padding(24)
         .frame(maxWidth: .infinity)
         .onChange(of: model.exportState) { _, state in
-            if case .saved = state { withAnimation(.spring(duration: 0.3)) { detent = SocialRow.detent } }
+            if case .saved = state { dismiss() }
         }
     }
 
