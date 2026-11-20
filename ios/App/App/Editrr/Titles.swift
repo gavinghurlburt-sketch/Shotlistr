@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreText
 
 /// How a piece of text comes in. It goes out the same way, faded.
 enum TitleEntry: String, Codable, CaseIterable, Sendable {
@@ -33,6 +34,11 @@ struct TitleClip: Codable, Equatable, Identifiable, Sendable {
     var posX: Double = 50
     var posY: Double = 50
     var entry = TitleEntry.fade
+    /// The text's box: how wide it wraps, in percent of the frame's width (nil: 90). With a height
+    /// (percent of the frame's height), the text grows or shrinks to fill the box; without one, the
+    /// box is as tall as the wrapped lines at `size`.
+    var boxW: Double?
+    var boxH: Double?
 
     var postScript: String? { customFont.isEmpty ? font.postScript : customFont }
 
@@ -53,6 +59,7 @@ struct TitleClip: Codable, Equatable, Identifiable, Sendable {
         read(.font, &t.font); read(.customFont, &t.customFont); read(.textCase, &t.textCase); read(.size, &t.size)
         read(.color, &t.color); read(.outline, &t.outline); read(.shadow, &t.shadow)
         read(.posX, &t.posX); read(.posY, &t.posY); read(.entry, &t.entry)
+        read(.boxW, &t.boxW); read(.boxH, &t.boxH)
         self = t
     }
 
@@ -60,6 +67,146 @@ struct TitleClip: Codable, Equatable, Identifiable, Sendable {
     var label: String {
         let line = text.split(separator: "\n").first.map(String.init) ?? ""
         return line.trimmingCharacters(in: .whitespaces).isEmpty ? "Text" : line
+    }
+}
+
+/// Where a text's lines fall: wrapped to its box's width (onto new lines instead of shrinking), and
+/// with a box height, sized to fill the box. The same for the preview, the export and the handles.
+enum TitleLayout {
+    struct Laid {
+        /// The font size in pixels on this frame.
+        let size: Double
+        let lines: [String]
+        let lineHeight: Double
+        /// How wide the lines may run before wrapping, in pixels on this frame.
+        let wrapWidth: Double
+        /// The box on the video, in pixels on this frame. Until a side is pulled, it hugs the lines.
+        let width: Double
+        let height: Double
+    }
+
+    /// Line height for a font size (the renderer spaces lines the same).
+    static let leading = 1.15
+    /// The largest a text can grow to fill its box (pixels on a 1080-wide frame).
+    static let biggest = 480.0
+    static let smallest = 20.0
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cache: [String: Laid] = [:]
+    nonisolated(unsafe) private static var widths: [String: Double] = [:]
+
+    /// The pixels-on-a-1080-frame scale for this frame.
+    static func scale(_ canvas: CGSize) -> Double { Double(min(canvas.width, canvas.height)) / 1080 }
+
+    static func lay(_ title: TitleClip, canvas: CGSize) -> Laid {
+        let W = Double(canvas.width), H = Double(canvas.height)
+        let k = scale(canvas)
+        let text = title.textCase.apply(title.text)
+        let boxW = W * min(max(title.boxW ?? 90, 5), 100) / 100
+        let key = "\(text)|\(title.postScript ?? "")|\(title.size)|\(boxW)|\(title.boxH ?? -1)|\(W)x\(H)"
+        lock.lock()
+        if let found = cache[key] {
+            lock.unlock()
+            return found
+        }
+        lock.unlock()
+
+        let font = title.postScript
+        // Words measured once at 100 px, then scaled (a font's widths grow with its size).
+        let paragraphs = text.components(separatedBy: "\n").map { line in
+            line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        }
+        let space = width(" ", font: font)
+        func wrap(_ size: Double) -> [String] {
+            let f = size / 100
+            var lines: [String] = []
+            for words in paragraphs {
+                var line: [String] = []
+                var used = 0.0
+                for word in words {
+                    let w = width(word, font: font) * f
+                    if !line.isEmpty, used + space * f + w > boxW {
+                        lines.append(line.joined(separator: " "))
+                        line = [word]
+                        used = w
+                    } else {
+                        used += (line.isEmpty ? 0 : space * f) + w
+                        line.append(word)
+                    }
+                }
+                lines.append(line.joined(separator: " "))
+            }
+            return lines
+        }
+        /// Its longest single word fits across the box at this size.
+        func wordsFit(_ size: Double) -> Bool {
+            let longest = paragraphs.joined().map { width($0, font: font) }.max() ?? 0
+            return longest * size / 100 <= boxW
+        }
+
+        var size: Double
+        let height: Double
+        if let boxH = title.boxH {
+            // Fill the box: the biggest size whose wrapped lines fit inside it.
+            let tall = H * min(max(boxH, 2), 100) / 100
+            var low = smallest * k, high = biggest * k
+            func fits(_ s: Double) -> Bool {
+                wordsFit(s) && Double(wrap(s).count) * s * leading <= tall
+            }
+            if fits(high) {
+                low = high
+            } else {
+                for _ in 0..<18 where high - low > 0.5 {
+                    let mid = (low + high) / 2
+                    if fits(mid) { low = mid } else { high = mid }
+                }
+            }
+            size = low
+            height = tall
+        } else {
+            size = title.size * k
+            // A single word too long for the box shrinks to fit (there's nowhere to wrap it).
+            let longest = paragraphs.joined().map { width($0, font: font) }.max() ?? 0
+            if longest * size / 100 > boxW, longest > 0 { size = boxW / longest * 100 }
+            height = 0
+        }
+        size = (size * 2).rounded(.down) / 2
+        let lines = wrap(size)
+        let lineHeight = size * leading
+        var shown = boxW
+        if title.boxW == nil, title.boxH == nil {
+            let widest = lines.map { width($0, font: font) * size / 100 }.max() ?? 0
+            shown = min(boxW, widest + size * 0.3)
+        }
+        let laid = Laid(size: size, lines: lines, lineHeight: lineHeight, wrapWidth: boxW, width: shown,
+                        height: title.boxH == nil ? Double(max(lines.count, 1)) * lineHeight : height)
+        lock.lock()
+        if cache.count > 400 { cache.removeAll() }
+        cache[key] = laid
+        lock.unlock()
+        return laid
+    }
+
+    /// A word's width at 100 px in this font (the renderer's font rule).
+    private static func width(_ word: String, font postScript: String?) -> Double {
+        let key = "\(postScript ?? "")|\(word)"
+        lock.lock()
+        if let found = widths[key] {
+            lock.unlock()
+            return found
+        }
+        lock.unlock()
+        let uiFont = postScript.flatMap { UIFont(name: $0, size: 100) } ?? UIFont.systemFont(ofSize: 100, weight: .black)
+        let string = NSAttributedString(string: word, attributes: [
+            NSAttributedString.Key(kCTFontAttributeName as String): uiFont as CTFont
+        ])
+        let line = CTLineCreateWithAttributedString(string)
+        let measured = Double(CTLineGetTypographicBounds(line, nil, nil, nil))
+        lock.lock()
+        if widths.count > 4000 { widths.removeAll() }
+        widths[key] = measured
+        lock.unlock()
+        return measured
     }
 }
 
@@ -95,43 +242,122 @@ struct TextLaneChip: View {
     }
 }
 
-/// Over the video while a text is open: drag anywhere to move it. A crosshair marks its middle.
+/// Over the video while a text is picked or open: its box, with handles as on a picked layer in
+/// other editors. Drag anywhere to move it. Pull a side to change where its lines wrap; pull the top,
+/// the bottom or a corner and the text grows or shrinks to fill the box. A tap away lets go (or
+/// picks the text tapped), and a double tap on it opens its sheet.
 struct TitleMover: View {
     let model: EditorModel
     let id: UUID
+    private static let space = "titleMover"
     @State private var start: CGPoint?
+    /// The box (fractions of the frame) when a handle was taken hold of.
+    @State private var shaping: CGRect?
+    @State private var lastTap = Date.distantPast
+
+    /// Each handle: which way it pulls across (-1 left, 1 right) and down (-1 top, 1 bottom).
+    private static let handles: [(x: Int, y: Int)] = [
+        (0, -1), (0, 1), (-1, 0), (1, 0),
+        (-1, -1), (1, -1), (-1, 1), (1, 1)
+    ]
 
     var body: some View {
         GeometryReader { geo in
-            let clip = model.title(id)
+            let w = max(geo.size.width, 1), h = max(geo.size.height, 1)
             ZStack(alignment: .topLeading) {
                 Color.clear
-                if let clip {
-                    Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.9), radius: 3)
-                        .position(x: geo.size.width * clip.posX / 100,
-                                  y: geo.size.height * clip.posY / 100)
+                    .contentShape(Rectangle())
+                    .gesture(move(width: w, height: h))
+                    .onTapGesture(coordinateSpace: .local) { at in
+                        tapped(CGPoint(x: at.x / w, y: at.y / h))
+                    }
+                if let box = model.titleBox(id) {
+                    let frame = CGRect(x: box.minX * w, y: box.minY * h, width: box.width * w, height: box.height * h)
+                    Rectangle()
+                        .strokeBorder(Tint.accent, lineWidth: 2)
+                        .frame(width: frame.width, height: frame.height)
+                        .position(x: frame.midX, y: frame.midY)
                         .allowsHitTesting(false)
+                    ForEach(0..<Self.handles.count, id: \.self) { i in
+                        let pull = Self.handles[i]
+                        handle(pull)
+                            .frame(width: 40, height: 40)
+                            .contentShape(Rectangle())
+                            .gesture(shape(pull, width: w, height: h))
+                            .position(x: frame.midX + CGFloat(pull.x) * frame.width / 2,
+                                      y: frame.midY + CGFloat(pull.y) * frame.height / 2)
+                            .accessibilityLabel(pull.y == 0 ? "Change where the text wraps" : "Make the text fill a bigger or smaller box")
+                    }
                 }
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        guard let clip = model.title(id) else { return }
-                        if start == nil { start = CGPoint(x: clip.posX, y: clip.posY) }
-                        guard let start else { return }
-                        let x = start.x + value.translation.width / max(geo.size.width, 1) * 100
-                        let y = start.y + value.translation.height / max(geo.size.height, 1) * 100
-                        model.placeTitle(id, x: Double(x), y: Double(y))
-                    }
-                    .onEnded { _ in
-                        start = nil
-                        model.placeTitleEnded()
-                    }
-            )
+        }
+        .coordinateSpace(name: Self.space)
+    }
+
+    /// A white square at a corner, a white bar on a side.
+    private func handle(_ pull: (x: Int, y: Int)) -> some View {
+        let corner = pull.x != 0 && pull.y != 0
+        return Rectangle()
+            .fill(Color.white)
+            .overlay(Rectangle().strokeBorder(Tint.accent, lineWidth: 2))
+            .frame(width: corner ? 14 : (pull.x == 0 ? 22 : 8), height: corner ? 14 : (pull.y == 0 ? 22 : 8))
+    }
+
+    /// Drag anywhere: the text follows the finger.
+    private func move(width: CGFloat, height: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                guard let clip = model.title(id) else { return }
+                if start == nil { start = CGPoint(x: clip.posX, y: clip.posY) }
+                guard let start else { return }
+                let x = start.x + value.translation.width / width * 100
+                let y = start.y + value.translation.height / height * 100
+                model.placeTitle(id, x: Double(x), y: Double(y))
+            }
+            .onEnded { _ in
+                start = nil
+                model.placeTitleEnded()
+            }
+    }
+
+    /// A handle: the side across from it stays put while the box grows or shrinks toward the finger.
+    private func shape(_ pull: (x: Int, y: Int), width: CGFloat, height: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.space))
+            .onChanged { value in
+                if shaping == nil { shaping = model.titleBox(id) }
+                guard let s = shaping else { return }
+                let dx = value.translation.width / width, dy = value.translation.height / height
+                var boxW = s.width, boxH = s.height, mx = s.midX, my = s.midY
+                if pull.x != 0 {
+                    boxW = min(max(s.width + CGFloat(pull.x) * dx, 0.12), 1)
+                    mx = s.midX + CGFloat(pull.x) * (boxW - s.width) / 2
+                }
+                if pull.y != 0 {
+                    boxH = min(max(s.height + CGFloat(pull.y) * dy, 0.03), 1)
+                    my = s.midY + CGFloat(pull.y) * (boxH - s.height) / 2
+                }
+                model.shapeTitle(id, width: Double(boxW * 100), height: pull.y != 0 ? Double(boxH * 100) : nil,
+                                 x: Double(mx * 100), y: Double(my * 100))
+            }
+            .onEnded { _ in
+                shaping = nil
+                model.placeTitleEnded()
+            }
+    }
+
+    private func tapped(_ point: CGPoint) {
+        let inside = model.titleBox(id)?.insetBy(dx: -0.03, dy: -0.02).contains(point) ?? false
+        if inside {
+            // A double tap on the text opens it.
+            let now = Date()
+            if now.timeIntervalSince(lastTap) < 0.35 {
+                lastTap = .distantPast
+                model.openTitle(id)
+            } else {
+                lastTap = now
+            }
+        } else if model.titleEditing == nil {
+            model.pickTitle(model.titleAt(point))
         }
     }
 }
@@ -152,7 +378,7 @@ struct TitleSheet: View {
                     header(clip)
                     words(id)
                     look(id, clip)
-                    note("Drag on the video to move it. On the timeline, hold the text clip to move it, or drag its ends to make it longer or shorter.")
+                    note("Drag on the video to move it. Pull the box's sides to change where the lines wrap, or its top or bottom to make the text fill the box. On the timeline, hold the text clip to move it, or drag its ends to make it longer or shorter.")
                 } else {
                     note("This text is gone.")
                 }
@@ -232,8 +458,12 @@ struct TitleSheet: View {
             chips(LyricCase.allCases, selected: clip.textCase, name: { $0.name }) { textCase in
                 model.editTitle(id) { $0.textCase = textCase }
             }
-            FXSlider(value: clip.size, range: 40...320, ends: ("Small", "Big")) { value in
-                model.editTitle(id) { $0.size = value }
+            // Sizing by hand lets go of filling the box (the box is as tall as the lines again).
+            FXSlider(value: clip.size, range: 40...TitleLayout.biggest, ends: ("Small", "Big")) { value in
+                model.editTitle(id) {
+                    $0.size = value
+                    $0.boxH = nil
+                }
             }
         }
 

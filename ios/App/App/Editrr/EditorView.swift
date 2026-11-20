@@ -856,6 +856,8 @@ struct EditingView: View {
                 } else {
                     performanceTools
                 }
+            } else if let id = model.titlePick, model.title(id) != nil {
+                titleTools(id)
             } else if model.musicPicked, let music = model.music {
                 musicTools(music)
             } else if model.lyricsPicked, model.hasLyrics {
@@ -949,6 +951,32 @@ struct EditingView: View {
                 ToolItem(icon: "square.and.arrow.up", text: "Export", on: true) {
                     model.resetExport()
                     exporting = true
+                }
+            }
+        }
+    }
+
+    /// A text picked: open it to change its words and look, cut it at the playhead, or delete it.
+    private func titleTools(_ id: UUID) -> some View {
+        HStack(spacing: 0) {
+            Button { model.pickTitle(nil) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 40, height: 52)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to all tools")
+            Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ToolItem(icon: "textformat", text: "Edit", spoken: "Change the text's words and look") {
+                        model.openTitle(id)
+                    }
+                    ToolItem(icon: "scissors", text: "Cut", enabled: model.canSplitTitle(id),
+                             spoken: "Cut the text in two at the playhead") { model.splitTitle(id) }
+                    ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                             spoken: "Delete the text") { model.deleteTitle(id) }
                 }
             }
         }
@@ -1740,10 +1768,14 @@ struct VideoStage: View {
                                  doubleTapped: { fullScreen = true },
                                  tapped: { at in tapped(at) })
                 }
-                // While a text is open, a drag on the video moves the text instead.
+                // While a text is open, or picked and on screen, its box and handles: a drag on the
+                // video moves the text instead.
                 .overlay {
                     if let id = model.titleEditing {
-                        TitleMover(model: model, id: id)
+                        TitleMover(model: model, id: id).id(id)
+                    } else if let id = model.titlePick, let clip = model.title(id),
+                              model.time >= clip.start, model.time < clip.end {
+                        TitleMover(model: model, id: id).id(id)
                     }
                 }
         }
@@ -1764,6 +1796,11 @@ struct VideoStage: View {
         if model.lyricsPicked {
             model.pickLyrics(false)
             model.notice = nil
+            return
+        }
+        // A tap on a text picks it: its box and handles, and its tools.
+        if let id = model.titleAt(at) {
+            model.pickTitle(id)
             return
         }
         if let id = model.overlayAt(at) { model.pickOverlay(id) }

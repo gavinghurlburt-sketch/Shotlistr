@@ -36,6 +36,7 @@ struct EditTimeline: View {
     @State private var rulerHeld = false
     /// When the performance clip was last tapped, to catch a double tap.
     @State private var lastClipTap = Date.distantPast
+    @State private var lastTitleTap: (id: UUID, at: Date)?
 
     /// Which row a touch is on.
     private enum Row: Equatable {
@@ -639,13 +640,14 @@ struct EditTimeline: View {
         }
     }
 
-    /// One text lane's row: each text as a clip with its words. The open one (or one held) gets the
-    /// yellow outline and grips on its ends.
+    /// One text lane's row: each text as a clip with its words. The picked or open one (or one held)
+    /// gets the yellow outline and grips on its ends.
     private func textRow(_ lane: Int) -> some View {
         let time = model.time
         let pps = model.pixelsPerSecond
         let titles = model.titles.filter { $0.lane == lane }
         let editing = model.titleEditing
+        let picked = model.titlePick
         let drag = model.titleDrag
         return Canvas { context, size in
             let middle = size.width / 2
@@ -662,7 +664,7 @@ struct EditTimeline: View {
                 inside.draw(Text("\(Image(systemName: "textformat")) \(title.label)")
                                 .font(.caption2.weight(.bold)).foregroundStyle(.white),
                             at: CGPoint(x: max(rect.minX, 0) + 8, y: rect.midY), anchor: .leading)
-                if editing == title.id || held {
+                if editing == title.id || picked == title.id || held {
                     context.stroke(Path(rect.insetBy(dx: -1.5, dy: -1.5)), with: .color(Tint.accent), lineWidth: 3)
                     let grips: [(CGFloat, EditorModel.Grip)] = [(rect.minX + 3, .trimStart), (rect.maxX - 7, .trimEnd)]
                     for (edgeX, which) in grips {
@@ -856,15 +858,27 @@ struct EditTimeline: View {
                 }
                 model.pickMusic(false)
                 if let textLane {
-                    // A tap on a text opens it to edit.
+                    // A tap on a text picks it (its ends' grips, its tools, its box on the video);
+                    // again lets go. A double tap opens it to change its words and look.
                     if let hit = textGrip(lane: textLane, at: point, width: width) {
-                        model.openTitle(hit.id)
+                        let now = Date()
+                        if lastTitleTap?.id == hit.id, let last = lastTitleTap?.at,
+                           now.timeIntervalSince(last) < 0.35 {
+                            lastTitleTap = nil
+                            model.openTitle(hit.id)
+                            return
+                        }
+                        lastTitleTap = (hit.id, now)
+                        model.pickTitle(model.titlePick == hit.id ? nil : hit.id)
                     } else {
+                        model.pickTitle(nil)
                         model.pickOnEdit(nil)
                         model.pickOverlay(nil)
                     }
                     return
                 }
+                // Anywhere else on the timeline lets go of a picked text.
+                model.pickTitle(nil)
                 if let overlayID, let overlay = model.overlay(overlayID) {
                     // A tap near one of its diamonds picks that keyframe.
                     let place = (overlay.keys ?? []).map { overlay.keyOrigin + $0.time }

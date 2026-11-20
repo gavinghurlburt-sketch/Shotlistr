@@ -234,6 +234,9 @@ final class EditorModel {
     var titles: [TitleClip] = []
     /// The text whose sheet is open.
     var titleEditing: UUID?
+    /// The text picked (a tap on its clip): its tools, its box and handles on the video, and its
+    /// ends' grips on the timeline. A double tap opens its sheet.
+    var titlePick: UUID?
     /// The text clip a finger is moving or stretching on the timeline.
     var titleDrag: (id: UUID, grip: Grip)?
     /// How many text lanes there are (lanes stay packed: T1, T2, ...).
@@ -1634,6 +1637,7 @@ final class EditorModel {
         guard kind == .performance else { return }
         editPick = nil
         overlayPick = nil
+        titlePick = nil
         // The eyes are the edit page's: the performance page always shows and plays everything.
         videoHidden = false
         soundMuted = false
@@ -1649,6 +1653,7 @@ final class EditorModel {
             overlayPick = nil
             lyricsPicked = false
             musicPicked = false
+            titlePick = nil
         }
         selected = nil
         notice = nil
@@ -2178,6 +2183,7 @@ final class EditorModel {
             selected = nil
             lyricsPicked = false
             musicPicked = false
+            titlePick = nil
         }
         notice = nil
     }
@@ -2685,6 +2691,7 @@ final class EditorModel {
         if titles != state.titles {
             titles = state.titles
             if let id = titleEditing, title(id) == nil { titleEditing = nil }
+            if let id = titlePick, title(id) == nil { titlePick = nil }
             syncTitles()
         }
         if lyrics != state.lyrics || lyricStyle != state.lyricStyle {
@@ -3429,6 +3436,7 @@ final class EditorModel {
         lyricsPicked = on && hasLyrics
         guard lyricsPicked else { return }
         musicPicked = false
+        titlePick = nil
         overlayPick = nil
         editPick = nil
         selected = nil
@@ -3779,6 +3787,7 @@ final class EditorModel {
         syncTitles()
         titleEditStart = snapshot()
         titleEditing = clip.id
+        pickTitle(clip.id)
     }
 
     /// Opens a text's sheet (a tap on its clip, or the Text button over it).
@@ -3788,6 +3797,7 @@ final class EditorModel {
         if titleEditing != id { closeTitleEdit() }
         if titleEditStart == nil { titleEditStart = snapshot() }
         titleEditing = id
+        pickTitle(id)
         notice = nil
     }
 
@@ -3800,6 +3810,7 @@ final class EditorModel {
         if let id = titleEditing, let clip = title(id),
            clip.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             titles.removeAll { $0.id == id }
+            if titlePick == id { titlePick = nil }
             packTextLanes()
             syncTitles()
         }
@@ -3815,6 +3826,7 @@ final class EditorModel {
         change(&next)
         next.posX = min(max(next.posX, 2), 98)
         next.posY = min(max(next.posY, 2), 98)
+        refit(&next)
         guard next != titles[index] else { return }
         if titleEditStart == nil { history.append(snapshot()) }
         titles[index] = next
@@ -3838,6 +3850,97 @@ final class EditorModel {
 
     func placeTitleEnded() {
         syncTitles()
+        // Picked but not open: the move or resize is its own Undo step.
+        if titleEditing == nil, let start = titleEditStart {
+            if start.titles != titles { history.append(start) }
+            titleEditStart = nil
+        }
+    }
+
+    /// Picks a text (nil lets go): its tools under the timeline, and its box on the video.
+    func pickTitle(_ id: UUID?) {
+        titlePick = id.flatMap { title($0) != nil ? $0 : nil }
+        guard titlePick != nil else { return }
+        overlayPick = nil
+        editPick = nil
+        piecePick = nil
+        selected = nil
+        lyricsPicked = false
+        musicPicked = false
+        notice = nil
+    }
+
+    /// The text on the video under a finger (fractions of the frame), T1 first.
+    func titleAt(_ point: CGPoint) -> UUID? {
+        titles.filter { time >= $0.start && time < $0.end }
+            .sorted { $0.lane < $1.lane }
+            .first { titleBox($0.id)?.insetBy(dx: -0.03, dy: -0.02).contains(point) == true }?.id
+    }
+
+    /// A text's box on the video, in fractions of the frame.
+    func titleBox(_ id: UUID) -> CGRect? {
+        guard let clip = title(id) else { return nil }
+        let canvas = TimelineBuilder.canvas
+        let laid = TitleLayout.lay(clip, canvas: canvas)
+        let w = laid.width / max(Double(canvas.width), 1)
+        let h = laid.height / max(Double(canvas.height), 1)
+        return CGRect(x: clip.posX / 100 - w / 2, y: clip.posY / 100 - h / 2, width: w, height: h)
+    }
+
+    /// The box's handles on the video: a new width, and a height (the text then fills the box), and
+    /// its middle, all in percent of the frame. Follows live; Undo takes the whole drag back.
+    func shapeTitle(_ id: UUID, width: Double, height: Double?, x: Double, y: Double) {
+        guard let index = titles.firstIndex(where: { $0.id == id }) else { return }
+        pause()
+        if titleEditStart == nil { titleEditStart = snapshot() }
+        var next = titles[index]
+        next.boxW = min(max(width, 12), 100)
+        if let height { next.boxH = min(max(height, 3), 100) }
+        next.posX = min(max(x, 2), 98)
+        next.posY = min(max(y, 2), 98)
+        refit(&next)
+        guard next != titles[index] else { return }
+        titles[index] = next
+        lyricsLive.update(titles: titles)
+        if Date().timeIntervalSince(titleRedrawn) > 0.06 {
+            titleRedrawn = Date()
+            redraw()
+        }
+    }
+
+    /// A text filling its box keeps its size in step, so the Size slider shows it.
+    private func refit(_ clip: inout TitleClip) {
+        guard clip.boxH != nil else { return }
+        let canvas = TimelineBuilder.canvas
+        let fitted = TitleLayout.lay(clip, canvas: canvas).size / TitleLayout.scale(canvas)
+        clip.size = min(max(fitted.rounded(), TitleLayout.smallest), TitleLayout.biggest)
+    }
+
+    /// Cut: the picked text becomes two at the playhead, the same words and look.
+    func splitTitle(_ id: UUID) {
+        guard let index = titles.firstIndex(where: { $0.id == id }) else { return }
+        pause()
+        let at = (time * 30).rounded() / 30
+        let clip = titles[index]
+        guard at > clip.start + 0.1, at < clip.end - 0.1 else {
+            notice = "Move the playhead onto the text to cut it there."
+            return
+        }
+        if titleEditing != nil { closeTitleEdit() }
+        guard let again = titles.firstIndex(where: { $0.id == id }) else { return }
+        history.append(snapshot())
+        var second = titles[again]
+        second.id = UUID()
+        second.start = at
+        titles[again].end = at
+        titles.append(second)
+        notice = nil
+        syncTitles()
+    }
+
+    func canSplitTitle(_ id: UUID) -> Bool {
+        guard let clip = title(id) else { return false }
+        return time > clip.start + 0.1 && time < clip.end - 0.1
     }
 
     func deleteTitle(_ id: UUID) {
@@ -3845,6 +3948,7 @@ final class EditorModel {
         let before = titleEditStart ?? snapshot()
         titleEditStart = nil
         if titleEditing == id { titleEditing = nil }
+        if titlePick == id { titlePick = nil }
         titles.removeAll { $0.id == id }
         packTextLanes()
         history.append(before)
@@ -3860,6 +3964,8 @@ final class EditorModel {
         // Inside an open sheet the drag joins the sheet's Undo step.
         titleDragStart = (state: titleEditStart == nil ? snapshot() : nil, clip: clip)
         titleDrag = (id: id, grip: grip)
+        // A held text is picked too, so its tools and handles are ready after the drag.
+        if titleEditing == nil { pickTitle(id) }
         notice = nil
     }
 
@@ -3918,6 +4024,7 @@ final class EditorModel {
 
     private func resetTitleEditing() {
         titleEditing = nil
+        titlePick = nil
         titleEditStart = nil
         titleDrag = nil
         titleDragStart = nil
@@ -4682,6 +4789,7 @@ final class EditorModel {
         overlayPick = nil
         editPick = nil
         lyricsPicked = false
+        titlePick = nil
     }
 
     /// The music starts at the playhead instead.

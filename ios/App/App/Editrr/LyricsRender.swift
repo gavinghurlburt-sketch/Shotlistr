@@ -225,12 +225,13 @@ final class LyricsOverlay: @unchecked Sendable {
         guard !showing.isEmpty else { return nil }
 
         let W = Double(canvas.width), H = Double(canvas.height)
-        let k = min(W, H) / 1080
-        let maxW = W * 0.9
         var layer = CIImage.empty()
         for title in showing {
-            let lines = title.textCase.apply(title.text).components(separatedBy: "\n")
-            guard lines.contains(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { continue }
+            guard !title.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            // Wrapped to its box onto new lines (and sized to fill the box when it has a height).
+            let laid = TitleLayout.lay(title, canvas: canvas)
+            let lines = laid.lines
+            let maxW = laid.wrapWidth
             let color = LyricColor.cg(title.color) ?? CGColor(gray: 1, alpha: 1)
             let outlineColor = title.color.lowercased() == "#000000" ? CGColor(gray: 1, alpha: 1) : CGColor(gray: 0, alpha: 1)
             func glyphs(_ size: Double) -> [Glyph] {
@@ -239,8 +240,9 @@ final class LyricsOverlay: @unchecked Sendable {
                           stroke: title.outline ? 10 : 0, strokeColor: outlineColor, tracking: 0)
                 }
             }
-            var size = title.size * k
+            var size = laid.size
             var made = glyphs(size)
+            // Just in case a line measures a hair wider drawn than wrapped.
             let widest = made.map { $0.width }.max() ?? 0
             if widest > maxW, widest > 0 {
                 size *= maxW / widest
@@ -273,7 +275,7 @@ final class LyricsOverlay: @unchecked Sendable {
 
             let cx = W * title.posX / 100
             let cy = H - H * title.posY / 100      // Core Image's y goes up
-            let lineHeight = size * 1.15
+            let lineHeight = size * TitleLayout.leading
             var y = cy + Double(made.count - 1) * lineHeight / 2 - rise
             var block = CIImage.empty()
             for g in made {
