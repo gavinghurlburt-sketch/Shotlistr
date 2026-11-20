@@ -584,6 +584,7 @@ final class EditorModel {
         problem = nil
         notice = nil
         wide = pendingWide
+        filter = .none
         clearSounds()
         overlays = []
         trackKeys = []
@@ -1241,6 +1242,7 @@ final class EditorModel {
         project.wide = wide ? true : nil
         project.music = nil
         project.sounds = sounds.isEmpty ? nil : sounds
+        project.filter = filter == .none ? nil : filter
         return project
     }
 
@@ -1295,6 +1297,7 @@ final class EditorModel {
         defer { busy = nil }
         await PhotoAccess.ask()
         wide = saved.wide ?? false
+        filter = saved.filter ?? .none
 
         // 1. The videos and the song, from Photos or the project's folder.
         var assets: [AVAsset] = []
@@ -1455,6 +1458,7 @@ final class EditorModel {
         lastAuto = nil
         currentProject = nil
         wide = false
+        filter = .none
         clearSounds()
         refreshProjects()
         pause()
@@ -3184,7 +3188,8 @@ final class EditorModel {
                                                                      cuts: cuts, layers: layers, duration: duration,
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
-                                                                     media: overlayMedia, board: overlayBoard)
+                                                                     media: overlayMedia, board: overlayBoard,
+                                                                     filter: filter)
             player.replaceCurrentItem(with: item)
             watchForEnd(of: item)
             updateLoop()
@@ -3208,7 +3213,8 @@ final class EditorModel {
                                                                      cuts: cuts, layers: layers, duration: duration,
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
-                                                                     media: overlayMedia, board: overlayBoard)
+                                                                     media: overlayMedia, board: overlayBoard,
+                                                                     filter: filter)
     }
 
     /// What actually plays: the cuts, or only the previewed video while you take a look.
@@ -4539,6 +4545,98 @@ final class EditorModel {
         redraw()
     }
 
+    // MARK: Fx page (one card per effect)
+
+    /// Whether this effect is on the cut the Fx page is on.
+    func effectOn(_ kind: FXKind) -> Bool {
+        let fx = fxHere
+        switch kind {
+        case .transition: return transitionHere.kind != .none
+        case .zoom: return zoomHere != .off
+        case .color: return fx.color != .none
+        case .blur: return fx.blur >= 0.01
+        case .tilt: return abs(fx.rotate) >= 0.1
+        case .shake: return fx.shake >= 0.01
+        case .mirror: return fx.mirror
+        case .face: return fx.followFace
+        case .rgbSplit, .fisheye: return fx.custom != nil && fx.custom == kind.customID
+        }
+    }
+
+    /// Puts an effect on this cut, already showing (a starting amount you can change after).
+    func addEffect(_ kind: FXKind) {
+        guard fxIndex != nil, !effectOn(kind) else { return }
+        var fx = fxHere
+        switch kind {
+        case .transition:
+            guard canTransitionHere else {
+                notice = "The first cut has nothing before it to come in from."
+                return
+            }
+            var next = transitionHere
+            next.kind = .crossfade
+            setTransitionHere(next)
+            return
+        case .zoom:
+            setZoomHere(.zoomIn)
+            return
+        case .face:
+            Task { await followFaceHere(true) }
+            return
+        case .color: fx.color = .blackWhite
+        case .blur: fx.blur = 0.3
+        case .tilt: fx.rotate = 8
+        case .shake: fx.shake = 0.4
+        case .mirror: fx.mirror = true
+        case .rgbSplit, .fisheye:
+            fx.custom = kind.customID
+            fx.customAmount = 0.5
+        }
+        setFXHere(fx)
+    }
+
+    /// Takes an effect off this cut.
+    func removeEffect(_ kind: FXKind) {
+        guard fxIndex != nil else { return }
+        var fx = fxHere
+        switch kind {
+        case .transition:
+            var next = transitionHere
+            next.kind = .none
+            setTransitionHere(next)
+            return
+        case .zoom:
+            setZoomHere(.off)
+            return
+        case .face:
+            Task { await followFaceHere(false) }
+            return
+        case .color: fx.color = .none
+        case .blur: fx.blur = 0
+        case .tilt: fx.rotate = 0
+        case .shake: fx.shake = 0
+        case .mirror: fx.mirror = false
+        case .rgbSplit, .fisheye:
+            guard fx.custom == kind.customID else { return }
+            fx.custom = nil
+            fx.fishKeys = nil
+        }
+        setFXHere(fx)
+    }
+
+    // MARK: Filter (the whole video)
+
+    /// A color look over the whole video (each cut can still have its own Color in Fx).
+    private(set) var filter: ColorLook = .none
+
+    func setFilter(_ look: ColorLook) {
+        guard look != filter else { return }
+        pause()
+        filter = look
+        notice = look == .none ? "No filter on the video." : "\(look.name) on the whole video."
+        redraw()
+    }
+
     // MARK: Fisheye circle
 
     /// The effects sheet is open on a cut with Fisheye: a drag on the video moves its circle, and a
@@ -5423,7 +5521,8 @@ final class EditorModel {
         session.videoComposition = TimelineBuilder.videoComposition(segments: cutsOnly, built: source,
                                                                      cuts: cuts, layers: layers, duration: duration,
                                                                      length: timelineEnd, lyrics: words,
-                                                                     overlays: overlays, media: overlayMedia, board: board)
+                                                                     overlays: overlays, media: overlayMedia, board: board,
+                                                                     filter: filter)
         session.shouldOptimizeForNetworkUse = true
         // Only the part between Start and End, plus any clips added after the performance.
         let start = loopStart

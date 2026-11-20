@@ -558,6 +558,8 @@ struct EditingView: View {
     /// Picking a photo or video to put on top, and the Mask sheet.
     @State private var overlayPicking = false
     @State private var overlayItems: [PhotosPickerItem] = []
+    /// The Fx page (effects on the cut at the playhead) is open.
+    @State private var fxOpen = false
     @State private var masking = false
     /// Picking a clip to go before or after the picked piece of the video track.
     @State private var clipPicking = false
@@ -893,6 +895,15 @@ struct EditingView: View {
             }
         }
         .frame(height: 52)
+        // The Fx page: effects on the cut at the playhead. The video stays usable above it (the
+        // Fisheye circle is moved there).
+        .sheet(isPresented: $fxOpen, onDismiss: { model.endFX() }) {
+            FXSheet(model: model)
+                .presentationDetents([.medium])
+                .presentationContentInteraction(.scrolls)
+                .presentationBackground(.ultraThinMaterial)
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        }
         // The lyrics' look (colors, font, animation...), without the word editing.
         .sheet(isPresented: $lookOpen) {
             LyricsSheet(model: model, lookOnly: true)
@@ -942,6 +953,7 @@ struct EditingView: View {
                      spoken: "Add or change text") {
                 model.textButton()
             }
+            fxTool
             // Music or a sound effect at the playhead: its row shows once there is one.
             ToolItem(icon: "music.note", text: "Add sound", tint: MusicTint.color,
                      spoken: "Add music or a sound effect at the playhead") {
@@ -1123,6 +1135,7 @@ struct EditingView: View {
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
             ToolStrip {
                 splitTools
+                fxTool
                 if model.kind == .performance {
                     ToolItem(icon: PerformanceGlyph.name, text: "Edit performance",
                              spoken: "Edit the performance: every video synced to the song") {
@@ -1180,6 +1193,18 @@ struct EditingView: View {
         }
     }
 
+    /// Fx: effects on the cut at the playhead (each cut has its own).
+    private var fxTool: some View {
+        ToolItem(icon: "sparkles", text: "Fx", on: model.hasFXAtPlayhead || model.zoomHere != .off,
+                 spoken: "Effects for the clip at the playhead") {
+            if model.beginFX() {
+                fxOpen = true
+            } else {
+                model.notice = "Move the playhead onto a clip to add effects."
+            }
+        }
+    }
+
     /// Tap beat: the song plays and each tap drops a cut.
     private var tapBeatTool: some View {
         ToolItem(icon: "hand.tap", text: "Tap beat", spoken: "Tap the beat to make cuts") {
@@ -1194,6 +1219,7 @@ struct EditingView: View {
                      spoken: "Done: edit the performance from Start to End") {
                 withAnimation(.spring(duration: 0.35)) { model.showEditPage() }
             }
+            fxTool
             ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
             shuffleTool
             tapBeatTool
@@ -1237,6 +1263,7 @@ struct EditingView: View {
                     model.cut(to: index)
                 }
                 .accessibilityHint("Shows this video from the playhead on")
+                fxTool
                 ToolItem(icon: "eye", text: "Preview", on: model.previewing == index) { model.preview(index) }
                 ToolItem(icon: "plus.square.on.square", text: "Duplicate", enabled: !full) { model.duplicate(index) }
                 ToolItem(icon: "backward.frame", text: "1 frame", enabled: !model.locked,
@@ -2159,26 +2186,26 @@ struct LyricsHandles: View {
     }
 }
 
-/// Effects for the cut at the playhead, and the keyframes of the video on screen.
+/// Filters for the whole video, and the keyframes of the video on screen.
 struct FramingControls: View {
     let model: EditorModel
-    @State private var showingFX = false
+    @State private var showingFilters = false
 
     var body: some View {
         VStack(spacing: 8) {
+            // Filters: a color look over the whole video. (Each clip's own effects are Fx, below.)
             Button {
-                if model.beginFX() { showingFX = true }
+                model.pause()
+                showingFilters = true
             } label: {
-                SideTile(icon: "sparkles", text: "Effects",
-                         lit: model.hasFXAtPlayhead || model.zoomHere != .off)
+                SideTile(icon: "camera.filters", text: "Filters", lit: model.filter != .none)
             }
-            .accessibilityLabel("Transitions and effects for this cut")
-            .sheet(isPresented: $showingFX, onDismiss: { model.endFX() }) {
-                FXSheet(model: model)
-                    .presentationDetents([.medium])
-                    .presentationContentInteraction(.scrolls)
+            .accessibilityLabel("Filters for the whole video")
+            .sheet(isPresented: $showingFilters) {
+                FilterSheet(model: model)
+                    .presentationDetents([.height(330)])
                     .presentationBackground(.ultraThinMaterial)
-                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    .presentationBackgroundInteraction(.enabled(upThrough: .height(330)))
             }
 
             // On a keyframe, the diamond takes it off; anywhere else it sets one.
@@ -2375,149 +2402,274 @@ struct AutoEditSheet: View {
 
 // MARK: - Effects sheet
 
-/// Transitions, zoom, color, blur, movement, face follow and custom shaders for one cut.
+/// The Fx page for one cut. It starts empty with + Add an effect. The + opens a grid of every
+/// effect (each tile shows what it does to a ✨); picking one adds it as a card with its controls.
 struct FXSheet: View {
     let model: EditorModel
     @Environment(\.dismiss) private var dismiss
+    /// Effects added while the page is open keep their card, even turned all the way down.
+    @State private var kept: [FXKind] = []
+    @State private var picking = false
+
+    private var shown: [FXKind] {
+        FXKind.allCases.filter { model.effectOn($0) || kept.contains($0) }
+    }
 
     var body: some View {
-        let fx = model.fxHere
-        let transition = model.transitionHere
+        VStack(spacing: 0) {
+            header
+            if picking {
+                picker
+            } else if shown.isEmpty {
+                empty
+            } else {
+                cards
+            }
+        }
+        .foregroundStyle(.white)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            if picking {
+                Button { picking = false } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.title3.weight(.semibold))
+                        .frame(width: 36, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(picking ? "Add an effect" : "Fx").font(.title3.weight(.bold))
+                Text(model.fxCutName).font(.footnote).foregroundStyle(.white.opacity(0.65))
+            }
+            Spacer(minLength: 0)
+            Button { model.playCutHere() } label: {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .background(Tint.surface2)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play this cut")
+            Button { dismiss() } label: {
+                Text("Done")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 14)
+                    .frame(height: 40)
+                    .background(Tint.accent)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
+    }
+
+    /// Nothing on this cut yet: one big +.
+    private var empty: some View {
+        VStack(spacing: 10) {
+            Spacer(minLength: 0)
+            Button { picking = true } label: {
+                VStack(spacing: 10) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(Tint.accent)
+                        .frame(width: 76, height: 76)
+                        .background(Tint.surface2)
+                    Text("Add an effect")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Text("Effects go on this cut only.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.6))
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Every effect, as a tile showing what it does to a ✨.
+    private var picker: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Effects").font(.title3.weight(.bold))
-                        Text(model.fxCutName).font(.footnote).foregroundStyle(.white.opacity(0.65))
-                    }
-                    Spacer(minLength: 0)
-                    Button { model.playCutHere() } label: {
-                        Label("Play", systemImage: "play.fill")
-                    }
-                    .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true))
-                    Button("Done") { dismiss() }
-                        .buttonStyle(GlassButtonStyle())
-                }
-
-                section("Transition in") {
-                    if model.canTransitionHere {
-                        chips(TransitionKind.allCases, selected: transition.kind, name: { $0.name }) { kind in
-                            var next = transition
-                            next.kind = kind
-                            model.setTransitionHere(next)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+                ForEach(FXKind.allCases) { kind in
+                    let on = model.effectOn(kind)
+                    let blocked = kind == .transition && !model.canTransitionHere
+                    Button { choose(kind) } label: {
+                        VStack(spacing: 6) {
+                            FXIcon(kind: kind)
+                                .frame(width: 52, height: 52)
+                            Text(kind.name)
+                                .font(.caption2.weight(.medium))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
-                        if transition.kind != .none {
-                            HStack(spacing: 8) {
-                                ForEach(Transition.lengths.indices, id: \.self) { i in
-                                    let length = Transition.lengths[i]
-                                    Button(length.name) {
-                                        var next = transition
-                                        next.length = length.seconds
-                                        model.setTransitionHere(next)
-                                    }
-                                    .buttonStyle(GlassButtonStyle(tint: Tint.calm,
-                                                                  selected: abs(transition.length - length.seconds) < 0.01))
-                                }
-                            }
-                        }
-                    } else {
-                        note("The first cut has nothing before it to come in from.")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Tint.surface2)
+                        .overlay(Rectangle().strokeBorder(on ? Tint.accent : .clear, lineWidth: 1.5))
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .disabled(blocked)
+                    .opacity(blocked ? 0.35 : 1)
+                    .accessibilityLabel(on ? "\(kind.name), on" : kind.name)
                 }
+            }
+            if !model.canTransitionHere {
+                note("The first cut has nothing before it to come in from, so it has no transition.")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
+            }
+        }
+        .padding(.horizontal, 20)
+    }
 
-                section("Zoom") {
-                    chips(AutoZoom.allCases, selected: model.zoomHere, name: { $0.name }) { model.setZoomHere($0) }
+    private func choose(_ kind: FXKind) {
+        if !model.effectOn(kind) { model.addEffect(kind) }
+        // One custom shader at a time: the other one's card goes.
+        if let id = kind.customID {
+            kept.removeAll { $0.customID != nil && $0.customID != id }
+        }
+        if !kept.contains(kind) { kept.append(kind) }
+        picking = false
+    }
+
+    /// The effects on this cut, one card each, and + to add another.
+    private var cards: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(shown) { kind in
+                    card(kind)
                 }
-
-                section("Color") {
-                    chips(ColorLook.allCases, selected: fx.color, name: { $0.name }) { look in
-                        var next = fx
-                        next.color = look
-                        model.setFXHere(next)
-                    }
+                Button { picking = true } label: {
+                    Label("Add an effect", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Tint.accent)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Tint.surface2)
+                        .contentShape(Rectangle())
                 }
-
-                section("Blur") {
-                    FXSlider(value: fx.blur, range: 0...1, ends: ("None", "Soft")) { value in
-                        var next = fx
-                        next.blur = value
-                        model.setFXHere(next)
-                    }
-                }
-
-                section("Move") {
-                    FXSlider(value: fx.rotate, range: -30...30, ends: ("Tilt left", "Tilt right"), snapToZero: true) { value in
-                        var next = fx
-                        next.rotate = value
-                        model.setFXHere(next)
-                    }
-                    FXSlider(value: fx.shake, range: 0...1, ends: ("No shake", "Big shake")) { value in
-                        var next = fx
-                        next.shake = value
-                        model.setFXHere(next)
-                    }
-                    Button {
-                        var next = fx
-                        next.mirror.toggle()
-                        model.setFXHere(next)
-                    } label: {
-                        Label("Mirror", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
-                    }
-                    .buttonStyle(GlassButtonStyle(tint: Tint.calm, selected: fx.mirror))
-                }
-
-                section("Face") {
-                    Button {
-                        let on = !fx.followFace
-                        Task { await model.followFaceHere(on) }
-                    } label: {
-                        Label(model.busy == "Finding the face…" ? "Finding the face…" : "Follow face",
-                              systemImage: "face.smiling")
-                    }
-                    .buttonStyle(GlassButtonStyle(tint: Tint.calm, selected: fx.followFace))
-                    .disabled(model.busy != nil)
-                    note("Finds the face in this cut and keeps it in the middle, zoomed in a little.")
-                }
-
-                section("Custom") {
-                    let none = "none"
-                    let ids = [none] + CustomFX.all.map { $0.id }
-                    chips(ids, selected: fx.custom ?? none,
-                          name: { id in id == none ? "None" : (CustomFX.entry(id)?.name ?? id) }) { id in
-                        var next = fx
-                        next.custom = id == none ? nil : id
-                        model.setFXHere(next)
-                    }
-                    if fx.custom != nil {
-                        FXSlider(value: fx.customAmount, range: 0...1, ends: ("Subtle", "Strong")) { value in
-                            var next = fx
-                            next.customAmount = value
-                            model.setFXHere(next)
-                        }
-                    }
-                    if fx.custom == CustomFX.fisheye {
-                        fishPanel
-                    }
-                    if !CustomFX.isReady {
-                        note("The custom shaders didn't load in this build.")
-                    }
-                }
-
+                .buttonStyle(.plain)
                 HStack(spacing: 8) {
-                    Button { model.useFXOnEveryCut() } label: {
-                        Label("Use on every cut", systemImage: "square.stack.3d.down.right")
+                    plainButton("Use on every cut", icon: "square.stack.3d.down.right") { model.useFXOnEveryCut() }
+                    plainButton("Clear", icon: "xmark", tint: Tint.bad) {
+                        model.clearFXHere()
+                        kept = []
                     }
-                    .buttonStyle(GlassButtonStyle())
-                    Button { model.clearFXHere() } label: {
-                        Label("Clear", systemImage: "xmark")
-                    }
-                    .buttonStyle(GlassButtonStyle(tint: Tint.bad))
                 }
                 note("Undo takes back any change.")
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
-        .foregroundStyle(.white)
+    }
+
+    private func card(_ kind: FXKind) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: kind.icon)
+                    .foregroundStyle(Tint.accent)
+                    .frame(width: 22)
+                Text(kind.name).font(.subheadline.weight(.semibold))
+                Spacer(minLength: 0)
+                Button {
+                    model.removeEffect(kind)
+                    kept.removeAll { $0 == kind }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Take \(kind.name) off")
+            }
+            controls(kind)
+        }
+        .padding(12)
+        .background(Tint.surface2)
+    }
+
+    @ViewBuilder private func controls(_ kind: FXKind) -> some View {
+        let fx = model.fxHere
+        let transition = model.transitionHere
+        switch kind {
+        case .transition:
+            chips(TransitionKind.allCases.filter { $0 != .none }, selected: transition.kind, name: { $0.name }) { pick in
+                var next = transition
+                next.kind = pick
+                model.setTransitionHere(next)
+            }
+            chips(Transition.lengths.map { $0.name },
+                  selected: Transition.lengths.first(where: { abs(transition.length - $0.seconds) < 0.01 })?.name ?? "",
+                  name: { $0 }) { pick in
+                guard let length = Transition.lengths.first(where: { $0.name == pick }) else { return }
+                var next = transition
+                next.length = length.seconds
+                model.setTransitionHere(next)
+            }
+        case .zoom:
+            chips([AutoZoom.zoomIn, .zoomOut], selected: model.zoomHere, name: { $0.name }) { model.setZoomHere($0) }
+        case .color:
+            chips(ColorLook.allCases.filter { $0 != .none }, selected: fx.color, name: { $0.name }) { look in
+                var next = fx
+                next.color = look
+                model.setFXHere(next)
+            }
+        case .blur:
+            FXSlider(value: fx.blur, range: 0...1, ends: ("None", "Soft")) { value in
+                var next = fx
+                next.blur = value
+                model.setFXHere(next)
+            }
+        case .tilt:
+            FXSlider(value: fx.rotate, range: -30...30, ends: ("Tilt left", "Tilt right"), snapToZero: true) { value in
+                var next = fx
+                next.rotate = value
+                model.setFXHere(next)
+            }
+        case .shake:
+            FXSlider(value: fx.shake, range: 0...1, ends: ("Gentle", "Big shake")) { value in
+                var next = fx
+                next.shake = value
+                model.setFXHere(next)
+            }
+        case .mirror:
+            note(fx.mirror ? "Flipped side to side." : "Off. Take it off and add it again to flip.")
+        case .face:
+            if model.busy == "Finding the face…" {
+                note("Finding the face…")
+            } else {
+                note(fx.followFace ? "Keeps the face in the middle, zoomed in a little."
+                     : "No face was found to follow in this cut.")
+            }
+        case .rgbSplit, .fisheye:
+            if fx.custom == kind.customID {
+                FXSlider(value: fx.customAmount, range: 0...1, ends: ("Subtle", "Strong")) { value in
+                    var next = fx
+                    next.customAmount = value
+                    model.setFXHere(next)
+                }
+                if kind == .fisheye {
+                    fishPanel
+                }
+                if !CustomFX.isReady {
+                    note("The custom shaders didn't load in this build.")
+                }
+            } else {
+                note("Off. Only one of RGB split and Fisheye can be on at a time.")
+            }
+        }
     }
 
     /// Fisheye's circle: drag or tap the video to place it, and keyframe it across the cut.
@@ -2534,8 +2686,8 @@ struct FXSheet: View {
                     .foregroundStyle(.white.opacity(0.8))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                Button("Center it") { model.centerFish() }
-                    .buttonStyle(GlassButtonStyle(tint: Tint.calm))
+                plainButton("Center it", icon: "scope") { model.centerFish() }
+                    .fixedSize()
             }
             // The playhead, kept inside this cut (where the effect is).
             HStack(spacing: 8) {
@@ -2563,8 +2715,8 @@ struct FXSheet: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(here || count == 0 ? Tint.accent : .white)
                         .frame(maxWidth: .infinity, minHeight: 40)
-                        .background(Tint.surface2, in: Corner.chip)
-                        .overlay(Corner.chip.strokeBorder(here ? Tint.accent : .clear, lineWidth: 1.5))
+                        .background(Color.white.opacity(0.08))
+                        .overlay(Rectangle().strokeBorder(here ? Tint.accent : .clear, lineWidth: 1.5))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -2597,19 +2749,25 @@ struct FXSheet: View {
         .accessibilityLabel(spoken)
     }
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+    private func plainButton(_ title: String, icon: String, tint: Color = .white,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.7))
-            content()
+                .foregroundStyle(tint)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 36)
+                .background(Color.white.opacity(0.08))
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     private func note(_ text: String) -> some View {
         Text(text)
             .font(.footnote)
             .foregroundStyle(.white.opacity(0.6))
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func chips<Item: Hashable>(_ items: [Item], selected: Item, name: @escaping (Item) -> String,
@@ -2617,11 +2775,152 @@ struct FXSheet: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(items, id: \.self) { item in
-                    Button(name(item)) { pick(item) }
-                        .buttonStyle(GlassButtonStyle(tint: Tint.calm, selected: item == selected))
+                    let on = item == selected
+                    Button { pick(item) } label: {
+                        Text(name(item))
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(on ? Color.black : Color.white)
+                            .padding(.horizontal, 12)
+                            .frame(height: 34)
+                            .background(on ? Tint.accent : Color.white.opacity(0.08))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
+    }
+}
+
+/// An effect's tile in the Fx picker: the same ✨ for every effect, with that effect done to it,
+/// its strength swelling and easing off so the difference is easy to see.
+struct FXIcon: View {
+    let kind: FXKind
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            // 0 ... 1 ... 0 every 1.6 seconds.
+            let p = (sin(t * 2 * .pi / 1.6) + 1) / 2
+            glyph(p: p, t: t)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    private var sparkle: some View { sparkle(Tint.accent) }
+
+    private func sparkle(_ color: Color) -> some View {
+        Image(systemName: "sparkles")
+            .font(.system(size: 26, weight: .semibold))
+            .foregroundStyle(color)
+    }
+
+    @ViewBuilder private func glyph(p: Double, t: Double) -> some View {
+        switch kind {
+        case .transition:
+            // One ✨ fades out as the next slides in.
+            ZStack {
+                sparkle.opacity(1 - p).offset(x: -14 * p)
+                sparkle(.white).opacity(p).offset(x: 14 * (1 - p))
+            }
+        case .zoom:
+            sparkle.scaleEffect(0.7 + 0.6 * p)
+        case .color:
+            sparkle.hueRotation(.degrees(300 * p)).saturation(1 - 0.9 * max(0, p - 0.6) / 0.4)
+        case .blur:
+            sparkle.blur(radius: 5 * p)
+        case .tilt:
+            sparkle.rotationEffect(.degrees(-30 + 60 * p))
+        case .shake:
+            sparkle.offset(x: 4 * p * sin(t * 37), y: 4 * p * sin(t * 29 + 1))
+        case .mirror:
+            sparkle.scaleEffect(x: cos(p * .pi), y: 1)
+        case .face:
+            // A square that keeps hold of the ✨ while it drifts.
+            let x = 8 * sin(t * 1.7), y = 6 * sin(t * 2.3)
+            ZStack {
+                sparkle.scaleEffect(0.85)
+                Rectangle()
+                    .strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5)
+                    .frame(width: 34, height: 34)
+            }
+            .offset(x: x * (1 - p), y: y * (1 - p))
+        case .rgbSplit:
+            // Red and blue pull apart; where all three meet it's white.
+            ZStack {
+                sparkle(.red).offset(x: -5 * p).blendMode(.screen)
+                sparkle(.green).blendMode(.screen)
+                sparkle(.blue).offset(x: 5 * p).blendMode(.screen)
+            }
+            .compositingGroup()
+            .overlay { sparkle.opacity(1 - p) }
+        case .fisheye:
+            // Swells inside a round lens with a blue rim, dark around it.
+            ZStack {
+                Color.black.opacity(0.6 * p)
+                sparkle.scaleEffect(1 + 0.5 * p)
+                    .frame(width: 46, height: 46)
+                    .clipShape(Circle())
+                    .background(Circle().fill(Color(red: 0.22, green: 0.5, blue: 1).opacity(0.18 * p)))
+                Circle()
+                    .stroke(Color(red: 0.22, green: 0.5, blue: 1).opacity(0.9 * p), lineWidth: 2)
+                    .frame(width: 46, height: 46)
+                    .blur(radius: 1.5)
+            }
+        }
+    }
+}
+
+/// Filters: one color look over the whole video (over every clip and overlay, under the words).
+/// Each clip can still have its own Color in Fx.
+struct FilterSheet: View {
+    let model: EditorModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Filters").font(.title3.weight(.bold))
+                    Text("The whole video").font(.footnote).foregroundStyle(.white.opacity(0.65))
+                }
+                Spacer(minLength: 0)
+                Button { dismiss() } label: {
+                    Text("Done")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 14)
+                        .frame(height: 40)
+                        .background(Tint.accent)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(ColorLook.allCases, id: \.self) { look in
+                    let on = model.filter == look
+                    Button { model.setFilter(look) } label: {
+                        Text(look.name)
+                            .font(.footnote.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .foregroundStyle(on ? Color.black : Color.white)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(on ? Tint.accent : Tint.surface2)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("Effects for one clip are in Fx, in the tools under the timeline.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.6))
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .foregroundStyle(.white)
     }
 }
 

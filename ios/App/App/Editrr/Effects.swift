@@ -49,6 +49,52 @@ enum ColorLook: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// One effect in the Fx page's picker: each cut can have any of these, one card each.
+enum FXKind: String, CaseIterable, Identifiable, Sendable {
+    case transition, zoom, color, blur, tilt, shake, mirror, face, rgbSplit, fisheye
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .transition: "Transition"
+        case .zoom: "Zoom"
+        case .color: "Color"
+        case .blur: "Blur"
+        case .tilt: "Tilt"
+        case .shake: "Shake"
+        case .mirror: "Mirror"
+        case .face: "Follow face"
+        case .rgbSplit: "RGB split"
+        case .fisheye: "Fisheye"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .transition: "arrow.left.arrow.right.square"
+        case .zoom: "plus.magnifyingglass"
+        case .color: "camera.filters"
+        case .blur: "drop.halffull"
+        case .tilt: "rotate.right"
+        case .shake: "waveform.path"
+        case .mirror: "arrow.left.and.right.righttriangle.left.righttriangle.right"
+        case .face: "face.smiling"
+        case .rgbSplit: "rectangle.split.3x1"
+        case .fisheye: "camera.aperture"
+        }
+    }
+
+    /// The shader id, for the custom ones (only one custom effect at a time).
+    var customID: String? {
+        switch self {
+        case .rgbSplit: "rgbSplit"
+        case .fisheye: CustomFX.fisheye
+        default: nil
+        }
+    }
+}
+
 /// Where a face is in one frame: timeline seconds, and its center as a fraction of the upright
 /// picture (0,0 top left).
 struct FacePoint: Codable, Equatable, Sendable {

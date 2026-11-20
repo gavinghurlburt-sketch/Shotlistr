@@ -46,10 +46,14 @@ final class LayerInstruction: NSObject, AVVideoCompositionInstructionProtocol, @
     /// Pictures and videos on top of the main video, bottom first, and where each sits.
     let overlays: [OverlayRef]
     let board: OverlayBoard?
+    /// The whole video's filter (over the video and overlays, under the words).
+    let filter: ColorLook
 
     init(timeRange: CMTimeRange, layers: [LayerInfo], transition: TransitionWindow? = nil,
-         lyrics: LyricsOverlay? = nil, overlays: [OverlayRef] = [], board: OverlayBoard? = nil) {
+         lyrics: LyricsOverlay? = nil, overlays: [OverlayRef] = [], board: OverlayBoard? = nil,
+         filter: ColorLook = .none) {
         self.timeRange = timeRange
+        self.filter = filter
         self.layers = layers
         self.transition = transition
         self.lyrics = lyrics
@@ -181,6 +185,10 @@ final class LayerCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
                     }
                 }
             }
+        }
+
+        if instruction.filter != .none {
+            picture = Effects.color(instruction.filter, picture.cropped(to: canvas), rect: canvas)
         }
 
         if let words = instruction.lyrics?.image(at: seconds, canvas: size) {
