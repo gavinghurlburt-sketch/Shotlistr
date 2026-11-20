@@ -222,25 +222,26 @@ struct ToolStrip<Content: View>: View {
 
 /// Lays the tools out left to right, sharing the spare width between them as even gaps (at most
 /// `maxGap` each, so two or three tools don't end up far apart).
-struct SpreadRow: Layout {
+/// (SwiftUI's Layout: the editor has its own `Layout` enum.)
+struct SpreadRow: SwiftUI.Layout {
     var minWidth: CGFloat
     var maxGap: CGFloat = 30
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: LayoutSubviews, cache: inout ()) -> CGSize {
+        let sizes: [CGSize] = subviews.map { $0.sizeThatFits(ProposedViewSize.unspecified) }
         let total = sizes.reduce(0) { $0 + $1.width }
-        return CGSize(width: max(total, minWidth), height: sizes.map(\.height).max() ?? 0)
+        return CGSize(width: max(total, minWidth), height: sizes.map { $0.height }.max() ?? 0)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: LayoutSubviews, cache: inout ()) {
         guard !subviews.isEmpty else { return }
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let sizes: [CGSize] = subviews.map { $0.sizeThatFits(ProposedViewSize.unspecified) }
         let total = sizes.reduce(0) { $0 + $1.width }
         let gap = min(maxGap, max(0, bounds.width - total) / CGFloat(subviews.count))
         var x = bounds.minX
         for (subview, size) in zip(subviews, sizes) {
             subview.place(at: CGPoint(x: x + (size.width + gap) / 2, y: bounds.midY),
-                          anchor: .center, proposal: ProposedViewSize(size))
+                          anchor: UnitPoint.center, proposal: ProposedViewSize(size))
             x += size.width + gap
         }
     }
