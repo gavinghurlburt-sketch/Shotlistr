@@ -4,7 +4,7 @@ import SwiftUI
 /// text inside the line. Margins are in pixels of the 1080 x 1920 frame, from each platform's ad specs
 /// (Facebook Reels uses Meta's Reels margins, the same as Instagram).
 enum SafeZone: String, CaseIterable {
-    case off, instagram, tiktok, facebook, youtube, all
+    case off, instagram, tiktok, facebook, youtube
 
     var name: String {
         switch self {
@@ -13,7 +13,6 @@ enum SafeZone: String, CaseIterable {
         case .tiktok: "TikTok"
         case .facebook: "Facebook Reels"
         case .youtube: "YouTube Shorts"
-        case .all: "All of them"
         }
     }
 
@@ -24,7 +23,6 @@ enum SafeZone: String, CaseIterable {
         case .tiktok: "TikTok"
         case .facebook: "Facebook"
         case .youtube: "Shorts"
-        case .all: "All apps"
         }
     }
 
@@ -35,7 +33,6 @@ enum SafeZone: String, CaseIterable {
         case .instagram, .facebook: (269, 672, 65, 65)
         case .tiktok: (240, 660, 120, 120)
         case .youtube: (288, 672, 48, 192)
-        case .all: (288, 672, 120, 192)     // the tightest of all four
         }
     }
 
@@ -51,8 +48,7 @@ enum SafeZone: String, CaseIterable {
 }
 
 /// Shows what each app puts on top of the video: its buttons, counts, name, caption and bars, drawn
-/// as a stand-in (no real names or logos) in the spots the app uses. "All of them" shows the tightest
-/// safe box instead. Only on screen, never in the export.
+/// as a stand-in (no real names or logos) in the spots the app uses. Only on screen, never in the export.
 struct SafeZoneOverlay: View {
     let zone: SafeZone
 
@@ -60,30 +56,9 @@ struct SafeZoneOverlay: View {
         switch zone {
         case .off:
             EmptyView()
-        case .all:
-            SafeBox(zone: zone)
         case .instagram, .tiktok, .facebook, .youtube:
             AppMock(layout: MockLayout.for(zone))
         }
-    }
-}
-
-/// The dashed safe box (used for "All of them").
-private struct SafeBox: View {
-    let zone: SafeZone
-
-    var body: some View {
-        Canvas { context, size in
-            let safe = zone.rect(in: size)
-            var outside = Path(CGRect(origin: .zero, size: size))
-            outside.addRect(safe)
-            context.fill(outside, with: .color(.black.opacity(0.35)), style: FillStyle(eoFill: true))
-            context.stroke(Path(safe), with: .color(Tint.warn),
-                           style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-            context.draw(Text(zone.name).font(.caption2.weight(.bold)).foregroundStyle(Tint.warn),
-                         at: CGPoint(x: safe.minX + 6, y: safe.maxY - 6), anchor: .bottomLeading)
-        }
-        .allowsHitTesting(false)
     }
 }
 
@@ -385,15 +360,24 @@ private struct AppMock: View {
 }
 
 /// Picks which app's safe zone to show. A tap on it fans the apps' marks out from under it
-/// (Instagram, Facebook, YouTube, TikTok, all of them, and off); tap one to pick it.
+/// (Instagram, Facebook, YouTube, TikTok, and off); tap one to pick it.
 struct SafeZonePicker: View {
     @Binding var zone: SafeZone
     /// Drawn as a tile for the column beside the video.
     var tile = false
-    @State private var open = false
+    /// Whether the apps are fanned out, for a screen that needs to know (it lifts the column over
+    /// its neighbours so a tap anywhere off the menu closes it). Nil: kept here.
+    var isOpen: Binding<Bool>? = nil
+    @State private var openHere = false
+    private var open: Bool { isOpen?.wrappedValue ?? openHere }
+    private func setOpen(_ value: Bool) {
+        withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
+            if let isOpen { isOpen.wrappedValue = value } else { openHere = value }
+        }
+    }
 
     /// In the order they fan out.
-    private static let order: [SafeZone] = [.instagram, .facebook, .youtube, .tiktok, .all, .off]
+    private static let order: [SafeZone] = [.instagram, .facebook, .youtube, .tiktok, .off]
     private static let step: CGFloat = 46
 
     var body: some View {
@@ -401,11 +385,13 @@ struct SafeZonePicker: View {
             ForEach(Array(Self.order.enumerated()), id: \.element) { index, option in
                 Button {
                     zone = option
-                    withAnimation(.spring(duration: 0.3, bounce: 0.2)) { open = false }
+                    setOpen(false)
                 } label: {
                     SocialMark(zone: option, picked: zone == option)
                         .frame(width: 36, height: 40)
-                        .background(Color.black.opacity(0.65))
+                        // Solid, so the tiles under the fanned-out marks (Lyrics' speech bubble)
+                        // don't show through.
+                        .background(Color.black)
                         .overlay(Rectangle().strokeBorder(zone == option ? Tint.accent : .clear, lineWidth: 1.5))
                         .contentShape(Rectangle())
                 }
@@ -418,7 +404,7 @@ struct SafeZonePicker: View {
                 .allowsHitTesting(open)
             }
             Button {
-                withAnimation(.spring(duration: 0.3, bounce: 0.2)) { open.toggle() }
+                setOpen(!open)
             } label: {
                 Group {
                     if zone == .off {
@@ -438,6 +424,17 @@ struct SafeZonePicker: View {
             .accessibilityLabel(zone == .off ? "Safe zone" : "Safe zone: \(zone.name)")
             .accessibilityHint("Shows the apps to pick from")
         }
+        // Open: a tap anywhere off the menu closes it (a clear catcher far past the screen's edges,
+        // under the apps' marks).
+        .background {
+            if open {
+                Color.black.opacity(0.001)
+                    .frame(width: 5000, height: 5000)
+                    .contentShape(Rectangle())
+                    .onTapGesture { setOpen(false) }
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
     private var chip: some View {
@@ -455,7 +452,7 @@ struct SafeZonePicker: View {
 }
 
 /// A small mark for each app's safe zone, drawn here (no image files): Instagram's camera, the
-/// Facebook f, YouTube's play button and TikTok's note. All is a stack, Off a dashed frame.
+/// Facebook f, YouTube's play button and TikTok's note. Off is a dashed frame.
 struct SocialMark: View {
     let zone: SafeZone
     var picked = false
@@ -502,10 +499,6 @@ struct SocialMark: View {
                     note.foregroundStyle(.white)
                 }
                 .frame(width: 22, height: 22)
-            case .all:
-                Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(picked ? Tint.warn : .white)
             case .off:
                 Image(systemName: "rectangle.dashed")
                     .font(.system(size: 18, weight: .semibold))

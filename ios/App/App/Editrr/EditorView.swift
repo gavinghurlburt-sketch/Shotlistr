@@ -547,6 +547,8 @@ struct StepCard<Actions: View>: View {
 struct EditingView: View {
     let model: EditorModel
     @AppStorage("safeZone") private var safeZone: SafeZone = .off
+    /// The safe zone menu is fanned out (a tap anywhere off it closes it).
+    @State private var safeZoneOpen = false
     @State private var fullScreen = false
     @State private var exporting = false
     @State private var autoEditing = false
@@ -603,7 +605,7 @@ struct EditingView: View {
                     showingBadge
                     // The apps' safe zones are for vertical video only.
                     if !model.wide {
-                        SafeZonePicker(zone: $safeZone, tile: true)
+                        SafeZonePicker(zone: $safeZone, tile: true, isOpen: $safeZoneOpen)
                             .zIndex(1)   // its fanned-out apps draw over the tiles under it
                     }
                     // Lyrics swaps the timeline for the lyrics timeline; it then reads Editing to go back.
@@ -627,6 +629,7 @@ struct EditingView: View {
                 }
                 .frame(width: 36)
                 .frame(maxHeight: .infinity, alignment: .top)
+                .zIndex(safeZoneOpen ? 1 : 0)   // its tap-off catcher over the video and the right column
 
                 VideoStage(model: model, fullScreen: $fullScreen)
                     .aspectRatio(ratio, contentMode: .fit)
@@ -691,15 +694,11 @@ struct EditingView: View {
                            alignment: .top)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            // A tap beside the video (in the columns around its buttons) lets go of whatever is picked.
-            .background {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { model.letGoOfAll() }
-                    .accessibilityHidden(true)
-            }
             }
             .frame(maxHeight: .infinity)
+            // The safe zone menu open: this row sits over the rest, so its tap-off catcher covers
+            // the timeline and toolbar too.
+            .zIndex(safeZoneOpen ? 1 : 0)
                 .fullScreenCover(isPresented: $fullScreen) { FullScreenPreview(model: model) }
                 .sheet(isPresented: $autoEditing) {
                     AutoEditSheet(model: model)
@@ -766,6 +765,15 @@ struct EditingView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
+        // A tap on any empty space (beside the video, around the play bar, between the timeline's
+        // rows, beside the tools) lets go of whatever is picked. Buttons, the timeline's own touches
+        // and scrubbing come first, so they work as before.
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { model.letGoOfAll() }
+                .accessibilityHidden(true)
+        }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { editorHeight = $0 }
         // Fx and Filters: panels from the bottom, edge to edge (a half-height sheet floats with a
         // gap at each side). The video above stays live: the Fisheye circle and zoom boxes are on it.
@@ -2212,17 +2220,17 @@ struct VideoStage: View {
             model.pickLyrics(true)
             return
         }
-        if model.lyricsPicked {
-            model.pickLyrics(false)
-            model.notice = nil
-            return
-        }
         // A tap on a text picks it: its box and handles, and its tools.
         if let id = model.titleAt(at) {
             model.pickTitle(id)
             return
         }
-        if let id = model.overlayAt(at) { model.pickOverlay(id) }
+        // A tap on an overlay picks it; anywhere else on the video lets go of whatever is picked.
+        if let id = model.overlayAt(at) {
+            model.pickOverlay(id)
+        } else {
+            model.letGoOfAll()
+        }
     }
 
     /// Keeps the spot under the fingers still while zooming: the shift that goes with the pinch.

@@ -915,8 +915,13 @@ struct EditTimeline: View {
                 if case .audio(let lane) = row {
                     let at = model.time + Double(point.x - width / 2) / model.pixelsPerSecond
                     let hit = model.sounds.first { $0.lane == lane && at >= $0.at && at <= $0.at + $0.length }?.id
-                    model.pickSound(hit == model.soundPick ? nil : hit)
-                    model.pickTitle(nil)
+                    if let hit, hit != model.soundPick {
+                        model.pickSound(hit)
+                        model.pickTitle(nil)
+                    } else {
+                        // Again, or empty space: lets go of whatever is picked.
+                        model.letGoOfAll()
+                    }
                     return
                 }
                 model.pickSound(nil)
@@ -932,11 +937,9 @@ struct EditTimeline: View {
                             return
                         }
                         lastTitleTap = (hit.id, now)
-                        model.pickTitle(model.titlePick == hit.id ? nil : hit.id)
+                        if model.titlePick == hit.id { model.letGoOfAll() } else { model.pickTitle(hit.id) }
                     } else {
-                        model.pickTitle(nil)
-                        model.pickOnEdit(nil)
-                        model.pickOverlay(nil)
+                        model.letGoOfAll()
                     }
                     return
                 }
@@ -954,7 +957,7 @@ struct EditTimeline: View {
                 if let overlayID {
                     // A tap on an overlay picks it; again, or beside it, lets go.
                     let hit = overlayGrip(overlayID, at: point, width: width, ends: false) != nil
-                    model.pickOverlay(hit && model.overlayPick != overlayID ? overlayID : nil)
+                    if hit && model.overlayPick != overlayID { model.pickOverlay(overlayID) } else { model.letGoOfAll() }
                     return
                 }
                 // A tap on the lyrics row picks a piece: its tools (split, delete, show/hide, look, lyric editor).
@@ -963,13 +966,12 @@ struct EditTimeline: View {
                     let at = model.time + Double(point.x - width / 2) / model.pixelsPerSecond
                     let hit = model.lyricsPiece(at: at)
                     let again = model.lyricsPicked && hit == model.lyricPiecePick
-                    model.pickLyrics(hit != nil && !again, piece: hit)
+                    if hit != nil && !again { model.pickLyrics(true, piece: hit) } else { model.letGoOfAll() }
                     return
                 }
                 // A tap on a clip picks it; again, or anywhere else, lets go.
                 guard video else {
-                    model.pickOnEdit(nil)
-                    model.pickOverlay(nil)
+                    model.letGoOfAll()
                     return
                 }
                 // A tap near one of an added clip's diamonds picks that keyframe.
@@ -988,7 +990,7 @@ struct EditTimeline: View {
                 }
                 // A tap on an added clip picks it; again lets go.
                 if let hit = cutawayGrip(at: point, width: width, ends: false) {
-                    model.pickOverlay(model.overlayPick == hit.id ? nil : hit.id)
+                    if model.overlayPick == hit.id { model.letGoOfAll() } else { model.pickOverlay(hit.id) }
                     return
                 }
                 let at = model.time + Double(point.x - width / 2) / model.pixelsPerSecond
@@ -1003,13 +1005,15 @@ struct EditTimeline: View {
                     }
                     lastClipTap = now
                 }
-                if model.kind == .performance, hit != nil {
+                if hit == nil || (model.kind != .performance && hit == model.editPick) {
+                    // Empty space on the track, or the picked video again: lets go of everything.
+                    model.letGoOfAll()
+                } else if model.kind == .performance {
                     // A split performance: the piece under the finger.
                     model.pickPiece(at: at)
                 } else {
-                    model.pickOnEdit(hit == model.editPick ? nil : hit)
+                    model.pickOnEdit(hit)
                 }
-                if hit == nil { model.pickOverlay(nil) }
             },
             pinchBegan: { zoomStart = model.pixelsPerSecond },
             pinched: { scale in
