@@ -898,10 +898,9 @@ final class EditorModel {
     /// Cuts between In and Out on the beat, to whichever video looks best at each moment.
     /// `shuffle`: the last Auto edit's settings with some luck, for a different cut. `recipe`:
     /// a starter recipe's settings instead of the pace alone.
-    /// `tapped`: cut at these times (from Tap to cut) instead of finding the cuts. `exact`: they're
-    /// already where they belong (the game snaps them itself), so they aren't moved.
+    /// `tapped`: cut at these times (from Tap the beat) instead of finding the cuts.
     func autoEdit(pace: AutoPace, request: String = "", shuffle: Bool = false, recipe: AutoStyle? = nil,
-                  tapped: [Double]? = nil, exact: Bool = false) async {
+                  tapped: [Double]? = nil) async {
         guard busy == nil, !layers.isEmpty, duration > 0 else { return }
         pause()
         notice = nil
@@ -1036,8 +1035,8 @@ final class EditorModel {
         if let tapped {
             var kept = [from]
             for tap in tapped.sorted() {
-                var at = exact ? tap : tap - 0.05
-                if !exact, let near = beats.min(by: { abs($0 - tap) < abs($1 - tap) }), abs(near - tap) < 0.15 { at = near }
+                var at = tap - 0.05
+                if let near = beats.min(by: { abs($0 - tap) < abs($1 - tap) }), abs(near - tap) < 0.15 { at = near }
                 at = (at * 30).rounded() / 30
                 if at > (kept.last ?? from) + 0.25, at < to - 0.25 { kept.append(at) }
             }
@@ -1077,49 +1076,46 @@ final class EditorModel {
         }
     }
 
-    // MARK: Tap to cut (the rhythm game)
+    // MARK: Tap the beat
 
-    /// Tap to cut is open: a full-screen game where the song plays and each tap is a cut.
+    /// Tap the beat is open: the song plays from Start and each tap drops a cut.
     var tapBeatOn = false
+    /// The taps so far (timeline seconds).
+    var beatTaps: [Double] = []
 
     func openTapBeat() {
         guard kind == .performance, busy == nil, !layers.isEmpty else { return }
         pause()
+        beatTaps = []
         tapBeatOn = true
         notice = nil
-        problem = nil
     }
 
-    /// For the game: stopped, back at Start.
-    func rewindForTapGame() {
-        pause()
+    /// Plays from Start so you can tap along (again: starts over, taps cleared).
+    func startTapBeat() {
+        beatTaps = []
         time = loopStart
         player.seek(to: CMTime(seconds: loopStart, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        play()
     }
 
-    /// The song's beats on the timeline (seconds) and which beat starts the bars, for the game.
-    func songBeats() async -> (times: [Double], barPhase: Int) {
-        guard let track = soundtrack, let sound = track.sound else { return ([], 0) }
-        let shift = track.shift
-        guard let found = await Task.detached(priority: .userInitiated, operation: { Beats.find(sound) }).value else {
-            return ([], 0)
-        }
-        return (found.times.map { $0 + shift }, found.barPhase)
+    /// One tap: a cut here. Only while playing, and only forward (not after it loops round).
+    func tapBeat() {
+        guard tapBeatOn, isPlaying else { return }
+        let now = player.currentTime().seconds
+        guard now.isFinite, now > loopStart + 0.2, now < loopEnd - 0.2,
+              now > (beatTaps.last ?? -1) + 0.15 else { return }
+        beatTaps.append(now)
     }
 
-    /// The song's loudness for the game's waveform: the timeline time of the first value, and
-    /// the values (100 a second, 0 to 1).
-    var songLoudness: (zero: Double, values: [Float])? {
-        guard let track = soundtrack, let sound = track.sound, !sound.loudness.isEmpty else { return nil }
-        return (sound.start + track.shift, sound.loudness)
-    }
-
-    /// The game's cuts (already on the beat where they were close) go on the timeline, each to
-    /// the best-looking take. One Undo step. Says whether they went on.
-    func applyTapGame(_ taps: [Double]) async -> Bool {
-        let before = history.count
-        await autoEdit(pace: .normal, tapped: taps, exact: true)
-        return history.count > before
+    /// Done: the taps become cuts, each to the best-looking take. Cancel leaves the cuts alone.
+    func finishTapBeat(keep: Bool) async {
+        pause()
+        tapBeatOn = false
+        let taps = beatTaps
+        beatTaps = []
+        guard keep, !taps.isEmpty else { return }
+        await autoEdit(pace: .normal, tapped: taps)
     }
 
     /// Where the loudest stretch of the song this long starts (timeline seconds, on a whole frame):

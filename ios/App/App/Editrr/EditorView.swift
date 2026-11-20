@@ -726,7 +726,9 @@ struct EditingView: View {
                     .transition(.opacity)
             }
 
-            if model.lyricTimeline {
+            if model.tapBeatOn {
+                TapBeatPanel(model: model)
+            } else if model.lyricTimeline {
                 LyricsToolbar(model: model) {
                     model.pause()
                     lyricsOpen = true
@@ -778,9 +780,6 @@ struct EditingView: View {
         }
         // The first time a project opens: three short tips, then never again.
         .overlay { FirstTips() }
-        .fullScreenCover(isPresented: Binding(get: { model.tapBeatOn }, set: { model.tapBeatOn = $0 })) {
-            TapGameView(model: model)
-        }
     }
 
     /// A problem or a notice, over the bottom of the video only while there is one (notices fade
@@ -966,7 +965,7 @@ struct EditingView: View {
                          spoken: "Performance: every video synced to the song") {
                     withAnimation(.spring(duration: 0.35)) { model.showPerformancePage() }
                 }
-                // No Auto edit, Shuffle or Tap to cut here: the performance is already edited
+                // No Auto edit, Shuffle or Tap beat here: the performance is already edited
                 // (on its own page), so nothing on this page can re-cut it by accident.
             }
             // A photo or video on top of the main video.
@@ -1181,9 +1180,9 @@ struct EditingView: View {
         }
     }
 
-    /// Tap to cut: a rhythm game where the song plays and each tap is a cut.
+    /// Tap beat: the song plays and each tap drops a cut.
     private var tapBeatTool: some View {
-        ToolItem(icon: "hand.tap", text: "Tap to cut", spoken: "Tap to cut: tap along with the song to make cuts") {
+        ToolItem(icon: "hand.tap", text: "Tap beat", spoken: "Tap the beat to make cuts") {
             model.openTapBeat()
         }
     }
@@ -1428,6 +1427,60 @@ struct ExportSheet: View {
                     .multilineTextAlignment(.center)
             }
         }
+    }
+}
+
+/// Tap the beat: the song plays from Start, and each tap on the big square drops a cut there.
+/// Done turns the taps into cuts, each to the best-looking take.
+struct TapBeatPanel: View {
+    let model: EditorModel
+    /// A finger is down on the square (one tap per touch, on the touch down, for timing).
+    @State private var down = false
+
+    var body: some View {
+        let playing = model.isPlaying
+        VStack(spacing: 8) {
+            HStack {
+                Button("Cancel") { Task { await model.finishTapBeat(keep: false) } }
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer()
+                Text(model.beatTaps.isEmpty ? "Tap along while it plays" : "\(model.beatTaps.count) cuts")
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                Spacer()
+                Button("Done") { Task { await model.finishTapBeat(keep: true) } }
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(model.beatTaps.isEmpty ? Color.white.opacity(0.35) : Tint.accent)
+                    .disabled(model.beatTaps.isEmpty)
+            }
+            .buttonStyle(.plain)
+            Corner.card
+                .fill(playing ? (down ? Color.white : Tint.accent) : Tint.surface2)
+                .frame(height: 84)
+                .overlay {
+                    Text(playing ? "TAP" : (model.beatTaps.isEmpty ? "Play and tap along" : "Start over"))
+                        .font(playing ? Font.title.weight(.heavy) : Font.headline)
+                        .foregroundStyle(playing ? Color.black : Color.white)
+                }
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !down else { return }
+                        down = true
+                        press()
+                    }
+                    .onEnded { _ in down = false })
+                .sensoryFeedback(.impact(weight: .light), trigger: model.beatTaps.count)
+                .accessibilityElement()
+                .accessibilityLabel(playing ? "Tap for a cut" : "Play and tap along")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { press() }
+        }
+        .foregroundStyle(.white)
+        .padding(.top, 4)
+    }
+
+    private func press() {
+        if model.isPlaying { model.tapBeat() } else { model.startTapBeat() }
     }
 }
 
