@@ -301,6 +301,20 @@ struct LyricsToolbar: View {
     }
 
     var body: some View {
+        HStack(spacing: 0) {
+            // Done: back to editing, like Done on the Performance page.
+            ToolItem(icon: "checkmark", text: "Done", tint: Tint.accent, on: true,
+                     spoken: "Done: back to editing") {
+                model.setLyricTimeline(false)
+            }
+            .fixedSize()
+            Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 30)
+                .padding(.trailing, 8)
+            strip
+        }
+    }
+
+    private var strip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 if model.lyrics.isEmpty {

@@ -1397,7 +1397,8 @@ body.band-mode .banner { height: auto; aspect-ratio: 3 / 2; max-height: 360px; }
 .post-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 12px 8px 8px; border-radius: 16px; background-color: var(--surface); margin-bottom: 8px; text-align: left; color: var(--text); font: inherit; }
 .post-row .pr-thumb { flex: none; width: 40px; height: 56px; border-radius: 8px; background-color: var(--surface-2); background-size: cover; background-position: center; }
 .post-row .pr-text { flex: 1; min-width: 0; }
-.post-row .pr-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.post-row .pr-name { display: block; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.post-row .pr-sub { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* the cut and day on the line under the name */
 .post-row .pr-go { flex: none; font-size: 13px; font-weight: 700; color: var(--accent); }
 .post-row.done .pr-go { color: var(--good-fill); }
 body:not(.native-app) .native-only { display: none !important; }
@@ -5529,7 +5530,7 @@ function postsByDay() { const by = {}; (nativePosts || []).forEach(x => { (by[x.
 function postRowHTML(x) {
   const today = ymd(new Date());
   const go = x.posted ? "Posted" : (x.date < today ? "Post it" : (x.date === today ? "Post now" : "Open"));
-  return `<button type="button" class="post-row ${x.posted ? "done" : ""}" data-post="${esc(x.key)}"><span class="pr-thumb"${x.thumb ? ` style="background-image:url(${x.thumb})"` : ""}></span><span class="pr-text"><span class="pr-name">${esc(x.name)}</span><span class="muted small">${esc(x.cut)} · ${esc(dayLabel(x.date, true))}</span></span><span class="pr-go">${go}</span></button>`;
+  return `<button type="button" class="post-row ${x.posted ? "done" : ""}" data-post="${esc(x.key)}"><span class="pr-thumb"${x.thumb ? ` style="background-image:url(${x.thumb})"` : ""}></span><span class="pr-text"><span class="pr-name">${esc(x.name)}</span><span class="pr-sub muted small">${esc(x.cut)} · ${esc(dayLabel(x.date, true))}</span></span><span class="pr-go">${go}</span></button>`;
 }
 function paintGoal() { document.querySelectorAll("[data-goal-pref]").forEach(b => b.classList.toggle("primary", +b.dataset.goalPref === nativeGoal)); }
 window.creatrrPosts = function (data) {
