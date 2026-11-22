@@ -1240,6 +1240,7 @@ final class EditorModel {
         var thumbs: [UUID: UIImage] = [:]
         for project in projects { thumbs[project.id] = ProjectStore.thumbnail(for: project.id) }
         projectThumbs = thumbs
+        PostBook.changed(projects)
     }
 
     /// Saves what was just lined up as a new named project.
@@ -1282,6 +1283,12 @@ final class EditorModel {
                        voice: $0.voice != nil ? true : nil)
         }
         project.cuts = cuts
+        // The cut on screen keeps these cuts; the edit's other cuts (Remixes) keep their own.
+        if var list = project.variations, !list.isEmpty {
+            let active = project.activeVariation ?? list[0].id
+            if let index = list.firstIndex(where: { $0.id == active }) { list[index].cuts = cuts }
+            project.variations = list
+        }
         project.duration = duration
         project.inPoint = inPoint
         project.outPoint = outPoint
@@ -6102,7 +6109,10 @@ final class EditorModel {
         // Its own copy of where the overlays sit, so moving one during the export changes nothing.
         let board = OverlayBoard()
         board.update(overlays, media: overlayMedia, track: trackKeys)
-        let words = LyricsOverlay(words: lyrics, style: lyricStyle, titles: titles)
+        // Posting: the lyrics show or don't, as that post was planned.
+        var wordStyle = lyricStyle
+        if let posting { wordStyle.show = posting.lyrics }
+        let words = LyricsOverlay(words: lyrics, style: wordStyle, titles: titles)
         words.setVideoHidden(videoHidden)
         session.videoComposition = TimelineBuilder.videoComposition(segments: cutsOnly, built: source,
                                                                      cuts: cuts, layers: layers, duration: duration,
@@ -6204,5 +6214,211 @@ final class EditorModel {
         return locked
             ? "Tap a number to preview, twice to cut. Drag a switch on the song lane to move it."
             : "Unlocked: hold a clip to move it, drag its end to trim. Lock when you're done."
+    }
+
+    // MARK: Cuts and posts
+
+    /// Posts a week the artist is aiming for.
+    var postGoal = PostBook.goal
+
+    func setGoal(_ goal: Int) {
+        PostBook.goal = goal
+        postGoal = PostBook.goal
+        PostBook.changed(projects)
+    }
+
+    /// The weekly goal was changed in creatrr's Settings.
+    func goalChangedElsewhere() {
+        postGoal = PostBook.goal
+    }
+
+    /// A project as it stands now: the open one with its live changes, any other as saved.
+    func postProject(_ id: UUID) -> SavedProject? {
+        if currentProject?.id == id, stage == .editing, let live = savedState() { return live }
+        return projects.first { $0.id == id }
+    }
+
+    /// The name of the cut on screen ("Remix 2"), when the edit has more than one.
+    var activeCutName: String? {
+        guard let project = currentProject, (project.variations?.count ?? 0) > 1 else { return nil }
+        return project.cutList.first { $0.id == project.activeCut }?.name
+    }
+
+    /// Changes a project's cuts or posts and saves it (the open one with its live changes).
+    private func changeProject(_ id: UUID, _ body: (inout SavedProject) -> Void) {
+        if currentProject?.id == id, stage == .editing {
+            saveNow()
+            guard var project = currentProject else { return }
+            body(&project)
+            currentProject = project
+            saveNow(force: true)
+        } else {
+            guard var project = projects.first(where: { $0.id == id }) else { return }
+            body(&project)
+            try? ProjectStore.save(project)
+        }
+        refreshProjects()
+    }
+
+    /// Picks the day one post goes up (nil takes it off the calendar).
+    func setPostDay(_ id: UUID, cut: UUID, lyrics: Bool, to date: Date?) {
+        changeProject(id) { project in
+            project.makeCutsReal()
+            project.changeCut(cut) { $0.change(lyrics: lyrics) { $0.date = date.map(PostBook.day) } }
+        }
+    }
+
+    /// Marks one post as posted (today, on its day if it had none) or not posted yet.
+    func setPosted(_ id: UUID, cut: UUID, lyrics: Bool, _ posted: Bool) {
+        let now = Date()
+        changeProject(id) { project in
+            project.makeCutsReal()
+            project.changeCut(cut) {
+                $0.change(lyrics: lyrics) { plan in
+                    plan.posted = posted ? now : nil
+                    if posted, plan.date == nil { plan.date = PostBook.day(now) }
+                }
+            }
+        }
+    }
+
+    func setCaption(_ id: UUID, cut: UUID, lyrics: Bool, _ caption: String?) {
+        changeProject(id) { project in
+            project.makeCutsReal()
+            project.changeCut(cut) { $0.change(lyrics: lyrics) { $0.caption = caption } }
+        }
+    }
+
+    /// Plan them all: a day for every post of this edit that has none, spread out to the weekly
+    /// goal. Returns how many were planned.
+    @discardableResult
+    func planAll(_ id: UUID) -> Int {
+        guard let project = postProject(id) else { return 0 }
+        let picks = PostBook.autoPlan(for: project, among: projects, goal: postGoal)
+        guard let first = picks.map({ $0.date }).min() else {
+            notice = "Every post of \u{201C}\(project.name)\u{201D} already has a day."
+            return 0
+        }
+        changeProject(id) { saved in
+            saved.makeCutsReal()
+            for pick in picks {
+                saved.changeCut(pick.cut) { $0.change(lyrics: pick.lyrics) { $0.date = pick.date } }
+            }
+        }
+        notice = "Planned \(picks.count) post\(picks.count == 1 ? "" : "s"), starting \(PostBook.spoken(first))."
+        return picks.count
+    }
+
+    /// Deletes a Remix (never the Main cut). Its posts come off the calendar.
+    func deleteCut(_ id: UUID, cut: UUID) {
+        guard let project = postProject(id),
+              let target = project.cutList.first(where: { $0.id == cut }), !target.isMain else { return }
+        if currentProject?.id == id, stage == .editing, project.activeCut == cut {
+            useCut(project.cutList[0].id)
+        }
+        changeProject(id) { saved in
+            saved.variations?.removeAll { $0.id == cut }
+            if saved.activeVariation == cut, let first = saved.variations?.first {
+                saved.activeVariation = first.id
+                saved.cuts = first.cuts
+            }
+        }
+        notice = "Deleted \(target.name)."
+    }
+
+    /// Puts another cut of the open edit on screen to edit (the one there now keeps its cuts).
+    func useCut(_ cut: UUID) {
+        guard currentProject != nil, stage == .editing else { return }
+        saveNow()
+        guard var project = currentProject else { return }
+        project.makeCutsReal()
+        guard project.activeVariation != cut,
+              let target = project.variations?.first(where: { $0.id == cut }) else { return }
+        if let active = project.activeVariation { project.changeCut(active) { $0.cuts = cuts } }
+        project.activeVariation = cut
+        currentProject = project
+        pause()
+        let valid = target.cuts.filter { layers.indices.contains($0.layer) }
+        cuts = valid.isEmpty ? [Cut(time: 0, layer: 0)] : valid
+        history = []
+        future = []
+        previewing = nil
+        selected = nil
+        redraw()
+        saveNow(force: true)
+        refreshProjects()
+        notice = "Showing \(target.name)."
+    }
+
+    /// Remix: another cut of the same takes, as a new cut of this edit. The cut on screen stays
+    /// as it was.
+    func remix() async {
+        guard currentProject != nil, stage == .editing, kind == .performance, busy == nil else { return }
+        saveNow()
+        guard var project = currentProject else { return }
+        project.makeCutsReal()
+        let before = cuts
+        let previous = project.activeVariation
+        if let previous { project.changeCut(previous) { $0.cuts = before } }
+        let number = (project.variations ?? [])
+            .compactMap { Int($0.name.replacingOccurrences(of: "Remix ", with: "")) }.max() ?? 0
+        let made = Variation(name: "Remix \(number + 1)", cuts: before)
+        project.variations?.append(made)
+        project.activeVariation = made.id
+        currentProject = project
+        history = []
+        future = []
+        if let last = lastAuto {
+            await autoEdit(pace: last.style.pace, shuffle: true)
+        } else {
+            var style = AutoStyle(pace: .normal)
+            style.shuffle = UInt64.random(in: 1...UInt64.max)
+            await autoEdit(pace: .normal, recipe: style)
+        }
+        history = []
+        future = []
+        guard cuts != before else {
+            // Nothing different came out: the Remix comes off again.
+            currentProject?.variations?.removeAll { $0.id == made.id }
+            currentProject?.activeVariation = previous
+            saveNow(force: true)
+            refreshProjects()
+            if problem == nil { notice = "Couldn't make a different cut from these takes." }
+            return
+        }
+        saveNow(force: true)
+        refreshProjects()
+        notice = "\(made.name) is ready: a new cut. The one before stays as it was (Posts has them all)."
+    }
+
+    /// The post being made right now: the export renders it, then the share pop up opens.
+    var posting: PostTarget?
+
+    /// Opens a post from its notification or creatrr's calendar: its edit, its cut, the edit page,
+    /// then the export, with or without lyrics as it was planned.
+    func openPost(_ key: String) async {
+        guard let ids = PostBook.parse(key) else { return }
+        refreshProjects()
+        guard let saved = projects.first(where: { $0.id == ids.project }) else {
+            notice = "That post's edit isn't here anymore."
+            return
+        }
+        if currentProject?.id != ids.project || stage != .editing {
+            if stage == .editing { startOver() }
+            await open(saved)
+            guard currentProject?.id == ids.project, stage == .editing else { return }
+        }
+        if postProject(ids.project)?.activeCut != ids.cut { useCut(ids.cut) }
+        if performancePage { showEditPage() }
+        posting = PostTarget(project: ids.project, cut: ids.cut, lyrics: ids.lyrics)
+    }
+
+    /// The share pop up closed after posting: shared marks it posted.
+    func finishPosting(shared: Bool) {
+        guard let target = posting else { return }
+        posting = nil
+        guard shared else { return }
+        setPosted(target.project, cut: target.cut, lyrics: target.lyrics, true)
+        notice = "Marked as posted."
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 import WebKit
 import AVFoundation
 import Capacitor
+import UserNotifications
 
 /// creatrr on iPhone: the web app (Projects, Artists) with editrr (Edits) beside it.
 /// On Edits home, creatrr's own header and tabs stay at the top (the web app keeps drawing them) and
@@ -66,7 +67,14 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         content?.add(messages, name: "creatrrShoot")
         content?.add(messages, name: "creatrrLyrics")
         content?.add(messages, name: "creatrrEditsDrag")
-        nav.backTitle = artistTier ? "Projects" : "Artists"
+        content?.add(messages, name: "creatrrPost")
+        content?.add(messages, name: "creatrrPostsAsk")
+        content?.add(messages, name: "creatrrGoal")
+        nav.backTitle = artistTier ? "Calendar" : "Artists"
+        // A post's reminder, tapped: Edits opens on that post, ready to share.
+        artist.bridge?.notificationRouter.localNotificationHandler = PostNotificationHandler.shared
+        NotificationCenter.default.addObserver(self, selector: #selector(openPost), name: .creatrrOpenPost, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(tellPosts), name: .creatrrPostsChanged, object: nil)
         view.addGestureRecognizer(toEditor)
         view.addGestureRecognizer(toArtist)
         NotificationCenter.default.addObserver(self, selector: #selector(stageChanged), name: .editrrStage, object: nil)
@@ -106,7 +114,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     func setTier(_ tier: String) {
         UserDefaults.standard.set(tier, forKey: Self.tierKey)
         artistTier = tier == "artist"
-        nav.backTitle = artistTier ? "Projects" : "Artists"
+        nav.backTitle = artistTier ? "Calendar" : "Artists"
         refreshSwipes()
     }
 
@@ -200,6 +208,36 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     func tellLyrics(key: String, count: Int) {
         guard let data = try? JSONEncoder().encode(key), let quoted = String(data: data, encoding: .utf8) else { return }
         webView?.evaluateJavaScript("try { window.creatrrSongLyrics && window.creatrrSongLyrics(\(quoted), \(count)); } catch (e) {}")
+    }
+
+    // MARK: Posts
+
+    /// A post on the calendar, or its reminder, was tapped: Edits opens on it, ready to share.
+    @objc func openPost() {
+        guard PostBook.pendingOpen != nil else { return }
+        let go = { [weak self] in
+            guard let self else { return }
+            if !self.showingEditor { self.show(editor: true) }
+            NotificationCenter.default.post(name: .editrrPost, object: nil)
+        }
+        if presentedViewController != nil {
+            dismiss(animated: true) { go() }
+        } else {
+            go()
+        }
+    }
+
+    /// The calendar's posts (with thumbnails) and the weekly goal, for the web app.
+    @objc func tellPosts() {
+        let payload = PostBook.webPayload(ProjectStore.list())
+        webView?.evaluateJavaScript("try { window.creatrrPosts && window.creatrrPosts(\(payload)); } catch (e) {}")
+    }
+
+    /// The weekly goal, changed in Settings.
+    func setGoal(_ goal: Int) {
+        PostBook.goal = goal
+        NotificationCenter.default.post(name: .creatrrGoalChanged, object: nil)
+        PostBook.changed(ProjectStore.list())
     }
 
     /// Projects, Artists, the bell or your account was tapped in the header while Edits was open.
@@ -394,6 +432,15 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
                 } else {
                     home?.dragFromWeb(nil)
                 }
+            case "creatrrPost":
+                if let key = message.body as? String, !key.isEmpty {
+                    PostBook.pendingOpen = key
+                    home?.openPost()
+                }
+            case "creatrrPostsAsk":
+                home?.tellPosts()
+            case "creatrrGoal":
+                if let goal = (message.body as? NSNumber)?.intValue { home?.setGoal(goal) }
             case "creatrrHome":
                 if let info = message.body as? [String: Any], let place = info["place"] as? String {
                     let bottom = (info["top"] as? NSNumber).map { CGFloat(truncating: $0) }
@@ -404,6 +451,26 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
             default:
                 break
             }
+        }
+    }
+}
+
+/// Taps on creatrr's own reminders (a post's day, running low on posts). Pushes go to the push
+/// plugin as before.
+final class PostNotificationHandler: NSObject, NotificationHandlerProtocol {
+    static let shared = PostNotificationHandler()
+
+    /// A reminder that comes while creatrr is open still shows.
+    func willPresent(notification: UNNotification) -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    func didReceive(response: UNNotificationResponse) {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let key = response.notification.request.content.userInfo["post"] as? String else { return }
+        Task { @MainActor in
+            PostBook.pendingOpen = key
+            NotificationCenter.default.post(name: .creatrrOpenPost, object: nil)
         }
     }
 }

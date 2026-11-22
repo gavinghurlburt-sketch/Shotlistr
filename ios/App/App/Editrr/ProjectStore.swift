@@ -76,6 +76,11 @@ struct SavedProject: Codable, Equatable, Identifiable {
     var filter: ColorLook?
     /// How much of the filter shows (nil: all of it).
     var filterAmount: Double?
+    /// Every cut of this edit (the Main cut and any Remixes) and the days their posts go up. nil:
+    /// just the Main cut, nothing planned (every older project).
+    var variations: [Variation]?
+    /// The cut on screen (nil: the first).
+    var activeVariation: UUID?
 }
 
 /// Music or a sound effect added on the edit page (a file from Files, or a creatrr song or section).

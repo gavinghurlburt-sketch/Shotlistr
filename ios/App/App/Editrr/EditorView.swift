@@ -57,12 +57,26 @@ struct EditorView: View {
         }
         // A section's red record button in creatrr.
         .onReceive(NotificationCenter.default.publisher(for: .editrrShoot)) { _ in takeShoot() }
-        .onAppear { takeShoot() }
+        .onAppear {
+            takeShoot()
+            takePost()
+        }
+        // A post's reminder or its day on the calendar: that post opens, ready to share.
+        .onReceive(NotificationCenter.default.publisher(for: .editrrPost)) { _ in takePost() }
+        // The weekly goal, changed in creatrr's Settings.
+        .onReceive(NotificationCenter.default.publisher(for: .creatrrGoalChanged)) { _ in model.goalChangedElsewhere() }
         // Inside creatrr, the left-edge swipe back to the artist page only works from home, so it
         // never fights the timeline.
         .onChange(of: model.stage, initial: true) { _, stage in
             EditrrStage.editing = stage == .editing
         }
+    }
+
+    /// Picks up a post creatrr asked to open.
+    private func takePost() {
+        guard let key = PostBook.pendingOpen else { return }
+        PostBook.pendingOpen = nil
+        Task { await model.openPost(key) }
     }
 
     /// Picks up a part creatrr asked to shoot.
@@ -90,6 +104,12 @@ struct SetupView: View {
     @Environment(\.creatrrBack) private var back
     @Environment(\.creatrrBackTitle) private var backTitle
     @Environment(\.creatrrBare) private var bare
+    /// The edit whose posts are open.
+    @State private var postsFor: SavedProject?
+    @State private var showGoal = false
+    @State private var showOlder = false
+    /// Edits whose "can give you N posts" card was closed (ids, comma separated).
+    @AppStorage("creatrr.planCardHidden") private var hiddenCards = ""
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -138,7 +158,36 @@ struct SetupView: View {
                             .foregroundStyle(.white.opacity(0.55))
                             .padding(.vertical, 12)
                     } else {
-                        projectsGrid
+                        // How much is lined up, and how long it lasts.
+                        PipelineBar(projects: model.projects, goal: model.postGoal) { showGoal = true }
+                            .padding(.bottom, 14)
+                        if let project = planCardProject {
+                            PlanCard(project: project,
+                                     planAll: { _ = model.planAll(project.id) },
+                                     seeAll: { postsFor = project },
+                                     hide: { withAnimation(.snappy) { hideCard(project.id) } })
+                                .padding(.bottom, 16)
+                        }
+                        projectsGrid(current)
+                        if !older.isEmpty {
+                            Button {
+                                withAnimation(.snappy) { showOlder.toggle() }
+                            } label: {
+                                HStack {
+                                    Text("Older (\(older.count))").font(.headline)
+                                    Spacer()
+                                    Image(systemName: showOlder ? "chevron.up" : "chevron.down")
+                                        .font(.footnote.weight(.bold))
+                                }
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 18)
+                            .accessibilityLabel(showOlder ? "Hide older edits" : "Show older edits, posted over a month ago")
+                            if showOlder { projectsGrid(older) }
+                        }
                     }
                 }
                 // Full width even with no projects yet, so nothing shrinks toward the middle.
@@ -194,6 +243,14 @@ struct SetupView: View {
             }
             Button("Cancel", role: .cancel) { renaming = nil }
         }
+        .sheet(item: $postsFor) { project in
+            PostsSheet(model: model, projectID: project.id)
+                .frostedSheet()
+        }
+        .sheet(isPresented: $showGoal) {
+            GoalSheet(model: model)
+                .frostedSheet()
+        }
         .confirmationDialog(deleting.map { "Delete \u{201C}\($0.name)\u{201D}?" } ?? "",
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                             titleVisibility: .visible) {
@@ -216,11 +273,31 @@ struct SetupView: View {
             }
     }
 
-    /// Saved projects, last edited first, three to a row. Tap to open; hold for Rename and Delete.
-    private var projectsGrid: some View {
+    /// Edits still in use, and ones posted over a month ago with nothing left to post (folded away).
+    private var current: [SavedProject] { model.projects.filter { !PostBook.isOlder($0) } }
+    private var older: [SavedProject] { model.projects.filter { PostBook.isOlder($0) } }
+
+    /// The newest edit that's edited, has posts with no day yet, and whose card wasn't closed.
+    private var planCardProject: SavedProject? {
+        let hidden = Set(hiddenCards.split(separator: ",").map(String.init))
+        return current.first { project in
+            !project.justFilmed && !hidden.contains(project.id.uuidString)
+                && PostBook.slots([project]).contains { !$0.plan.isPlanned && $0.plan.posted == nil }
+        }
+    }
+
+    private func hideCard(_ id: UUID) {
+        var hidden = hiddenCards.split(separator: ",").map(String.init)
+        hidden.append(id.uuidString)
+        // Only the last few are kept; an old one coming back does no harm.
+        hiddenCards = hidden.suffix(60).joined(separator: ",")
+    }
+
+    /// Saved projects, last edited first, three to a row. Tap to open; hold for Posts, Rename and Delete.
+    private func projectsGrid(_ list: [SavedProject]) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: 3),
                   spacing: 16) {
-            ForEach(model.projects) { project in
+            ForEach(list) { project in
                 Button {
                     Task { await model.open(project) }
                 } label: {
@@ -228,6 +305,7 @@ struct SetupView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    Button("Posts", systemImage: "calendar") { postsFor = project }
                     Button("Rename", systemImage: "pencil") {
                         newName = project.name
                         renaming = project
@@ -551,6 +629,8 @@ struct EditingView: View {
     @State private var safeZoneOpen = false
     @State private var fullScreen = false
     @State private var exporting = false
+    /// This edit's posts (every cut, with and without lyrics, and their days).
+    @State private var postsOpen = false
     @State private var autoEditing = false
     @State private var lyricsOpen = false
     /// The lyrics' look on its own (from the lyrics track's Look tool).
@@ -708,7 +788,16 @@ struct EditingView: View {
                 .sheet(isPresented: $exporting, onDismiss: {
                     // Made it: the phone's own share sheet comes up from the edit page itself, so it
                     // gets the full width (over the export sheet it was squeezed narrow).
-                    if case .saved(let url) = model.exportState {
+                    guard case .saved(let url) = model.exportState else {
+                        model.posting = nil
+                        return
+                    }
+                    if let slot = model.postingSlot {
+                        // Posting: its caption is copied to paste in, and sharing it marks it posted.
+                        if let caption = slot.plan.caption, !caption.isEmpty { UIPasteboard.general.string = caption }
+                        SharePopUp.present(url) { _, completed in model.finishPosting(shared: completed) }
+                    } else {
+                        model.posting = nil
                         SharePopUp.present(url) { _, _ in }
                     }
                 }) {
@@ -717,6 +806,18 @@ struct EditingView: View {
                     ExportSheet(model: model)   // sizes itself to fit, with the pull-down bar
                         .frostedSheet()
                         .interactiveDismissDisabled(model.exportState.isWorking)
+                }
+                .sheet(isPresented: $postsOpen) {
+                    if let id = model.currentProject?.id {
+                        PostsSheet(model: model, projectID: id, inEditor: true)
+                            .frostedSheet()
+                    }
+                }
+                // A post opened from its reminder or the calendar: straight to its export.
+                .onChange(of: model.posting, initial: true) { _, post in
+                    guard post != nil, !exporting else { return }
+                    model.resetExport()
+                    exporting = true
                 }
 
             playBar
@@ -1045,6 +1146,11 @@ struct EditingView: View {
                 model.pause()
                 overlayPicking = true
             }
+            // This edit's posts: its cuts, with and without lyrics, and the days they go up.
+            ToolItem(icon: "calendar", text: "Posts", spoken: "Posts: plan the days this edit goes up") {
+                model.pause()
+                postsOpen = true
+            }
             // Export last, after every other tool.
             ToolItem(icon: "square.and.arrow.up", text: "Export", on: true) {
                 model.resetExport()
@@ -1302,6 +1408,11 @@ struct EditingView: View {
             mirrorTool
             ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
             shuffleTool
+            // Remix: another cut from the same takes, kept as its own post. This cut stays.
+            ToolItem(icon: "square.stack.3d.up", text: "Remix", enabled: model.busy == nil,
+                     spoken: "Remix: make another cut as a new post. This one stays as it is") {
+                Task { await model.remix() }
+            }
             tapBeatTool
             exportRangeTools
             // Lock: clips can't be moved, trimmed or nudged while it's on.
@@ -1417,6 +1528,19 @@ struct ExportSheet: View {
             // Once it's saved the sheet is on its way out (the share sheet follows).
             if case .saved = model.exportState {
                 EmptyView()
+            } else if let slot = model.postingSlot {
+                // Posting from the calendar: which post this is, and its day.
+                Text("Post").font(.title2.weight(.bold))
+                Text(slot.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Tint.accent)
+                if let caption = slot.plan.caption, !caption.isEmpty {
+                    Text("Your caption is copied when the share pop up opens, so you can paste it in.")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                }
+                range
             } else {
                 Text("Export").font(.title2.weight(.bold))
                 Text(model.wide ? "1920 x 1080, 30 fps. A horizontal video for YouTube and screens."
@@ -2817,6 +2941,20 @@ struct ProjectTile: View {
                             .background(Tint.accent, in: Capsule())
                             .padding(6)
                             .accessibilityLabel("Performance")
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    // Posts with a day and not up yet, or a check once every planned one is posted.
+                    let plans = PostBook.slots([project]).map(\.plan).filter(\.isPlanned)
+                    let waiting = plans.filter { $0.posted == nil }.count
+                    if !plans.isEmpty {
+                        Label(waiting > 0 ? "\(waiting)" : "Posted", systemImage: waiting > 0 ? "calendar" : "checkmark")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 6).padding(.vertical, 4)
+                            .background(waiting > 0 ? Tint.accent : Tint.good, in: Capsule())
+                            .padding(6)
+                            .accessibilityLabel(waiting > 0 ? "\(waiting) post\(waiting == 1 ? "" : "s") planned" : "All posted")
                     }
                 }
             Text(project.name)
