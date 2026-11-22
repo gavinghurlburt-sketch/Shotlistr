@@ -5077,7 +5077,7 @@ async function renderProjectsList() {
   $("artistChips").innerHTML = (artists.length && !isArtistTier()) ? [`<button type="button" class="btn small ${artistFilter ? "" : "primary"}" data-artist="">All</button>`].concat(artists.map(a => `<button type="button" class="btn small ${artistFilter === a ? "primary" : ""}" data-artist="${esc(a)}">${esc(a)}</button>`)).join("") : "";
   const projects = all.filter(p => !artistFilter || p.artist === artistFilter);
   renderCalendar(projects);
-  if (!all.length && !(nativePosts || []).length) { list.innerHTML = `<div class="projects-empty">No projects yet. Start one with New…</div>`; return; }
+  if (!all.length && !calSel) { list.innerHTML = `<div class="projects-empty">No projects yet. Start one with New…</div>`; return; }
   const today = ymd(new Date());
   const byDate = (a, b) => (primaryDate(a, today) || "").localeCompare(primaryDate(b, today) || "") || new Date(b.updatedAt) - new Date(a.updatedAt);
   let html = "";
@@ -5087,9 +5087,6 @@ async function renderProjectsList() {
     html += dayPosts.map(postRowHTML).join("");
     html += day.length ? day.map(projectCardHTML).join("") : (dayPosts.length ? "" : `<div class="projects-empty">Nothing planned that day.</div>`);
   } else {
-    /* the next few posts from Edits, so the next one is a tap away */
-    const next = (nativePosts || []).filter(x => !x.posted && x.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4);
-    if (next.length) html += `<div class="pl-head"><span>Next posts</span></div>` + next.map(postRowHTML).join("");
     const pd = p => primaryDate(p, today);
     const upcoming = projects.filter(p => pd(p) && pd(p) >= today).sort(byDate);
     const none = projects.filter(p => !pd(p)).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -5097,7 +5094,7 @@ async function renderProjectsList() {
     if (upcoming.length) html += `<div class="pl-head"><span>Upcoming</span></div>` + upcoming.map(projectCardHTML).join("");
     if (none.length) html += `<div class="pl-head"><span>${upcoming.length || past.length ? "No shoot date yet" : "Projects"}</span></div>` + none.map(projectCardHTML).join("");
     if (past.length) html += `<div class="pl-head"><span>Past</span></div>` + past.map(projectCardHTML).join("");
-    if (!projects.length && !next.length) html = `<div class="projects-empty">No projects for ${esc(artistFilter || "this filter")}.</div>`;
+    if (!projects.length) html = `<div class="projects-empty">No projects for ${esc(artistFilter || "this filter")}.</div>`;
   }
   if (artistFilter && !calSel) {
     const loose = all.filter(p => !p.artist);
