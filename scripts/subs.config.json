@@ -1,4 +1,5 @@
 {
   "live": true,
-  "revenueCatAppleKey": "appl_EajgKJsEjmUfCuWyNzgXOhsJbmV"
+  "revenueCatAppleKey": "appl_EajgKJsEjmUfCuWyNzgXOhsJbmV",
+  "testFlightFree": true
 }

@@ -602,6 +602,13 @@ class ViewController: CAPBridgeViewController {
         // TestFlight and the App Store use Release builds, which never get this.
         webView?.configuration.userContentController.addUserScript(
             WKUserScript(source: "window.__creatrrTester = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        #else
+        // TestFlight installs (and App Review) carry a test-store receipt. The page decides whether that makes the app free
+        // ("testFlightFree" in scripts/subs.config.json), so friends can test without paying.
+        if Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            webView?.configuration.userContentController.addUserScript(
+                WKUserScript(source: "window.__creatrrTestFlight = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         #endif
     }
 

@@ -126,7 +126,7 @@ must("clearTrack end", clearRe.test(h));
 const cloud = fs.readFileSync("scripts/cloud.js", "utf8").replace("__SB_URL__", SB_URL).replace("__SB_KEY__", SB_KEY);
 must("cloud.js has no script end tag", !/<\/script/i.test(cloud));
 const subsCfg = JSON.parse(fs.readFileSync("scripts/subs.config.json", "utf8"));
-const purchases = fs.readFileSync(WEB ? "scripts/webplan.js" : "scripts/purchases.js", "utf8").replace("__SUBS_LIVE__", subsCfg.live === true ? "true" : "false").replace("__RC_KEY__", subsCfg.revenueCatAppleKey || "");
+const purchases = fs.readFileSync(WEB ? "scripts/webplan.js" : "scripts/purchases.js", "utf8").replace("__SUBS_LIVE__", subsCfg.live === true ? "true" : "false").replace("__RC_KEY__", subsCfg.revenueCatAppleKey || "").replace("__TESTFLIGHT_FREE__", subsCfg.testFlightFree === true ? "true" : "false");
 must("purchases.js has no script end tag", !/<\/script/i.test(purchases));
 h = h.replace(clearRe, m => m + "\n" + cloud + "\n" + purchases + "\n");
 const lib = fs.readFileSync("scripts/supabase.bundle.js", "utf8");

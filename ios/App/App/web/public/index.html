@@ -2967,9 +2967,11 @@ const LEGAL_BASE = "https://www.creatrr.co/docs/";
 const TIER_CACHE_KEY = "creatrr_plan_cache_v1";
 let subs = { tier: null, trial: false, loaded: false }, rcOfferings = null, pwBlocking = false, pwBusy = false, rcLoggedIn = false;
 const rcApi = () => window.__RC_MOCK || window.RC;
-/* Your own Xcode runs (Debug builds) can try the app as each plan without buying it.
-   App Store and TestFlight builds are Release builds, so they never see this. */
-const PLAN_TESTER = !!window.__creatrrTester;
+/* Your own Xcode runs (Debug builds) can try the app as each plan without buying it. So can TestFlight builds while
+   scripts/subs.config.json has "testFlightFree": true (for friends testing). Turn that off before sending a build to App Review,
+   which also runs on the test store. App Store builds never see this. */
+const TESTFLIGHT_FREE = true;
+const PLAN_TESTER = !!window.__creatrrTester || (TESTFLIGHT_FREE && !!window.__creatrrTestFlight);
 const PREVIEW_KEY = "creatrr_preview_plan_v1";
 function previewPlan() {
   if (!PLAN_TESTER) return null;
@@ -2999,7 +3001,9 @@ function handleCustomerInfo(info) {
   cachePlan(r.tier);
   const pv = previewPlan();
   if (pv) { setTier(pv); closePaywall(true); }
-  else if (r.tier) { setTier(r.tier); closePaywall(true); } else openPaywall(true);
+  else if (r.tier) { setTier(r.tier); closePaywall(true); }
+  else if (PLAN_TESTER) { setTier("artist"); closePaywall(true); }   // test builds: free, as Artist, without the paywall
+  else openPaywall(true);
   paintPlanRow();
 }
 
@@ -3114,7 +3118,7 @@ function paintPlanRow() {
   $("acctPlanBtn").addEventListener("click", () => { acctCloseModal(); openPaywall(false); });
   if (!PLAN_TESTER) return;
   const cur = previewPlan() || subs.tier;
-  row.insertAdjacentHTML("beforeend", `<div class="muted small" style="margin:14px 0 6px">Try the app as (your Xcode builds only, nothing is bought)</div><div class="theme-seg">${["artist", "plus", "pro"].map(t => `<button type="button" class="btn small${t === cur ? " primary" : ""}" data-preview-plan="${t}">${TIERS[t].name.replace("creatrr ", "")}</button>`).join("")}</div>`);
+  row.insertAdjacentHTML("beforeend", `<div class="muted small" style="margin:14px 0 6px">Try the app as (test builds only, nothing is bought)</div><div class="theme-seg">${["artist", "plus", "pro"].map(t => `<button type="button" class="btn small${t === cur ? " primary" : ""}" data-preview-plan="${t}">${TIERS[t].name.replace("creatrr ", "")}</button>`).join("")}</div>`);
   row.querySelectorAll("[data-preview-plan]").forEach(b => b.addEventListener("click", () => setPreviewPlan(b.dataset.previewPlan)));
 }
 
@@ -3136,7 +3140,7 @@ async function subsInit() {
     loadOfferings();
   } catch (e) {
     console.error("purchases", e);
-    if (!cached) { subs.loaded = true; openPaywall(true); }        // no cached plan and can't reach the store
+    if (!cached) { subs.loaded = true; if (PLAN_TESTER) setTier("artist"); else openPaywall(true); }        // no cached plan and can't reach the store
   }
 }
 async function onCloudUser(u) {                                     // called by the account code when the signed-in user changes
