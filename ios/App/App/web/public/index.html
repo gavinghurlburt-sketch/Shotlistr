@@ -4358,12 +4358,99 @@ function computePeaks(buf) {
 }
 
 /* ---------- tempo & song-start detection ---------- */
-const onsetCache = new WeakMap();
+/* onsets: a "new sound starts here" curve, ~86 values a second, from how much the spectrum jumps up (spectral flux).
+   It hears a kick or snare inside a loud, dense mix far better than loudness alone, which a mastered song barely changes. */
+const onsetCache = new WeakMap(), onsetJobs = new WeakMap();
 function onsetInfo(buf) {
   if (onsetCache.has(buf)) return onsetCache.get(buf);
-  const r = onsetInfoCalc(buf); onsetCache.set(buf, r); return r;
+  const st = onsetJobs.get(buf) || onsetStart(buf);
+  onsetStep(st, st.frames);
+  return onsetDone(buf, st);
 }
-function onsetInfoCalc(buf) {
+function onsetReady(buf) { return onsetCache.has(buf) ? onsetCache.get(buf) : null; }
+/* the same, worked out a slice at a time so the page never freezes (the tempo sheet starts it when it opens) */
+function onsetSoon(buf) {
+  if (!buf || onsetCache.has(buf) || onsetJobs.has(buf)) return;
+  const st = onsetStart(buf); onsetJobs.set(buf, st);
+  const slice = () => {
+    if (onsetCache.has(buf)) return;
+    onsetStep(st, Math.min(st.frames, st.next + 700));
+    if (st.next >= st.frames) onsetDone(buf, st); else setTimeout(slice, 0);
+  };
+  setTimeout(slice, 0);
+}
+function onsetStart(buf) {
+  const sr0 = buf.sampleRate, D = Math.max(1, Math.round(sr0 / 11025)), sr = sr0 / D;
+  const c0 = buf.getChannelData(0), c1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
+  const n = Math.floor(buf.length / D), x = new Float32Array(n), g = 1 / (c1 ? 2 * D : D);
+  for (let i = 0, j = 0; i < n; i++) { let s = 0; for (let d = 0; d < D; d++, j++) s += c1 ? c0[j] + c1[j] : c0[j]; x[i] = s * g; }
+  const N = 512, hop = 128, frames = Math.max(0, Math.floor((n - N) / hop)), hann = new Float32Array(N);
+  for (let i = 0; i < N; i++) hann[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+  const rev = new Uint16Array(N), tw = new Float64Array(N);                   // a fixed-size FFT: bit order and twiddles worked out once
+  for (let i = 0, j = 0; i < N; i++) { rev[i] = j; let bit = N >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; }
+  for (let k = 0; k < N / 2; k++) { tw[2 * k] = Math.cos(-2 * Math.PI * k / N); tw[2 * k + 1] = Math.sin(-2 * Math.PI * k / N); }
+  return { x, sr, N, hop, frames, hann, rev, tw, next: 0, flux: new Float32Array(frames), energy: new Float32Array(frames),
+    re: new Float64Array(N), im: new Float64Array(N), prev: new Float64Array(N / 2 + 1), cur: new Float64Array(N / 2 + 1) };
+}
+function onsetStep(st, until) {
+  const { x, N, hop, hann, re, im, rev, tw, flux, energy } = st, H = N / 2;
+  let prev = st.prev, cur = st.cur, f = st.next;
+  for (; f < until; f++) {
+    const b = f * hop; let e = 0;
+    for (let i = 0; i < N; i++) { const v = x[b + i]; e += v * v; const r = rev[i]; re[r] = v * hann[i]; im[r] = 0; }
+    for (let len = 2; len <= N; len <<= 1) {
+      const half = len >> 1, ts = 2 * N / len;
+      for (let i = 0; i < N; i += len) for (let k = 0; k < half; k++) {
+        const a = i + k, c = a + half, wr = tw[k * ts], wi = tw[k * ts + 1];
+        const xr = re[c] * wr - im[c] * wi, xi = re[c] * wi + im[c] * wr;
+        re[c] = re[a] - xr; im[c] = im[a] - xi; re[a] += xr; im[a] += xi;
+      }
+    }
+    let fl = 0;
+    for (let k = 1; k < H; k++) {
+      const m = Math.log(1 + 1000 * Math.sqrt(re[k] * re[k] + im[k] * im[k]));
+      cur[k] = m;
+      let p = prev[k - 1]; if (prev[k] > p) p = prev[k]; if (prev[k + 1] > p) p = prev[k + 1];   // against the loudest neighbour, so a held, wobbling note doesn't count
+      if (m > p) fl += m - p;
+    }
+    flux[f] = f ? fl : 0; energy[f] = e;
+    const sw = prev; prev = cur; cur = sw;
+  }
+  st.next = f; st.prev = prev; st.cur = cur;
+}
+function onsetDone(buf, st) {
+  onsetJobs.delete(buf);
+  const { frames, flux, energy, sr, hop, N } = st;
+  let r = null;
+  if (frames >= 300) {
+    let maxE = 0; for (let f = 0; f < frames; f++) if (energy[f] > maxE) maxE = energy[f];
+    if (maxE > 0) {
+      let startF = 0; const thr = maxE * 0.0036;
+      while (startF < frames && energy[startF] < thr) startF++;
+      const pre = new Float64Array(frames + 1);
+      for (let f = 0; f < frames; f++) pre[f + 1] = pre[f] + flux[f];
+      const env = new Float32Array(frames), W = 8;
+      for (let f = 0; f < frames; f++) {
+        const a = Math.max(0, f - W), b = Math.min(frames, f + W + 1);
+        const v = flux[f] - (pre[b] - pre[a]) / (b - a);
+        env[f] = v > 0 ? v : 0;
+      }
+      const envW = new Float32Array(frames);
+      for (let f = 1; f < frames - 1; f++) envW[f] = Math.max(env[f - 1], env[f], env[f + 1]);
+      r = { sr, hop, win: N, frames, startF, env, envW, fps: sr / hop, bias: 2 * hop / sr };
+    }
+  }
+  onsetCache.set(buf, r);
+  return r;
+}
+/* the plain loudness version, kept for finding the tempo on its own when a song is added: it leans on kicks and snares,
+   so its guess at where the beat sits doesn't slide onto loud off-beat hi-hats */
+const loudOnsetCache = new WeakMap();
+function loudOnsetInfo(buf) {
+  if (loudOnsetCache.has(buf)) return loudOnsetCache.get(buf);
+  const r = loudOnsetCalc(buf); loudOnsetCache.set(buf, r); return r;
+}
+function loudOnsetCalc(buf) {
   const sr = buf.sampleRate, n = buf.length;
   const c0 = buf.getChannelData(0), c1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
   const hop = 512, win = 1024;
@@ -4400,7 +4487,7 @@ function onsetInfoCalc(buf) {
   return { sr, hop, win, frames, startF, env, envW, fps: sr / hop, bias: (win - hop / 2) / sr };
 }
 function analyzeTempo(buf) {
-  const info = onsetInfo(buf); if (!info) return null;
+  const info = loudOnsetInfo(buf); if (!info) return null;
   const { sr, hop, win, frames, startF, env, envW, fps } = info;
   const minL = Math.max(2, Math.floor(fps * 60 / 200)), maxL = Math.ceil(fps * 60 / 60);
   const ac = L => { let s = 0; for (let f = startF; f + L < frames; f++) s += env[f] * env[f + L]; return s; };
@@ -4995,44 +5082,100 @@ $("removeTrackBtn").addEventListener("click", () => {
   setTempoStatus("");
   if (isContent()) renderCurrent();
 });
-/* tap tempo: play the track, tap the beat; taps give the rough tempo and the "1", the track's onsets lock it in */
-var tap = { locked: false, taps: [], snap: null, base: null, active: false, sched: [], lastSongT: -1, timer: 0, prevClick: false, downbeat: false };
+/* tap tempo: play the track, tap the beat; taps give the rough tempo and the "1", the track's onsets give the exact tempo and lock it in */
+var tap = { locked: false, taps: [], snap: null, base: null, active: false, sched: [], lastSongT: -1, timer: 0, prevClick: false, downbeat: false, det: null };
 function outLatency() { try { if (cue && cue.native) return natLatency; return (audioCtx && (audioCtx.outputLatency || audioCtx.baseLatency)) || 0; } catch (e) { return 0; } }
+/* hybrid tap tempo: the taps say roughly how fast and where the beat is; the song's own onsets give the exact tempo and spot. */
+function foldAt(info, bpm, sub, f0, f1) {          // how much onset lands at each spot inside one beat, over frames f0..f1
+  const P = 60 * info.fps / bpm, B = Math.max(4, Math.round(P * sub)), h = new Float32Array(B), env = info.env, s0 = info.startF;
+  for (let f = Math.max(f0, s0); f < f1; f++) { const v = env[f]; if (v > 0) h[Math.floor(((f - s0) % P) / P * B) % B] += v; }
+  return { h, P, B };
+}
+function foldSmooth(fd, w) {
+  const { h, B } = fd, sm = new Float32Array(B);
+  let s = 0; for (let d = -w; d <= w; d++) s += h[(d + B) % B];
+  for (let i = 0; i < B; i++) { sm[i] = s; s += h[(i + w + 1) % B] - h[(i - w + B) % B]; }
+  return sm;
+}
+function foldScore(info, bpm, f0, f1) { const sm = foldSmooth(foldAt(info, bpm, 1, f0, f1), 1); let m = 0; for (let i = 0; i < sm.length; i++) if (sm[i] > m) m = sm[i]; return m; }
+function songTempoNear(info, rough, atF) {
+  const fps = info.fps, f0 = Math.max(info.startF, Math.round(atF - 30 * fps)), f1 = Math.min(info.frames, f0 + Math.round(60 * fps));
+  const span = (f1 - f0) / fps; if (span < 8) return null;
+  const step = Math.max(0.005, 0.6 * rough / (fps * span));     // fine enough that the right tempo can't fall between two tries
+  let best = -1, bestB = rough, sum = 0, cnt = 0;
+  for (let b = rough * 0.94; b <= rough * 1.06; b += step) { const sc = foldScore(info, b, f0, f1); sum += sc; cnt++; if (sc > best) { best = sc; bestB = b; } }
+  let fb = bestB, fs = -1;                                         // then the whole song decides the last decimal
+  for (let b = bestB - step; b <= bestB + step + 1e-9; b += 0.002) { const sc = foldScore(info, b, info.startF, info.frames); if (sc > fs) { fs = sc; fb = b; } }
+  const w = Math.round(fb);                                         // a whole BPM wins when it fits as well (songs made in a DAW)
+  if (Math.abs(fb - w) <= 0.25 && foldScore(info, w, info.startF, info.frames) >= fs * 0.97) fb = w;
+  return { bpm: Math.round(fb * 1000) / 1000, conf: best / (sum / cnt), rough };
+}
+/* where the beat sits: the strongest onset spot near the taps (within about a quarter beat), on a fine fold of the whole song */
+function songPhaseNear(info, bpm, tapPhase) {
+  const fd = foldAt(info, bpm, 4, info.startF, info.frames), sm = foldSmooth(fd, 4), beat = 60 / bpm, B = fd.B;
+  let top = 0; for (let i = 0; i < B; i++) if (sm[i] > top) top = sm[i];
+  let bestI = -1, bestV = 0;
+  for (let i = 0; i < B; i++) {
+    const t = (info.startF + (i + 0.5) / B * fd.P) / info.fps + info.bias;
+    let d = ((t - tapPhase) / beat) % 1; if (d < 0) d += 1; if (d > 0.5) d = 1 - d;
+    const near = d <= 0.12 ? 1 : d >= 0.3 ? 0 : 1 - (d - 0.12) / 0.18;
+    const v = sm[i] * near; if (v > bestV) { bestV = v; bestI = i; }
+  }
+  if (bestI < 0 || sm[bestI] < top * 0.45) return null;              // nothing clear near the taps: trust the taps
+  // centre of the peak, for a few ms more precision
+  let a = 0, wsum = 0; for (let d = -4; d <= 4; d++) { const v = fd.h[(bestI + d + B) % B]; a += v * d; wsum += v; }
+  const at = bestI + (wsum > 0 ? a / wsum : 0);
+  let off = (info.startF + (at + 0.5) / B * fd.P) / info.fps + info.bias;
+  return { offset: off - Math.floor(off / beat) * beat };
+}
+/* the taps on their own: tempo and spot from a straight-line fit through them (a skipped beat is allowed) */
+function tapFit(t) {
+  const d = []; for (let i = 1; i < t.length; i++) d.push(t[i] - t[i - 1]);
+  const m = d.slice().sort((a, b) => a - b)[d.length >> 1];
+  const k = [0]; let good = 0;
+  for (let i = 0; i < d.length; i++) { const r = d[i] / m, n = r < 1.75 ? 1 : Math.round(r); if (n <= 2 && Math.abs(r - n) < 0.3 * n) good++; k.push(k[i] + Math.max(1, n)); }
+  if (good < 3 || good < d.length * 0.6) return null;
+  const n = t.length; let sk = 0, st = 0; for (let i = 0; i < n; i++) { sk += k[i]; st += t[i]; }
+  const mk = sk / n, mt = st / n; let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (k[i] - mk) * (t[i] - mt); den += (k[i] - mk) * (k[i] - mk); }
+  if (!(den > 0)) return null;
+  const beat = num / den, a = mt - beat * mk; let res = 0;
+  for (let i = 0; i < n; i++) { const e = t[i] - a - beat * k[i]; res += e * e; }
+  return { beat, a, cv: Math.sqrt(res / n) / beat };
+}
 function quantizeTaps(all) {
   const taps = all.slice(-40);                              // the latest taps decide, so early wobble can't pull it off
   if (taps.length < 4) return null;
-  const d = []; for (let i = 1; i < taps.length; i++) d.push(taps[i] - taps[i - 1]);
-  const sorted = d.slice().sort((a, b) => a - b), m = sorted[sorted.length >> 1];
-  const good = d.filter(x => x > m * 0.7 && x < m * 1.4);
-  if (good.length < 3) return { uneven: true };
-  const mean = good.reduce((a, b) => a + b, 0) / good.length;
-  const cv = Math.sqrt(good.reduce((a, b) => a + (b - mean) * (b - mean), 0) / good.length) / mean;
-  let rough = 60 / mean; while (rough < 60) rough *= 2; while (rough > 200) rough /= 2;
-  const info = audioBuffer ? onsetInfo(audioBuffer) : null;
-  let bpm = Math.round(rough);
-  const gridAt = (b2, o) => {                              // onset strength under a beat grid with phase o (in frames)
-    const P = 60 * info.fps / b2; let sc = 0;
-    for (let f = o + Math.ceil((info.startF - o) / P) * P; f < info.frames; f += P) sc += info.envW[Math.round(f)] || 0;
-    return sc;
-  };
-  const bestGrid = b2 => { const P = 60 * info.fps / b2; let best = -1; for (let o = 0; o < P; o += 1) { const sc = gridAt(b2, o); if (sc > best) best = sc; } return best; };
-  if (info) {
-    let fine = rough, fs = -1;
-    for (let b2 = rough * 0.96; b2 <= rough * 1.04; b2 += 0.05) { const sc = bestGrid(b2); if (sc > fs) { fs = sc; fine = b2; } }
-    const lo = Math.floor(fine), hi = Math.ceil(fine);
-    bpm = lo === hi ? lo : (bestGrid(lo) >= bestGrid(hi) ? lo : hi);   // nearest whole BPM that the track's beat agrees with
+  const lat = outLatency(), t = taps.map(x => x - lat);
+  const fit = tapFit(t);
+  if (!fit || fit.cv > 0.15) return { uneven: true };
+  let rough = 60 / fit.beat; while (rough < 60) rough *= 2; while (rough > 200) rough /= 2;
+  const info = audioBuffer ? onsetReady(audioBuffer) : null;
+  if (audioBuffer && !info) onsetSoon(audioBuffer);
+  let bpm = 0, offsetSec = 0, song = false;
+  if (info && t.length >= 6) {
+    let det = tap.det;
+    if (!det || det.buf !== audioBuffer || Math.abs(det.rough / rough - 1) > 0.025) {
+      det = tap.det = songTempoNear(info, rough, t[t.length - 1] * info.fps) || { conf: 0, rough };
+      det.buf = audioBuffer;
+    }
+    if (det.conf >= 1.25) {
+      const beat = 60 / det.bpm;
+      let sx = 0, sy = 0; t.forEach(x => { const a = 2 * Math.PI * x / beat; sx += Math.cos(a); sy += Math.sin(a); });
+      const ph = songPhaseNear(info, det.bpm, Math.atan2(sy, sx) / (2 * Math.PI) * beat);
+      let se = 0, se2 = 0;                                                             // the taps must sit on that grid too
+      if (ph) t.forEach(x => { let e = ((x - ph.offset) / beat) % 1; if (e < 0) e += 1; if (e >= 0.5) e -= 1; se += e; se2 += e * e; });
+      const me = se / t.length, spread = Math.sqrt(Math.max(0, se2 / t.length - me * me));
+      if (ph && spread < 0.12 && Math.abs(me) < 0.25) { bpm = det.bpm; offsetSec = ph.offset; song = true; }
+    }
   }
-  const beat = 60 / bpm, bar = beat * 4, lat = outLatency();
-  const t = taps.map(x => x - lat);
-  let sx = 0, sy = 0; t.forEach(x => { const a = 2 * Math.PI * ((x % beat) / beat); sx += Math.cos(a); sy += Math.sin(a); });
-  let phase = Math.atan2(sy, sx) / (2 * Math.PI) * beat; if (phase < 0) phase += beat;     // where the user's taps sit inside a beat
-  let offsetSec = phase;
-  if (info) {                                                                              // slide onto the nearest real onset
-    const P = 60 * info.fps / bpm, c = (phase - info.bias) * info.fps;
-    let bestO = c, bestS = 0;
-    for (let o = c - P / 4; o <= c + P / 4; o += 0.25) { const sc = gridAt(bpm, o); if (sc > bestS) { bestS = sc; bestO = o; } }
-    offsetSec = bestO / info.fps + info.bias;
+  if (!song) {                                                                             // no clear beat in the song here: the taps alone
+    bpm = Math.round(rough);
+    const beat = 60 / bpm;
+    let sx = 0, sy = 0; t.forEach(x => { const a = 2 * Math.PI * x / beat; sx += Math.cos(a); sy += Math.sin(a); });
+    offsetSec = Math.atan2(sy, sx) / (2 * Math.PI) * beat; if (offsetSec < 0) offsetSec += beat;
   }
+  const beat = 60 / bpm, bar = beat * 4;
   const wrap = x => x - Math.floor(x / bar) * bar;
   let anchor;
   if (tap.base == null) { const k0 = Math.round((t[0] - offsetSec) / beat); anchor = wrap(offsetSec + k0 * beat); }   // the beat the first tap was on is the 1
@@ -5040,14 +5183,14 @@ function quantizeTaps(all) {
     let bestD = 1e9; anchor = wrap(offsetSec);
     for (let j = 0; j < 4; j++) { const a = wrap(offsetSec + j * beat), dd = Math.abs(((a - tap.base + bar * 1.5) % bar) - bar / 2); if (dd < bestD) { bestD = dd; anchor = a; } }
   }
-  return { bpm, offset: Math.round(anchor * 1000) / 1000, cv };
+  return { bpm, offset: Math.round(anchor * 1000) / 1000, cv: fit.cv, song };
 }
 function tapReadout() {
   const n = tap.taps.length, q = quantizeTaps(tap.taps), tp = curTempo(), have = !!(tp.bpm > 0 && tp.offset != null);
-  const locked = !!(q && q.bpm && n >= 8 && !q.uneven);
+  const locked = !!(q && q.bpm && !q.uneven && n >= (q.song ? 6 : 8));   // the song's own beat agreeing locks it sooner
   if (locked && !tap.locked) { tap.locked = true; feel("measure"); const r = $("tapReadout"); r.classList.remove("pop"); void r.offsetWidth; r.classList.add("pop"); }
   if (!n && !tap.downbeat) tap.locked = false;
-  $("tapReadout").textContent = (q && q.bpm ? q.bpm + " BPM" : (tp.bpm ? Math.round(tp.bpm) + " BPM" : "—"));
+  $("tapReadout").textContent = (q && q.bpm ? Math.round(q.bpm * 10) / 10 + " BPM" : (tp.bpm ? Math.round(tp.bpm) + " BPM" : "—"));
   $("tapReadout").classList.toggle("ok", !!tap.locked);
   $("tapBtn").classList.toggle("locked", !!tap.locked && !tap.downbeat);
   $("tapDown").classList.toggle("ready", !!tap.locked && !tap.downbeat);
@@ -5144,7 +5287,8 @@ $("tapBtn").addEventListener("pointerdown", e => {
   if (!currentTrackUrl) return;
   e.preventDefault();
   if (!isPlaying()) { tap.taps = []; tap.base = tap.downbeat ? tap.base : null; startGame(); return; }
-  const t = transportTime(), last = tap.taps[tap.taps.length - 1];
+  const lagMs = performance.now() - e.timeStamp, lag = lagMs > 0 && lagMs < 250 ? lagMs / 1000 : 0;   // when the finger landed, not when the page got to it
+  const t = transportTime() - lag * ((cue && cue.rate) || 1), last = tap.taps[tap.taps.length - 1];
   if (last != null && t - last < 0.12) return;              // ignore a bounce
   if (!tap.snap) { const tp = curTempo(); tap.snap = { bpm: tp.bpm, offset: tp.offset, songStart: tp.songStart, click: tap.prevClick }; }
   tap.taps.push(t); feel("light");
@@ -5207,6 +5351,7 @@ function tapNudge(dir) {
 function openTapGame() {
   const tp = curTempo();
   tap.start = null; tap.locked = false; tap.taps = []; tap.snap = null; tap.base = null; tap.downbeat = false; tap.active = true; tap.prevClick = !!tp.click; tp.click = false;   // the game plays its own click
+  tap.det = null; if (audioBuffer) onsetSoon(audioBuffer);   // start listening for the song's beat while you get ready to tap
   $("tempoModal").classList.remove("hidden");
   clearInterval(tap.timer); tap.timer = setInterval(gameClickTick, 80);
   syncTempoInputs(); paintTapUI();
