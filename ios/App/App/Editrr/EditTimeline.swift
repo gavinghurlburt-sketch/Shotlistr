@@ -71,16 +71,21 @@ struct EditTimeline: View {
         GeometryReader { geo in
             let laneWidth = max(geo.size.width - EditMetrics.sideWidth, 1)
             VStack(spacing: 0) {
-                Color.clear.frame(height: LaneMetrics.topSpace)
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: EditMetrics.sideWidth)
-                    Ruler(time: model.time, pixelsPerSecond: model.pixelsPerSecond, duration: model.loopEnd,
-                          origin: model.loopStart)
-                        .frame(width: laneWidth)
-                        .contentShape(Rectangle())
-                        .gesture(rulerGesture)
+                // Start and End in the corner over the row icons, the ruler beside them.
+                HStack(alignment: .bottom, spacing: 0) {
+                    RangeCorner(model: model, iconSize: 13)
+                        .frame(width: EditMetrics.sideWidth,
+                               height: LaneMetrics.topSpace + LaneMetrics.rulerHeight)
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: LaneMetrics.topSpace)
+                        Ruler(time: model.time, pixelsPerSecond: model.pixelsPerSecond, duration: model.loopEnd,
+                              origin: model.loopStart)
+                            .frame(width: laneWidth, height: LaneMetrics.rulerHeight)
+                            .contentShape(Rectangle())
+                            .gesture(rulerGesture)
+                    }
                 }
-                .frame(height: LaneMetrics.rulerHeight)
+                .frame(height: LaneMetrics.topSpace + LaneMetrics.rulerHeight)
 
                 // Text, a row for each text lane (T1 on top), above everything: it's drawn on top.
                 ForEach(0..<model.textLaneCount, id: \.self) { lane in

@@ -5950,8 +5950,13 @@ final class EditorModel {
 
     /// Marks where the export starts. If that's past Out, Out goes back to the end of the song.
     func setIn() {
-        defer { scheduleSave() }
         let at = playheadFrame
+        // On the edit page, Start trims the performance itself, not the clips added after it.
+        if !performancePage && at > performanceEnd - 0.5 {
+            notice = "Move the playhead back onto the performance to set Start."
+            return
+        }
+        defer { scheduleSave(); keepInRange() }
         inPoint = at
         if outPoint - at < 0.5 { outPoint = duration }
         notice = rangeNote(start: "Start")
@@ -5960,12 +5965,17 @@ final class EditorModel {
 
     /// Marks where the export ends. If that's before In, In goes back to the start of the song.
     func setOut() {
-        defer { scheduleSave() }
         let at = playheadFrame
         guard at > 0.5 else {
             notice = "Move the playhead later before setting End."
             return
         }
+        // On the edit page, End trims the performance itself; clips added after it stay after it.
+        if !performancePage && (at > performanceEnd + 0.001 || at - loopStart < 0.5) {
+            notice = "Move the playhead onto the performance to set End."
+            return
+        }
+        defer { scheduleSave(); keepInRange() }
         outPoint = at
         if at - inPoint < 0.5 { inPoint = 0 }
         notice = rangeNote(start: "End")

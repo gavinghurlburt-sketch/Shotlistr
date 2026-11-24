@@ -69,10 +69,10 @@ struct LanesView: View {
         GeometryReader { geo in
             let laneWidth = max(geo.size.width - LaneMetrics.labelWidth, 1)
             VStack(spacing: 0) {
-                // The corner above the track headers holds Start and End on the performance page,
-                // next to the markers they set; the ruler runs beside it.
+                // The corner above the track headers holds Start and End, next to the markers
+                // they set; the ruler runs beside it.
                 HStack(alignment: .bottom, spacing: 0) {
-                    rangeCorner
+                    RangeCorner(model: model, iconSize: 15)
                         .frame(width: LaneMetrics.labelWidth,
                                height: LaneMetrics.topSpace + LaneMetrics.rulerHeight)
                     VStack(spacing: 0) {
@@ -127,35 +127,6 @@ struct LanesView: View {
     }
 
     // MARK: Buttons on the left
-
-    /// Start and End, in the corner over the track headers, on the performance page only: each
-    /// sets its marker at the playhead, and turns amber once set, like the markers themselves.
-    @ViewBuilder private var rangeCorner: some View {
-        if model.kind == .performance && model.performancePage {
-            HStack(spacing: 0) {
-                rangeButton(icon: "arrow.right.to.line", set: model.inPoint > 0.0005,
-                            label: "Start", hint: "The performance starts at the playhead") { model.setIn() }
-                rangeButton(icon: "arrow.left.to.line", set: model.outPoint < model.duration - 0.0005,
-                            label: "End", hint: "The performance ends at the playhead") { model.setOut() }
-            }
-        } else {
-            Color.clear
-        }
-    }
-
-    private func rangeButton(icon: String, set: Bool, label: String, hint: String,
-                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(set ? Tint.warn : Color.white.opacity(0.9))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityHint(hint)
-    }
 
     /// The song lane's header: a note (or no-sound) icon and the tall tracks switch.
     private var songHeader: some View {
@@ -923,4 +894,35 @@ struct Filmstrip {
 enum SongTint {
     static let color = Color(white: 0.27)
     static let wave = Color.white.opacity(0.35)
+}
+
+/// Start and End, in the timeline's top left corner over the track headers (on the performance
+/// page and the edit page): each sets its marker at the playhead, and turns amber once set, like
+/// the markers themselves.
+struct RangeCorner: View {
+    let model: EditorModel
+    var iconSize: CGFloat = 15
+
+    var body: some View {
+        HStack(spacing: 0) {
+            button(icon: "arrow.right.to.line", set: model.inPoint > 0.0005,
+                   label: "Start", hint: "The video starts at the playhead") { model.setIn() }
+            button(icon: "arrow.left.to.line", set: model.outPoint < model.duration - 0.0005,
+                   label: "End", hint: "The video ends at the playhead") { model.setOut() }
+        }
+    }
+
+    private func button(icon: String, set: Bool, label: String, hint: String,
+                        action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundStyle(set ? Tint.warn : Color.white.opacity(0.9))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
+    }
 }
