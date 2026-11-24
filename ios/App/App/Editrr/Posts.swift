@@ -530,24 +530,12 @@ struct PipelineBar: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(.subheadline.weight(.semibold))
-            // The next 30 days, one square each, lit where a post is planned: how full the month
-            // is, and where the next gap is.
+            // How full the next 30 days are, and where the next gap is, in words.
             if counts.covered > 0 {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 2) {
-                        ForEach(Array(counts.days.enumerated()), id: \.offset) { _, has in
-                            Rectangle()
-                                .fill(has ? Tint.accent : Color.white.opacity(0.14))
-                                .frame(height: 8)
-                        }
-                    }
-                    Text(counts.coverLine)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(counts.coverLine)
+                Text(counts.coverLine)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
