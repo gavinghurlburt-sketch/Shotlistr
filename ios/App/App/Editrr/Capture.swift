@@ -602,6 +602,15 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         lookAlike = nil
     }
 
+    /// Throws one take away (its copy in Photos stays).
+    func dropTake(_ id: CapturedTake.ID) {
+        guard let index = takes.firstIndex(where: { $0.id == id }) else { return }
+        let take = takes.remove(at: index)
+        try? FileManager.default.removeItem(at: take.url)
+        looks[take.id] = nil
+        lookAlike = nil
+    }
+
     /// Throws every take away (the copies in Photos stay).
     func dropAllTakes() {
         for take in takes { try? FileManager.default.removeItem(at: take.url) }
@@ -658,6 +667,8 @@ struct CaptureView: View {
     @State private var asking = false
     /// The options pop-up (speed, camera, delete a take).
     @State private var menuOpen = false
+    /// Your takes, big, before you use them (like Photos).
+    @State private var reviewing = false
     /// A short note over the record button (the count-in and click need a tempo).
     @State private var note: String?
     /// The zoom when a pinch began.
@@ -791,6 +802,14 @@ struct CaptureView: View {
                 .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
             }
 
+            if reviewing {
+                TakesReview(takes: capture.takes, maxTakes: maxTakes,
+                            filmMore: { withAnimation(.snappy) { reviewing = false } },
+                            delete: { capture.dropTake($0) },
+                            use: { finish() })
+                    .transition(.move(edge: .bottom))
+            }
+
             if asking {
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
@@ -829,7 +848,7 @@ struct CaptureView: View {
             }
         }
         .overlay {
-            if heldWrong {
+            if heldWrong && !reviewing {
                 // Held the wrong way for what's being filmed: make it impossible to miss.
                 VStack(spacing: 10) {
                     Image(systemName: "iphone.gen3")
@@ -985,18 +1004,23 @@ struct CaptureView: View {
                 .buttonStyle(.plain)
                 .disabled(!capture.ready || heldWrong)
                 .accessibilityLabel("Retake the last take")
-                // Done filming: use the takes.
-                Button { finish() } label: {
-                    Text("Use \(capture.takes.count) of \(maxTakes)")
-                        .font(.headline)
-                        .monospacedDigit()
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 16)
-                        .frame(height: 38)
-                        .background(Capsule().fill(Tint.accent))
+                // See the takes (and delete any, film more, or use them).
+                Button { withAnimation(.snappy) { menuOpen = false; reviewing = true } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.stack")
+                        Text("\(capture.takes.count) of \(maxTakes)")
+                            .monospacedDigit()
+                        Image(systemName: "chevron.right")
+                            .font(.subheadline.weight(.bold))
+                    }
+                    .font(.headline)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 16)
+                    .frame(height: 38)
+                    .background(Capsule().fill(Tint.accent))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Use \(capture.takes.count) \(capture.takes.count == 1 ? "take" : "takes")")
+                .accessibilityLabel("See your \(capture.takes.count) \(capture.takes.count == 1 ? "take" : "takes")")
             }
         }
     }

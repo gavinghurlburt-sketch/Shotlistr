@@ -179,6 +179,9 @@ struct LyricsSheet: View {
 
             part("Font", icon: "textformat", says: "Hold one of yours to remove it. + adds your own.") {
                 fonts(style)
+                BoldItalicRow(bold: style.bold, italic: style.italic,
+                              toggleBold: { change { $0.bold.toggle() } },
+                              toggleItalic: { change { $0.italic.toggle() } })
             }
 
             part("Color", icon: "paintpalette",

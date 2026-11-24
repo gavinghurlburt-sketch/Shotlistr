@@ -53,13 +53,16 @@ final class LayerInstruction: NSObject, AVVideoCompositionInstructionProtocol, @
     let filter: ColorLook
     /// How much of the filter shows over the original (0: none, 1: all of it).
     let filterAmount: Double
+    /// The whole video's brightness, contrast, saturation and hue (after the filter).
+    let adjust: ColorAdjust
 
     init(timeRange: CMTimeRange, layers: [LayerInfo], transition: TransitionWindow? = nil,
          lyrics: LyricsOverlay? = nil, overlays: [OverlayRef] = [], board: OverlayBoard? = nil,
-         filter: ColorLook = .none, filterAmount: Double = 1) {
+         filter: ColorLook = .none, filterAmount: Double = 1, adjust: ColorAdjust = ColorAdjust()) {
         self.timeRange = timeRange
         self.filter = filter
         self.filterAmount = filterAmount
+        self.adjust = adjust
         self.layers = layers
         self.transition = transition
         self.lyrics = lyrics
@@ -205,6 +208,10 @@ final class LayerCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
                     kCIInputTimeKey: min(1, instruction.filterAmount),
                 ]).cropped(to: canvas)
             }
+        }
+
+        if !instruction.adjust.isOff {
+            picture = instruction.adjust.apply(picture.cropped(to: canvas), rect: canvas)
         }
 
         if let words = instruction.lyrics?.image(at: seconds, canvas: size) {

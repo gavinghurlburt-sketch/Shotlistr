@@ -26,6 +26,8 @@ struct TitleClip: Codable, Equatable, Identifiable, Sendable {
     var lane = 0
     var font = LyricFont.heavy
     var customFont = ""
+    var bold = false
+    var italic = false
     var textCase = LyricCase.asIs
     var size: Double = 110
     var color = "#ffffff"
@@ -41,6 +43,8 @@ struct TitleClip: Codable, Equatable, Identifiable, Sendable {
     var boxH: Double?
 
     var postScript: String? { customFont.isEmpty ? font.postScript : customFont }
+    /// The font as it's drawn: the font, with Bold and Italic.
+    var drawFont: String? { StyledFont.spec(postScript, bold: bold, italic: italic) }
 
     init(start: Double, end: Double, lane: Int) {
         self.start = start
@@ -56,7 +60,8 @@ struct TitleClip: Codable, Equatable, Identifiable, Sendable {
             if let found = try? c.decodeIfPresent(T.self, forKey: key) { value = found }
         }
         read(.id, &t.id); read(.text, &t.text); read(.start, &t.start); read(.end, &t.end); read(.lane, &t.lane)
-        read(.font, &t.font); read(.customFont, &t.customFont); read(.textCase, &t.textCase); read(.size, &t.size)
+        read(.font, &t.font); read(.customFont, &t.customFont)
+        read(.bold, &t.bold); read(.italic, &t.italic); read(.textCase, &t.textCase); read(.size, &t.size)
         read(.color, &t.color); read(.outline, &t.outline); read(.shadow, &t.shadow)
         read(.posX, &t.posX); read(.posY, &t.posY); read(.entry, &t.entry)
         read(.boxW, &t.boxW); read(.boxH, &t.boxH)
@@ -103,7 +108,7 @@ enum TitleLayout {
         let k = scale(canvas)
         let text = title.textCase.apply(title.text)
         let boxW = W * min(max(title.boxW ?? 90, 5), 100) / 100
-        let key = "\(text)|\(title.postScript ?? "")|\(title.size)|\(boxW)|\(title.boxH ?? -1)|\(W)x\(H)"
+        let key = "\(text)|\(title.drawFont ?? "")|\(title.size)|\(boxW)|\(title.boxH ?? -1)|\(W)x\(H)"
         lock.lock()
         if let found = cache[key] {
             lock.unlock()
@@ -111,7 +116,7 @@ enum TitleLayout {
         }
         lock.unlock()
 
-        let font = title.postScript
+        let font = title.drawFont
         // Words measured once at 100 px, then scaled (a font's widths grow with its size).
         let paragraphs = text.components(separatedBy: "\n").map { line in
             line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
@@ -196,9 +201,9 @@ enum TitleLayout {
             return found
         }
         lock.unlock()
-        let uiFont = postScript.flatMap { UIFont(name: $0, size: 100) } ?? UIFont.systemFont(ofSize: 100, weight: .black)
+        let made = StyledFont.font(postScript, size: 100)
         let string = NSAttributedString(string: word, attributes: [
-            NSAttributedString.Key(kCTFontAttributeName as String): uiFont as CTFont
+            NSAttributedString.Key(kCTFontAttributeName as String): made.font
         ])
         let line = CTLineCreateWithAttributedString(string)
         let measured = Double(CTLineGetTypographicBounds(line, nil, nil, nil))
@@ -455,6 +460,9 @@ struct TitleSheet: View {
                     }
                 }
             }
+            BoldItalicRow(bold: clip.bold, italic: clip.italic,
+                          toggleBold: { model.editTitle(id) { $0.bold.toggle() } },
+                          toggleItalic: { model.editTitle(id) { $0.italic.toggle() } })
             chips(LyricCase.allCases, selected: clip.textCase, name: { $0.name }) { textCase in
                 model.editTitle(id) { $0.textCase = textCase }
             }

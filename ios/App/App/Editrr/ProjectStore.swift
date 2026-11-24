@@ -76,6 +76,8 @@ struct SavedProject: Codable, Equatable, Identifiable {
     var filter: ColorLook?
     /// How much of the filter shows (nil: all of it).
     var filterAmount: Double?
+    /// Brightness, contrast, saturation and hue on the whole video (nil: none).
+    var adjust: ColorAdjust?
     /// Every cut of this edit (the Main cut and any Remixes) and the days their posts go up. nil:
     /// just the Main cut, nothing planned (every older project).
     var variations: [Variation]?

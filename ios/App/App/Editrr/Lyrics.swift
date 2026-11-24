@@ -163,6 +163,9 @@ struct LyricStyle: Codable, Equatable, Sendable {
     var font = LyricFont.heavy
     /// One of your own fonts (its PostScript name). Empty: the built-in `font` is used.
     var customFont = ""
+    /// Bold and italic on the whole look (drawn heavier or slanted when the font has no such face).
+    var bold = false
+    var italic = false
     var size: Double = 170
     var textCase = LyricCase.upper
     var tracking: Double = 0
@@ -224,7 +227,7 @@ struct LyricStyle: Codable, Equatable, Sendable {
             if let found = try? c.decodeIfPresent(T.self, forKey: key) { value = found }
         }
         read(.show, &s.show); read(.mode, &s.mode); read(.font, &s.font); read(.size, &s.size)
-        read(.customFont, &s.customFont)
+        read(.customFont, &s.customFont); read(.bold, &s.bold); read(.italic, &s.italic)
         read(.textCase, &s.textCase); read(.tracking, &s.tracking); read(.color, &s.color)
         read(.posX, &s.posX); read(.posY, &s.posY); read(.maxWidth, &s.maxWidth); read(.lineGap, &s.lineGap)
         read(.rotate, &s.rotate); read(.stroke, &s.stroke); read(.strokeColor, &s.strokeColor)

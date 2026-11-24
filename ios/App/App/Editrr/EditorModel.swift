@@ -623,6 +623,7 @@ final class EditorModel {
         wide = pendingWide
         filter = .none
         filterAmount = 1
+        adjust = ColorAdjust()
         clearSounds()
         overlays = []
         trackKeys = []
@@ -1309,6 +1310,7 @@ final class EditorModel {
         project.sounds = sounds.isEmpty ? nil : sounds
         project.filter = filter == .none ? nil : filter
         project.filterAmount = filter == .none || filterAmount >= 0.999 ? nil : filterAmount
+        project.adjust = adjust.isOff ? nil : adjust
         return project
     }
 
@@ -1365,6 +1367,7 @@ final class EditorModel {
         wide = saved.wide ?? false
         filter = saved.filter ?? .none
         filterAmount = saved.filterAmount ?? 1
+        adjust = saved.adjust ?? ColorAdjust()
 
         // 1. The videos and the song, from Photos or the project's folder.
         var assets: [AVAsset] = []
@@ -1527,6 +1530,7 @@ final class EditorModel {
         wide = false
         filter = .none
         filterAmount = 1
+        adjust = ColorAdjust()
         clearSounds()
         refreshProjects()
         pause()
@@ -3258,7 +3262,7 @@ final class EditorModel {
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
                                                                      media: overlayMedia, board: overlayBoard,
-                                                                     filter: filter, filterAmount: filterAmount)
+                                                                     filter: filter, filterAmount: filterAmount, adjust: adjust)
             player.replaceCurrentItem(with: item)
             watchForEnd(of: item)
             updateLoop()
@@ -3283,7 +3287,7 @@ final class EditorModel {
                                                                      length: timelineEnd,
                                                                      lyrics: lyricsLive, overlays: overlays,
                                                                      media: overlayMedia, board: overlayBoard,
-                                                                     filter: filter, filterAmount: filterAmount)
+                                                                     filter: filter, filterAmount: filterAmount, adjust: adjust)
     }
 
     /// The cuts as the video on screen draws them: the same, except that while the Fx page shows
@@ -5139,6 +5143,22 @@ final class EditorModel {
         redraw()
     }
 
+    /// Brightness, contrast, saturation and hue on the whole video (all in the middle: off).
+    private(set) var adjust = ColorAdjust()
+
+    func setAdjust(_ change: (inout ColorAdjust) -> Void) {
+        var next = adjust
+        change(&next)
+        next.brightness = min(1, max(-1, next.brightness))
+        next.contrast = min(1, max(-1, next.contrast))
+        next.saturation = min(1, max(-1, next.saturation))
+        next.hue = min(180, max(-180, next.hue))
+        guard next != adjust else { return }
+        pause()
+        adjust = next
+        redraw()
+    }
+
     // MARK: Fisheye circle
 
     /// The effects sheet is open on a cut with Fisheye: a drag on the video moves its circle, and a
@@ -6118,7 +6138,7 @@ final class EditorModel {
                                                                      cuts: cuts, layers: layers, duration: duration,
                                                                      length: timelineEnd, lyrics: words,
                                                                      overlays: overlays, media: overlayMedia, board: board,
-                                                                     filter: filter, filterAmount: filterAmount)
+                                                                     filter: filter, filterAmount: filterAmount, adjust: adjust)
         session.shouldOptimizeForNetworkUse = true
         // Only the part between Start and End, plus any clips added after the performance.
         let start = loopStart

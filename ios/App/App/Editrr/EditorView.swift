@@ -884,7 +884,7 @@ struct EditingView: View {
                     FXSheet(model: model, close: closeFX)
                 }
             } else if filtersOpen {
-                BottomPanel(height: 300, close: closeFilters) {
+                BottomPanel(height: min(400, max(300, editorHeight * 0.45)), close: closeFilters) {
                     FilterSheet(model: model, close: closeFilters)
                 }
             }
@@ -3603,17 +3603,19 @@ struct FXIcon: View {
     }
 }
 
-/// Filters: one color look over the whole video (over every clip and overlay, under the words).
+/// Filters: one color look over the whole video (over every clip and overlay, under the words),
+/// and Adjust: brightness, contrast, saturation and hue on the whole video.
 /// Each clip can still have its own Color in Fx.
 struct FilterSheet: View {
     let model: EditorModel
     let close: () -> Void
+    @State private var adjusting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Filters").font(.title3.weight(.bold))
+                    Text(adjusting ? "Adjust" : "Filters").font(.title3.weight(.bold))
                     Text("The whole video").font(.footnote).foregroundStyle(.white.opacity(0.65))
                 }
                 Spacer(minLength: 0)
@@ -3628,6 +3630,36 @@ struct FilterSheet: View {
                 }
                 .buttonStyle(.plain)
             }
+            // Two pages: the looks, or the sliders.
+            HStack(spacing: 8) {
+                pageButton("Filters", icon: "camera.filters", on: !adjusting) { adjusting = false }
+                pageButton("Adjust", icon: "slider.horizontal.3", on: adjusting) { adjusting = true }
+            }
+            ScrollView(.vertical, showsIndicators: false) {
+                if adjusting { adjustPage } else { filterPage }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
+        .foregroundStyle(.white)
+    }
+
+    private func pageButton(_ title: String, icon: String, on: Bool, _ pick: @escaping () -> Void) -> some View {
+        Button(action: pick) {
+            Label(title, systemImage: icon)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(on ? Color.black : Color.white)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(on ? Color.white : Color.white.opacity(0.08))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private var filterPage: some View {
+        VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(ColorLook.allCases, id: \.self) { look in
                     let on = model.filter == look
@@ -3656,12 +3688,45 @@ struct FilterSheet: View {
             Text("Effects for one clip are in Fx, in the tools under the timeline.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.6))
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
-        .padding(.bottom, 12)
-        .foregroundStyle(.white)
+    }
+
+    private var adjustPage: some View {
+        let adjust = model.adjust
+        return VStack(alignment: .leading, spacing: 10) {
+            adjustSlider("Brightness", value: adjust.brightness, range: -1...1, ends: ("Darker", "Brighter")) { v in
+                model.setAdjust { $0.brightness = v }
+            }
+            adjustSlider("Contrast", value: adjust.contrast, range: -1...1, ends: ("Flatter", "Punchier")) { v in
+                model.setAdjust { $0.contrast = v }
+            }
+            adjustSlider("Saturation", value: adjust.saturation, range: -1...1, ends: ("No color", "More color")) { v in
+                model.setAdjust { $0.saturation = v }
+            }
+            adjustSlider("Hue", value: adjust.hue, range: -180...180, ends: ("-180°", "180°")) { v in
+                model.setAdjust { $0.hue = v }
+            }
+            Button { model.setAdjust { $0 = ColorAdjust() } } label: {
+                Label("Reset", systemImage: "arrow.counterclockwise")
+                    .font(.footnote.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .frame(height: 34)
+                    .background(Color.white.opacity(0.08))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(adjust.isOff)
+            .opacity(adjust.isOff ? 0.4 : 1)
+        }
+    }
+
+    /// One slider with its name; the middle is off, and it snaps there when close.
+    private func adjustSlider(_ name: String, value: Double, range: ClosedRange<Double>, ends: (String, String),
+                              commit: @escaping (Double) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(name).font(.footnote.weight(.semibold)).foregroundStyle(.white.opacity(0.75))
+            FXSlider(value: value, range: range, ends: ends, snapToZero: true, commit: commit)
+        }
     }
 }
 

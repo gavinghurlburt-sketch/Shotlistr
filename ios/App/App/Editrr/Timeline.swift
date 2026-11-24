@@ -446,7 +446,7 @@ enum TimelineBuilder {
                                  duration: Double, length: Double? = nil, lyrics: LyricsOverlay? = nil,
                                  overlays: [SavedOverlay] = [], media: [UUID: OverlayMedia] = [:],
                                  board: OverlayBoard? = nil, filter: ColorLook = .none,
-                                 filterAmount: Double = 1) -> AVVideoComposition {
+                                 filterAmount: Double = 1, adjust: ColorAdjust = ColorAdjust()) -> AVVideoComposition {
         let end = built.duration
         let total = max(duration, length ?? duration)
         let windows = Transitions.windows(cuts: cuts, duration: duration)
@@ -536,7 +536,7 @@ enum TimelineBuilder {
             instructions.append(LayerInstruction(timeRange: CMTimeRange(start: start, end: stop),
                                                  layers: stack, transition: transition, lyrics: lyrics,
                                                  overlays: overlaysAt(middle), board: board, filter: filter,
-                                                 filterAmount: filterAmount))
+                                                 filterAmount: filterAmount, adjust: adjust))
             if stop == end { break }
         }
         // The instructions must cover the whole video with no gap.
@@ -545,7 +545,7 @@ enum TimelineBuilder {
             if from < end {
                 instructions.append(LayerInstruction(timeRange: CMTimeRange(start: from, end: end), layers: [],
                                                      lyrics: lyrics, board: board, filter: filter,
-                                                     filterAmount: filterAmount))
+                                                     filterAmount: filterAmount, adjust: adjust))
             }
         }
 

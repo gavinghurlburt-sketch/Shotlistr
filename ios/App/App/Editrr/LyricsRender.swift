@@ -119,7 +119,8 @@ final class LyricsOverlay: @unchecked Sendable {
             }
             let own = word.flatMap { words.indices.contains($0) ? words[$0] : nil }
             let outline = own?.strokeColor.flatMap { LyricColor.cg($0) } ?? stroke
-            return self.glyph(s, size: size * (word.map(scale) ?? 1), postScript: own?.postScript(style) ?? style.postScript,
+            return self.glyph(s, size: size * (word.map(scale) ?? 1), postScript: StyledFont.spec(own?.postScript(style) ?? style.postScript,
+                                                                    bold: style.bold, italic: style.italic),
                               color: fill, stroke: own?.stroke ?? style.stroke,
                               strokeColor: outline, tracking: style.tracking * k, palette: colors, offset: offset)
         }
@@ -252,7 +253,7 @@ final class LyricsOverlay: @unchecked Sendable {
             let outlineColor = title.color.lowercased() == "#000000" ? CGColor(gray: 1, alpha: 1) : CGColor(gray: 0, alpha: 1)
             func glyphs(_ size: Double) -> [Glyph] {
                 lines.map {
-                    glyph($0.isEmpty ? " " : $0, size: size, postScript: title.postScript, color: color,
+                    glyph($0.isEmpty ? " " : $0, size: size, postScript: title.drawFont, color: color,
                           stroke: title.outline ? 10 : 0, strokeColor: outlineColor, tracking: 0)
                 }
             }
@@ -409,17 +410,31 @@ final class LyricsOverlay: @unchecked Sendable {
 
     private static func draw(_ text: String, size: Double, postScript: String?, color: CGColor, stroke: Double,
                              strokeColor: CGColor, tracking: Double, palette: [CGColor] = [], offset: Int = 0) -> Glyph {
-        let uiFont = postScript.flatMap { UIFont(name: $0, size: size) }
-            ?? UIFont.systemFont(ofSize: size, weight: .black)
+        // `postScript` is a font spec: the font, with any Bold or Italic.
+        let styled = StyledFont.font(postScript, size: size)
         var attributes: [NSAttributedString.Key: Any] = [
-            NSAttributedString.Key(kCTFontAttributeName as String): uiFont as CTFont,
+            NSAttributedString.Key(kCTFontAttributeName as String): styled.font,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
             NSAttributedString.Key(kCTKernAttributeName as String): tracking
         ]
-        if stroke > 0 {
+        // Made-up bold: the letters get a stroke in their own color (no stroke color set, so each
+        // letter's own color, rainbow too), which makes them heavier.
+        let heavy = styled.fakeBold ? StyledFont.boldStroke : 0
+        // With an outline and made-up bold: the outline first (as much wider), then the heavier
+        // letters over it, so the outline shows as wide as ever around bolder letters.
+        var outlined: CTLine?
+        if stroke > 0 && heavy > 0 {
+            var under = attributes
+            under[NSAttributedString.Key(kCTStrokeWidthAttributeName as String)] = -(stroke + heavy)
+            under[NSAttributedString.Key(kCTStrokeColorAttributeName as String)] = strokeColor
+            outlined = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: under))
+            attributes[NSAttributedString.Key(kCTStrokeWidthAttributeName as String)] = -heavy
+        } else if stroke > 0 {
             // Negative: fill and outline, the outline as wide as `stroke` percent of the size.
             attributes[NSAttributedString.Key(kCTStrokeWidthAttributeName as String)] = -stroke
             attributes[NSAttributedString.Key(kCTStrokeColorAttributeName as String)] = strokeColor
+        } else if heavy > 0 {
+            attributes[NSAttributedString.Key(kCTStrokeWidthAttributeName as String)] = -heavy
         }
         let string = NSMutableAttributedString(string: text, attributes: attributes)
         if !palette.isEmpty {
@@ -435,7 +450,8 @@ final class LyricsOverlay: @unchecked Sendable {
         let line = CTLineCreateWithAttributedString(string)
         var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
         let width = Double(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
-        let pad = ceil(size * 0.15 + stroke * size / 100)
+        // Room for the outline, made-up bold, and a slant leaning past the last letter.
+        let pad = ceil(size * (styled.slanted ? 0.3 : 0.15) + (stroke + heavy) * size / 100)
         let pixelWidth = max(1, Int(ceil(width + pad * 2)))
         let pixelHeight = max(1, Int(ceil(Double(ascent + descent) + pad * 2)))
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
@@ -446,6 +462,10 @@ final class LyricsOverlay: @unchecked Sendable {
         }
         context.setShouldAntialias(true)
         context.setAllowsFontSmoothing(false)
+        if let outlined {
+            context.textPosition = CGPoint(x: pad, y: pad + Double(descent))
+            CTLineDraw(outlined, context)
+        }
         context.textPosition = CGPoint(x: pad, y: pad + Double(descent))
         CTLineDraw(line, context)
         guard let picture = context.makeImage() else {
