@@ -201,6 +201,14 @@ enum PostBook {
         var line = ""
         /// Running low: film soon.
         var low = false
+        /// The next 30 days from today: true where a post is planned (or went up today).
+        var days: [Bool] = []
+        /// How many of those days have a post.
+        var covered = 0
+        /// The first of those days with no post.
+        var nextEmpty: Date?
+        /// "12 of the next 30 days have a post (40%). Next empty day: Wednesday."
+        var coverLine = ""
     }
 
     /// Filmed (lined up, not edited), Editing (edited, nothing planned), Ready (posts with a day,
@@ -225,7 +233,33 @@ enum PostBook {
         let left = runway(all, goal: goal, now: now)
         counts.line = left.line
         counts.low = left.low
+        let cover = coverage(all, now: now)
+        counts.days = cover.days
+        counts.covered = cover.covered
+        counts.nextEmpty = cover.nextEmpty
+        let percent = Int((Double(cover.covered) / Double(max(1, cover.days.count)) * 100).rounded())
+        counts.coverLine = "\(cover.covered) of the next \(cover.days.count) days have a post (\(percent)%)."
+            + (cover.nextEmpty.map { " Next empty day: \(spoken($0, now: now))." } ?? " Every day has one.")
         return counts
+    }
+
+    /// The next 30 days from today: which have a post planned (or posted), how many do, and the
+    /// first one with none. Even when you're covered for weeks, gaps show, so you film something new.
+    static func coverage(_ all: [PostSlot], now: Date = Date()) -> (days: [Bool], covered: Int, nextEmpty: Date?) {
+        let today = day(now)
+        let taken = Set(all.compactMap { slot -> Date? in
+            if let posted = slot.plan.posted { return day(posted) }
+            return slot.plan.date.map { day($0) }
+        })
+        var days: [Bool] = []
+        var nextEmpty: Date?
+        for offset in 0..<30 {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            let has = taken.contains(day(date))
+            days.append(has)
+            if !has && nextEmpty == nil { nextEmpty = date }
+        }
+        return (days, days.filter { $0 }.count, nextEmpty)
     }
 
     /// How long the planned posts last: from today, each post no further from the one before than
@@ -496,6 +530,25 @@ struct PipelineBar: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(.subheadline.weight(.semibold))
+            // The next 30 days, one square each, lit where a post is planned: how full the month
+            // is, and where the next gap is.
+            if counts.covered > 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 2) {
+                        ForEach(Array(counts.days.enumerated()), id: \.offset) { _, has in
+                            Rectangle()
+                                .fill(has ? Tint.accent : Color.white.opacity(0.14))
+                                .frame(height: 8)
+                        }
+                    }
+                    Text(counts.coverLine)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(counts.coverLine)
+            }
         }
     }
 

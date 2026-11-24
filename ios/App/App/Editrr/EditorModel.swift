@@ -5030,8 +5030,7 @@ final class EditorModel {
     var hasFXAtPlayhead: Bool {
         guard let index = cutAtPlayhead else { return false }
         let cut = cuts[index]
-        var fx = cut.fx ?? CutFX()
-        fx.mirror = false   // Mirror has its own button
+        let fx = cut.fx ?? CutFX()
         return (cut.transition?.kind ?? .none) != .none || !fx.isEmpty
     }
 
@@ -5073,7 +5072,6 @@ final class EditorModel {
         var cleared = CutFX()
         cleared.faces = cuts[index].fx?.faces ?? []
         cleared.facesLayer = cuts[index].fx?.facesLayer
-        cleared.mirror = cuts[index].fx?.mirror ?? false   // Mirror is its own button, not on the Fx page
         let next: CutFX? = cleared == CutFX() ? nil : cleared
         guard cuts[index].fx != next || cuts[index].transition != nil else { return }
         pause()
@@ -5095,7 +5093,6 @@ final class EditorModel {
             var fx = source
             fx.faces = cuts[i].fx?.faces ?? []
             fx.facesLayer = cuts[i].fx?.facesLayer
-            fx.mirror = cuts[i].fx?.mirror ?? false   // each cut keeps its own Mirror
             // Keyframed sliders belong to this cut's stretch: the others get the value showing now.
             if i != index, let keys = fx.keys {
                 for (name, list) in keys {

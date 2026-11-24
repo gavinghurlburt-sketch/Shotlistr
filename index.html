@@ -4331,11 +4331,14 @@ function songTempoNear(info, rough, atF) {
   const span = (f1 - f0) / fps; if (span < 8) return null;
   const step = Math.max(0.005, 0.6 * rough / (fps * span));     // fine enough that the right tempo can't fall between two tries
   let best = -1, bestB = rough, sum = 0, cnt = 0;
-  for (let b = rough * 0.94; b <= rough * 1.06; b += step) { const sc = foldScore(info, b, f0, f1); sum += sc; cnt++; if (sc > best) { best = sc; bestB = b; } }
+  for (let b = rough * 0.94; b <= rough * 1.06; b += step) {     // the wide look says how clear the beat is...
+    const sc = foldScore(info, b, f0, f1); sum += sc; cnt++;
+    if (Math.abs(b / rough - 1) <= 0.015 && sc > best) { best = sc; bestB = b; }   // ...but only a tempo close to your taps can win, so a small slow-down follows you
+  }
   let fb = bestB, fs = -1;                                         // then the whole song decides the last decimal
   for (let b = bestB - step; b <= bestB + step + 1e-9; b += 0.002) { const sc = foldScore(info, b, info.startF, info.frames); if (sc > fs) { fs = sc; fb = b; } }
-  const w = Math.round(fb);                                         // a whole BPM wins when it fits as well (songs made in a DAW)
-  if (Math.abs(fb - w) <= 0.25 && foldScore(info, w, info.startF, info.frames) >= fs * 0.97) fb = w;
+  const w = Math.round(fb);                                         // a whole BPM only when it's right there anyway
+  if (Math.abs(fb - w) <= 0.05 && foldScore(info, w, info.startF, info.frames) >= fs * 0.995) fb = w;
   return { bpm: Math.round(fb * 1000) / 1000, conf: best / (sum / cnt), rough };
 }
 /* where the beat sits: the strongest onset spot near the taps (within about a quarter beat), on a fine fold of the whole song */
@@ -4371,34 +4374,39 @@ function tapFit(t) {
   for (let i = 0; i < n; i++) { const e = t[i] - a - beat * k[i]; res += e * e; }
   return { beat, a, cv: Math.sqrt(res / n) / beat };
 }
+/* how late this phone hears your taps (the screen's own touch delay), learned from songs with a clear beat */
+var tapLag = (() => { try { const v = parseFloat(localStorage.getItem("creatrr.tapLag")); return isFinite(v) ? Math.max(-0.05, Math.min(0.15, v)) : 0.03; } catch (e) { return 0.03; } })();
 function quantizeTaps(all) {
-  const taps = all.slice(-40);                              // the latest taps decide, so early wobble can't pull it off
+  /* the last 12 taps decide (about three bars), so a change of speed shows within a few taps; if those
+     straddle a change, the last 6 */
+  let taps = all.slice(-12);
   if (taps.length < 4) return null;
-  const lat = outLatency(), t = taps.map(x => x - lat);
-  const fit = tapFit(t);
+  const lat = outLatency() + tapLag;
+  let t = taps.map(x => x - lat), fit = tapFit(t);
+  if ((!fit || fit.cv > 0.15) && taps.length > 6) { taps = taps.slice(-6); t = t.slice(-6); fit = tapFit(t); }
   if (!fit || fit.cv > 0.15) return { uneven: true };
   let rough = 60 / fit.beat; while (rough < 60) rough *= 2; while (rough > 200) rough /= 2;
   const info = audioBuffer ? onsetReady(audioBuffer) : null;
   if (audioBuffer && !info) onsetSoon(audioBuffer);
-  let bpm = 0, offsetSec = 0, song = false;
+  let bpm = 0, offsetSec = 0, song = false, err = 0;
   if (info && t.length >= 6) {
     let det = tap.det;
-    if (!det || det.buf !== audioBuffer || Math.abs(det.rough / rough - 1) > 0.025) {
+    if (!det || det.buf !== audioBuffer || Math.abs(det.rough / rough - 1) > 0.004) {
       det = tap.det = songTempoNear(info, rough, t[t.length - 1] * info.fps) || { conf: 0, rough };
       det.buf = audioBuffer;
     }
-    if (det.conf >= 1.25) {
+    if (det.conf >= 1.25 && Math.abs(det.bpm / rough - 1) <= 0.012) {   // the song's beat only when your taps agree with it
       const beat = 60 / det.bpm;
       let sx = 0, sy = 0; t.forEach(x => { const a = 2 * Math.PI * x / beat; sx += Math.cos(a); sy += Math.sin(a); });
       const ph = songPhaseNear(info, det.bpm, Math.atan2(sy, sx) / (2 * Math.PI) * beat);
       let se = 0, se2 = 0;                                                             // the taps must sit on that grid too
       if (ph) t.forEach(x => { let e = ((x - ph.offset) / beat) % 1; if (e < 0) e += 1; if (e >= 0.5) e -= 1; se += e; se2 += e * e; });
       const me = se / t.length, spread = Math.sqrt(Math.max(0, se2 / t.length - me * me));
-      if (ph && spread < 0.12 && Math.abs(me) < 0.25) { bpm = det.bpm; offsetSec = ph.offset; song = true; }
+      if (ph && spread < 0.12 && Math.abs(me) < 0.25) { bpm = det.bpm; offsetSec = ph.offset; song = true; err = me * beat; }
     }
   }
   if (!song) {                                                                             // no clear beat in the song here: the taps alone
-    bpm = Math.round(rough);
+    bpm = Math.round(rough * 10) / 10;                                                     // to a tenth, so a small slow-down shows
     const beat = 60 / bpm;
     let sx = 0, sy = 0; t.forEach(x => { const a = 2 * Math.PI * x / beat; sx += Math.cos(a); sy += Math.sin(a); });
     offsetSec = Math.atan2(sy, sx) / (2 * Math.PI) * beat; if (offsetSec < 0) offsetSec += beat;
@@ -4411,11 +4419,11 @@ function quantizeTaps(all) {
     let bestD = 1e9; anchor = wrap(offsetSec);
     for (let j = 0; j < 4; j++) { const a = wrap(offsetSec + j * beat), dd = Math.abs(((a - tap.base + bar * 1.5) % bar) - bar / 2); if (dd < bestD) { bestD = dd; anchor = a; } }
   }
-  return { bpm, offset: Math.round(anchor * 1000) / 1000, cv: fit.cv, song };
+  return { bpm, offset: Math.round(anchor * 1000) / 1000, cv: fit.cv, song, err, n: t.length };
 }
 function tapReadout() {
   const n = tap.taps.length, q = quantizeTaps(tap.taps), tp = curTempo(), have = !!(tp.bpm > 0 && tp.offset != null);
-  const locked = !!(q && q.bpm && !q.uneven && n >= (q.song ? 6 : 8));   // the song's own beat agreeing locks it sooner
+  const locked = !!(q && q.bpm && !q.uneven && n >= (q.song ? 8 : 10));  // a few more taps before it says locked; it keeps following after
   if (locked && !tap.locked) { tap.locked = true; feel("measure"); const r = $("tapReadout"); r.classList.remove("pop"); void r.offsetWidth; r.classList.add("pop"); }
   if (!n && !tap.downbeat) tap.locked = false;
   $("tapReadout").textContent = (q && q.bpm ? Math.round(q.bpm * 10) / 10 + " BPM" : (tp.bpm ? Math.round(tp.bpm) + " BPM" : "—"));
@@ -4445,6 +4453,11 @@ function paintTapUI() {
 }
 function applyTaps() {
   const q = quantizeTaps(tap.taps); if (!q || !q.bpm) return;
+  /* the song's beat was clear and your taps sat a little behind (or ahead of) it: that's the touch delay, learned slowly */
+  if (q.song && q.n >= 8 && Math.abs(q.err) < 0.08) {
+    tapLag = Math.max(-0.05, Math.min(0.15, tapLag + q.err * 0.25));
+    try { localStorage.setItem("creatrr.tapLag", tapLag.toFixed(4)); } catch (e) {}
+  }
   if (tap.base == null) tap.base = q.offset;
   const tp = curTempo();
   tp.bpm = q.bpm; tp.offset = q.offset; tp.detected = true; if (tp.songStart == null) tp.songStart = q.offset;

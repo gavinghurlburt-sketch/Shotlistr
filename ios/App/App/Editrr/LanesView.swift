@@ -116,6 +116,8 @@ struct LanesView: View {
         .padding(LaneMetrics.inset)
         .background(LaneMetrics.backdrop)
         .clipShape(Corner.card)
+        // Tall tracks show each take's frames: made once per video, in the background.
+        .task(id: tallTracks ? model.layers.count : -1) { if tallTracks { model.makeFilmstrips() } }
     }
 
     // MARK: Buttons on the left
@@ -214,6 +216,9 @@ struct LanesView: View {
         let titleDrag = model.titleDrag
         let songName = soundtrack?.name ?? "Song"
         let textLanes = model.textLaneCount
+        // Tall tracks: each take's own frames along its clip (short tracks stay as they are).
+        let tall = tallTracks
+        let filmstrips = tallTracks ? model.filmstrips : [:]
 
         return Canvas { context, canvasSize in
             if !song { context.translateBy(x: 0, y: -songHeight) }
@@ -229,6 +234,34 @@ struct LanesView: View {
                 context.draw(Text(label).font(.caption2.weight(.heavy)).foregroundStyle(Tint.warn),
                              at: CGPoint(x: markX + (leading ? 4 : -4), y: 2),
                              anchor: leading ? .topLeading : .topTrailing)
+            }
+
+            /// A take's frames across `rect`, side by side (tall tracks only).
+            func frames(of layer: Layer, in rect: CGRect, into pictures: inout GraphicsContext) -> Bool {
+                let strip = filmstrips[ObjectIdentifier(layer.asset)]
+                let fallback = layer.thumbnail?.cgImage
+                if strip == nil && fallback == nil { return false }
+                let aspect = min(1.8, max(0.4, layer.displaySize.width / max(layer.displaySize.height, 1)))
+                let tile = max(8, rect.height * aspect)
+                let skip = max(0, floor(-rect.minX / tile) - 1)
+                var tileX = rect.minX + skip * tile
+                let stop = min(rect.maxX, size.width)
+                while tileX < stop {
+                    let at = time + Double(tileX + tile / 2 - middle) / pps
+                    if let image = strip?.frame(at: at - layer.offset) ?? fallback {
+                        pictures.draw(Image(decorative: image, scale: 1),
+                                      in: CGRect(x: tileX, y: rect.minY, width: tile, height: rect.height))
+                    }
+                    tileX += tile
+                }
+                return true
+            }
+
+            /// The take's frames inside its clip; false when it has none yet (it's drawn as before).
+            func drewFrames(of layer: Layer, clippedTo shape: Path, in rect: CGRect) -> Bool {
+                var pictures = context
+                pictures.clip(to: shape)
+                return frames(of: layer, in: rect, into: &pictures)
             }
 
             /// Loudness bars for a sound whose asset time + shift = timeline time (from the bottom
@@ -315,6 +348,26 @@ struct LanesView: View {
                         raised.addFilter(.shadow(color: .black.opacity(0.75), radius: 8, x: 0, y: 5))
                         raised.fill(shape, with: .color(tint.opacity(0.65)))
                     }
+                } else if tall, band.maxX > 0, band.minX < size.width,
+                          drewFrames(of: layer, clippedTo: shape, in: band) {
+                    // Tall tracks: the take's frames, dimmed where another take is the one showing,
+                    // full brightness (with its color stripe) where this one shows.
+                    context.fill(shape, with: .color(.black.opacity(0.55)))
+                    for segment in segments where segment.layer == layer.id {
+                        let lit = CGRect(x: x(segment.start), y: band.minY, width: width(segment.end - segment.start),
+                                         height: band.height).intersection(band)
+                        guard !lit.isNull, lit.width > 0.5, lit.maxX > 0, lit.minX < size.width else { continue }
+                        var bright = context
+                        bright.clip(to: Path(lit))
+                        _ = frames(of: layer, in: band, into: &bright)
+                        bright.fill(Path(lit), with: .linearGradient(
+                            Gradient(colors: [tint.opacity(0.35), tint.opacity(0)]),
+                            startPoint: CGPoint(x: lit.minX, y: lit.midY),
+                            endPoint: CGPoint(x: max(lit.maxX, lit.minX + 1), y: lit.midY)))
+                        context.fill(Path(CGRect(x: lit.minX, y: lit.minY, width: min(4, lit.width), height: lit.height)),
+                                     with: .color(tint))
+                    }
+                    context.stroke(shape, with: .color(tint.opacity(0.8)), lineWidth: 1)
                 } else {
                     context.fill(shape, with: .color(tint.opacity(0.18)))
                     context.stroke(shape, with: .color(tint.opacity(0.55)), lineWidth: 1)

@@ -1120,7 +1120,6 @@ struct EditingView: View {
                 model.textButton()
             }
             fxTool
-            mirrorTool
             // Music or a sound effect at the playhead: its row shows once there is one.
             ToolItem(icon: "music.note", text: "Add sound", tint: MusicTint.color,
                      spoken: "Add music or a sound effect at the playhead") {
@@ -1308,7 +1307,6 @@ struct EditingView: View {
             ToolStrip {
                 splitTools
                 fxTool
-                mirrorTool
                 if model.kind == .performance {
                     ToolItem(icon: PerformanceGlyph.name, text: "Edit performance",
                              spoken: "Edit the performance: every video synced to the song") {
@@ -1389,14 +1387,6 @@ struct EditingView: View {
         }
     }
 
-    /// Mirror: flips the cut at the playhead side to side (it's either mirrored or it isn't).
-    private var mirrorTool: some View {
-        ToolItem(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", text: "Mirror",
-                 on: model.mirrorHere, spoken: "Mirror the clip at the playhead") {
-            model.toggleMirrorHere()
-        }
-    }
-
     /// Tap beat: the song plays and each tap drops a cut.
     private var tapBeatTool: some View {
         ToolItem(icon: "hand.tap", text: "Tap beat", spoken: "Tap the beat to make cuts") {
@@ -1412,7 +1402,6 @@ struct EditingView: View {
                 withAnimation(.spring(duration: 0.35)) { model.showEditPage() }
             }
             fxTool
-            mirrorTool
             ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
             shuffleTool
             // Film more takes to the song; they come in as new videos, lined up.
@@ -1465,7 +1454,6 @@ struct EditingView: View {
                 }
                 .accessibilityHint("Shows this video from the playhead on")
                 fxTool
-                mirrorTool
                 ToolItem(icon: "eye", text: "Preview", on: model.previewing == index) { model.preview(index) }
                 ToolItem(icon: "plus.square.on.square", text: "Duplicate", enabled: !full) { model.duplicate(index) }
                 ToolItem(icon: "backward.frame", text: "1 frame", enabled: !model.locked,
@@ -3331,7 +3319,7 @@ struct FXSheet: View {
         case .shake:
             keyedSlider(.shake, name: "Shake", range: 0...1, ends: ("Gentle", "Big shake"))
         case .mirror:
-            note("Mirror is its own button in the tools under the timeline.")
+            note(fx.mirror ? "Flipped side to side." : "Off. Take it off and add it again to flip.")
         case .face:
             if model.busy == "Finding the face…" {
                 note("Finding the face…")

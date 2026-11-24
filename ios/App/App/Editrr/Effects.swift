@@ -67,8 +67,8 @@ enum GlowStyle: String, Codable, CaseIterable, Sendable {
 enum FXKind: String, CaseIterable, Identifiable, Sendable {
     case transition, zoom, color, blur, tilt, shake, mirror, face, glow, rgbSplit, fisheye
 
-    /// The effects the Fx page offers (Mirror is its own button on the toolbar: on or off).
-    static let onFxPage = allCases.filter { $0 != .mirror }
+    /// The effects the Fx page offers (all of them, Mirror included).
+    static let onFxPage = allCases
 
     var id: String { rawValue }
 
