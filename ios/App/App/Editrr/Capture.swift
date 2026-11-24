@@ -32,6 +32,47 @@ struct CaptureTempo: Equatable, Sendable {
 }
 
 /// Where recorded takes wait until a project adopts them (a project keeps its own link).
+/// Turns a take upright when the camera saved it on its side. Only the note in the file that
+/// says which way is up changes: the picture and sound are copied as they are (fast, no quality lost).
+enum TakeUpright {
+    static func fix(_ url: URL, wide: Bool) async {
+        // Horizontal takes are left alone (shooting is vertical only now).
+        guard !wide else { return }
+        let asset = AVURLAsset(url: url)
+        guard let video = try? await asset.loadTracks(withMediaType: .video).first,
+              let loaded = try? await video.load(.naturalSize, .preferredTransform) else { return }
+        let size = loaded.0, transform = loaded.1
+        let shown = CGRect(origin: .zero, size: size).applying(transform).size
+        // Taller than wide, as a vertical take should be: nothing to do.
+        guard abs(shown.width) > abs(shown.height) + 1 else { return }
+        // A picture lying on its side (top to the left) is turned a quarter right; a tall picture that
+        // was turned sideways is just put back.
+        let upright = size.width > size.height
+            ? CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: size.height, ty: 0)
+            : .identity
+        let composition = AVMutableComposition()
+        do {
+            let tracks = try await asset.load(.tracks)
+            for track in tracks where track.mediaType == .video || track.mediaType == .audio {
+                guard let copy = composition.addMutableTrack(withMediaType: track.mediaType,
+                                                             preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+                let range = try await track.load(.timeRange)
+                // At the same time it was, so the take stays lined up to the song.
+                try copy.insertTimeRange(range, of: track, at: range.start)
+                if track.trackID == video.trackID { copy.preferredTransform = upright }
+            }
+        } catch { return }
+        guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else { return }
+        let turned = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString + ".mov")
+        do {
+            try await session.export(to: turned, as: .mov)
+            _ = try FileManager.default.replaceItemAt(url, withItemAt: turned)
+        } catch {
+            try? FileManager.default.removeItem(at: turned)
+        }
+    }
+}
+
 enum TakeStore {
     static var folder: URL {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -454,9 +495,14 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         let rate = speed.songRate
         let hint = TakeHint(songTime: playFrom - delay * rate, speed: rate)
         let take = CapturedTake(url: url, hint: hint, wide: takeWide)
-        takes.append(take)
-        Self.keepInPhotos(url)
-        compareLook(of: take)
+        // Some cameras (the front one on some iPhones) save a vertical take on its side: it's turned
+        // upright before it shows anywhere.
+        Task {
+            await TakeUpright.fix(url, wide: take.wide)
+            takes.append(take)
+            Self.keepInPhotos(url)
+            compareLook(of: take)
+        }
     }
 
     /// Checks the new take against the earlier ones in this shoot. If it looks a lot like one,
