@@ -10,6 +10,9 @@ struct TakesReview: View {
     let filmMore: () -> Void
     let delete: (CapturedTake.ID) -> Void
     let use: () -> Void
+    /// The camera's small pictures of the takes, shown until the sharper ones here load, so the
+    /// Polaroid that grows into this view already has its picture.
+    var startThumbs: [CapturedTake.ID: UIImage] = [:]
     @State private var picked: CapturedTake.ID?
     @State private var player = AVPlayer()
     @State private var thumbs: [CapturedTake.ID: UIImage] = [:]
@@ -46,7 +49,7 @@ struct TakesReview: View {
             TabView(selection: page) {
                 ForEach(takes) { take in
                     ZStack {
-                        if let image = thumbs[take.id] {
+                        if let image = thumbs[take.id] ?? startThumbs[take.id] {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFit()
@@ -215,5 +218,50 @@ struct TakesReview: View {
                 thumbs[take.id] = UIImage(cgImage: frame.image)
             }
         }
+    }
+}
+
+/// Tapping the takes grows the top Polaroid into the full view (and closing shrinks it back):
+/// the view starts at the Polaroid's size and place, showing only that much of itself, and opens
+/// out to fill the screen.
+struct CardExpand: ViewModifier, Animatable {
+    /// 0 is the Polaroid, 1 is the full view.
+    var progress: Double
+    /// Where the Polaroid is on screen.
+    let from: CGRect
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        GeometryReader { geo in
+            let full = geo.frame(in: .global)
+            let p = min(max(progress, 0), 1)
+            let start = from.width > 1 && full.width > 1 ? from.width / full.width : 1
+            let scale = start + (1 - start) * p
+            // How much of the view shows, before scaling: a Polaroid-shaped slice that opens up
+            // to all of it. Fully open, nothing is cut (the black reaches under the clock too).
+            let sliceHeight = (start < 1 ? from.height / start : full.height) * (1 - p) + full.height * p
+            content
+                .frame(width: geo.size.width, height: geo.size.height)
+                .mask {
+                    Rectangle()
+                        .frame(width: p >= 0.999 ? full.width + 400 : full.width,
+                               height: p >= 0.999 ? full.height + 400 : sliceHeight)
+                }
+                .scaleEffect(scale)
+                .offset(x: from.width > 1 ? (from.midX - full.midX) * (1 - p) : 0,
+                        y: from.width > 1 ? (from.midY - full.midY) * (1 - p) : 0)
+                .opacity(0.4 + 0.6 * min(1, p * 3))
+        }
+    }
+}
+
+extension AnyTransition {
+    /// The takes view growing out of the Polaroid at `rect`, and back into it on the way out.
+    static func cardExpand(from rect: CGRect) -> AnyTransition {
+        .modifier(active: CardExpand(progress: 0, from: rect), identity: CardExpand(progress: 1, from: rect))
     }
 }
