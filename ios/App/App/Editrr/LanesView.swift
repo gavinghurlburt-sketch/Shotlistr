@@ -69,15 +69,21 @@ struct LanesView: View {
         GeometryReader { geo in
             let laneWidth = max(geo.size.width - LaneMetrics.labelWidth, 1)
             VStack(spacing: 0) {
-                Color.clear.frame(height: LaneMetrics.topSpace)
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: LaneMetrics.labelWidth)
-                    Ruler(time: model.time, pixelsPerSecond: model.pixelsPerSecond, duration: model.duration)
-                        .frame(width: laneWidth)
-                        .contentShape(Rectangle())
-                        .gesture(rulerGesture)
+                // The corner above the track headers holds Start and End on the performance page,
+                // next to the markers they set; the ruler runs beside it.
+                HStack(alignment: .bottom, spacing: 0) {
+                    rangeCorner
+                        .frame(width: LaneMetrics.labelWidth,
+                               height: LaneMetrics.topSpace + LaneMetrics.rulerHeight)
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: LaneMetrics.topSpace)
+                        Ruler(time: model.time, pixelsPerSecond: model.pixelsPerSecond, duration: model.duration)
+                            .frame(width: laneWidth, height: LaneMetrics.rulerHeight)
+                            .contentShape(Rectangle())
+                            .gesture(rulerGesture)
+                    }
                 }
-                .frame(height: LaneMetrics.rulerHeight)
+                .frame(height: LaneMetrics.topSpace + LaneMetrics.rulerHeight)
 
                 // The song lane stays put on top; only the video lanes under it scroll.
                 HStack(spacing: 0) {
@@ -121,6 +127,35 @@ struct LanesView: View {
     }
 
     // MARK: Buttons on the left
+
+    /// Start and End, in the corner over the track headers, on the performance page only: each
+    /// sets its marker at the playhead, and turns amber once set, like the markers themselves.
+    @ViewBuilder private var rangeCorner: some View {
+        if model.kind == .performance && model.performancePage {
+            HStack(spacing: 0) {
+                rangeButton(icon: "arrow.right.to.line", set: model.inPoint > 0.0005,
+                            label: "Start", hint: "The performance starts at the playhead") { model.setIn() }
+                rangeButton(icon: "arrow.left.to.line", set: model.outPoint < model.duration - 0.0005,
+                            label: "End", hint: "The performance ends at the playhead") { model.setOut() }
+            }
+        } else {
+            Color.clear
+        }
+    }
+
+    private func rangeButton(icon: String, set: Bool, label: String, hint: String,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(set ? Tint.warn : Color.white.opacity(0.9))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
+    }
 
     /// The song lane's header: a note (or no-sound) icon and the tall tracks switch.
     private var songHeader: some View {

@@ -1344,17 +1344,6 @@ struct EditingView: View {
         }
     }
 
-    /// Start and End on the performance page (the code still calls them In and Out).
-    @ViewBuilder private var exportRangeTools: some View {
-        // Start and End: where the performance clip starts and ends, set at the playhead.
-        ToolItem(icon: "arrow.right.to.line", text: "Start", tint: Tint.warn,
-                 on: model.inPoint > 0.0005) { model.setIn() }
-            .accessibilityHint("The performance starts at the playhead")
-        ToolItem(icon: "arrow.left.to.line", text: "End", tint: Tint.warn,
-                 on: model.outPoint < model.duration - 0.0005) { model.setOut() }
-            .accessibilityHint("The performance ends at the playhead")
-    }
-
     /// Shuffle, once Auto edit has run: a fresh cut from the same clips.
     @ViewBuilder private var shuffleTool: some View {
         if model.canShuffle {
@@ -1413,7 +1402,7 @@ struct EditingView: View {
                 Task { await model.remix() }
             }
             tapBeatTool
-            exportRangeTools
+            // Start and End live in the timeline's top left corner, by their markers.
             // Lock: clips can't be moved, trimmed or nudged while it's on.
             lockTool
         }
