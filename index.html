@@ -1640,6 +1640,10 @@ body.art-inline #artistSheet .grab, body.art-inline #artistScrim, body.art-inlin
       <label for="importProjectInput" class="btn small file-label">Import a backup file</label>
       <p class="modal-hint" style="margin:16px 0 8px">Help</p>
       <button type="button" id="tourReplayBtn" class="btn small">Show the quick tour</button>
+      <p class="modal-hint" style="margin:16px 0 8px">Suggestion box</p>
+      <textarea id="feedbackText" class="field" rows="3" style="width:100%" placeholder="An idea, something that bugged you, anything. It goes straight to the person who makes creatrr."></textarea>
+      <button type="button" id="feedbackSend" class="btn small" style="margin-top:8px" disabled>Send feedback</button>
+      <p class="muted small" id="feedbackSay" style="margin:8px 0 0"></p>
       <div class="modal-actions"><span></span><button id="settingsDone" class="btn primary">Done</button></div>
     </div>
   </div>
@@ -5739,6 +5743,24 @@ document.querySelectorAll("[data-tier-pref]").forEach(b => b.classList.toggle("p
 if (window.matchMedia) { const mq = matchMedia("(prefers-color-scheme: dark)"); const f = () => { if (themePref === "system") applyTheme(); }; if (mq.addEventListener) mq.addEventListener("change", f); else if (mq.addListener) mq.addListener(f); }
 $("settingsBtn").addEventListener("click", () => { $("settingsModal").classList.remove("hidden"); const el = $("pushStatus"); if (el) el.textContent = pushState; });
 $("settingsDone").addEventListener("click", () => $("settingsModal").classList.add("hidden"));
+/* Suggestion box: what's typed opens in the mail app, addressed and ready, so there's nothing to set up. */
+const FEEDBACK_TO = "apps@gavingeddes.art";
+$("feedbackText").addEventListener("input", () => {
+  $("feedbackSend").disabled = !$("feedbackText").value.trim();
+  $("feedbackSay").textContent = "";
+});
+$("feedbackSend").addEventListener("click", () => {
+  const text = $("feedbackText").value.trim();
+  if (!text) return;
+  const where = isNativeApp() ? "iPhone app" : "web";
+  const body = text + "\n\n--\ncreatrr feedback (" + where + ")";
+  const link = document.createElement("a");
+  link.href = "mailto:" + FEEDBACK_TO + "?subject=" + encodeURIComponent("creatrr feedback") + "&body=" + encodeURIComponent(body);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  $("feedbackSay").textContent = "Your mail app opened with it: tap Send there. Thank you! If nothing opened, email " + FEEDBACK_TO + ".";
+});
 $("settingsModal").addEventListener("click", e => { if (e.target === $("settingsModal")) $("settingsModal").classList.add("hidden"); });
 
 /* ================= content shoot: model helpers ================= */
