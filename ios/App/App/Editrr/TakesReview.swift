@@ -17,6 +17,10 @@ struct TakesReview: View {
     @State private var loop: NSObjectProtocol?
 
     private var shown: CapturedTake? { takes.first { $0.id == picked } ?? takes.last }
+    /// The page showing: the take picked (a swipe picks the next one).
+    private var page: Binding<CapturedTake.ID> {
+        Binding(get: { shown?.id ?? UUID() }, set: { picked = $0 })
+    }
     private var shownNumber: Int { (shown.flatMap { take in takes.firstIndex { $0.id == take.id } } ?? 0) + 1 }
 
     var body: some View {
@@ -37,11 +41,30 @@ struct TakesReview: View {
             }
             .padding(.horizontal, 8)
 
-            // The take picked, big, playing over and over.
-            VideoPlayer(player: player)
-                .aspectRatio(shown?.wide == true ? 16.0 / 9.0 : 9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, 8)
+            // The take picked, big, playing over and over. Swipe for the next or the one before;
+            // tap to pause.
+            TabView(selection: page) {
+                ForEach(takes) { take in
+                    ZStack {
+                        if let image = thumbs[take.id] {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                        }
+                        if take.id == shown?.id {
+                            VideoPlayer(player: player)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .aspectRatio(take.wide ? 16.0 / 9.0 : 9.0 / 16.0, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture { togglePlay() }
+                    .tag(take.id)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .padding(.vertical, 8)
 
             strip
 
@@ -129,6 +152,10 @@ struct TakesReview: View {
                 .padding(.horizontal, 16)
             }
             .onAppear { if let last = takes.last { scroller.scrollTo(last.id, anchor: .trailing) } }
+            // A swipe to another take keeps its thumbnail in view down here.
+            .onChange(of: picked) { _, id in
+                if let id { withAnimation(.snappy) { scroller.scrollTo(id, anchor: .center) } }
+            }
         }
         .frame(height: 64)
     }
@@ -147,6 +174,10 @@ struct TakesReview: View {
             }
         }
         player.play()
+    }
+
+    private func togglePlay() {
+        if player.timeControlStatus == .paused { player.play() } else { player.pause() }
     }
 
     private func stop() {
@@ -179,7 +210,7 @@ struct TakesReview: View {
         for take in takes where thumbs[take.id] == nil {
             let generator = AVAssetImageGenerator(asset: AVURLAsset(url: take.url))
             generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 200, height: 200)
+            generator.maximumSize = CGSize(width: 720, height: 720)
             if let frame = try? await generator.image(at: CMTime(seconds: 0.5, preferredTimescale: 600)) {
                 thumbs[take.id] = UIImage(cgImage: frame.image)
             }

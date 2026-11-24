@@ -713,11 +713,11 @@ struct CaptureView: View {
     @State private var menuOpen = false
     /// Your takes, big, before you use them (like Photos).
     @State private var reviewing = false
-    /// A small picture of each take, for the Polaroids.
+    /// A small picture of each take, for the deck of takes.
     @State private var thumbs: [CapturedTake.ID: UIImage] = [:]
-    /// The white flash when a take ends (1 is all white).
+    /// The soft white flash when a take ends (1 is all white).
     @State private var flash = 0.0
-    /// The newest Polaroid, developing from white to its picture (0 to 1).
+    /// The newest take's card, fading in from soft and blurry (0 to 1).
     @State private var developing: CapturedTake.ID?
     @State private var develop = 1.0
     /// A short note over the record button (the count-in and click need a tempo).
@@ -927,23 +927,23 @@ struct CaptureView: View {
             if recording { menuOpen = false; note = nil; wheelOn = false }
         }
         .onChange(of: capture.takes.map(\.id)) { old, new in
-            // A new take (not one thrown away): flash, and its Polaroid develops.
+            // A new take (not one thrown away): flash, and its card fades in.
             guard let newest = capture.takes.last, !old.contains(newest.id) else { return }
             tookPicture(newest)
         }
     }
 
-    /// The flash, then the new Polaroid slowly shows its picture, white first.
+    /// The flash, then the new take's card fades in on the deck.
     private func tookPicture(_ take: CapturedTake) {
-        flash = 0.9
+        flash = 0.55
         developing = take.id
         develop = 0
         Task {
-            try? await Task.sleep(for: .milliseconds(60))
-            withAnimation(.easeOut(duration: 0.7)) { flash = 0 }
+            try? await Task.sleep(for: .milliseconds(40))
+            withAnimation(.easeOut(duration: 0.45)) { flash = 0 }
             await loadThumb(take)
             guard developing == take.id else { return }
-            withAnimation(.easeIn(duration: 3)) { develop = 1 }
+            withAnimation(.easeOut(duration: 1.2)) { develop = 1 }
         }
     }
 
@@ -1091,23 +1091,35 @@ struct CaptureView: View {
         }
     }
 
-    /// Your last three takes, bottom right, like a little stack of Polaroids with the newest on
-    /// top. Tap it to see them all.
+    /// Your last three takes, bottom right, as a little deck of rounded thumbnails with the newest
+    /// on top and how many takes on a yellow badge. Tap it to see them all.
     private var takesStack: some View {
         let latest = Array(capture.takes.suffix(3))
         let count = capture.takes.count
         return Button { withAnimation(.snappy) { menuOpen = false; reviewing = true } } label: {
-            ZStack {
-                ForEach(Array(latest.enumerated()), id: \.element.id) { index, take in
-                    // 0 is the top one; the ones under it peek out, tilted.
-                    let depth = latest.count - 1 - index
-                    polaroid(take, count: depth == 0 ? count : nil)
-                        .rotationEffect(.degrees(depth == 0 ? 0 : (depth == 1 ? -8 : 7)))
-                        .offset(x: CGFloat(depth) * -3, y: CGFloat(depth) * -2)
-                        .zIndex(Double(index))
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    ForEach(Array(latest.enumerated()), id: \.element.id) { index, take in
+                        // 0 is the top one; the ones under it peek out above it, a little smaller.
+                        let depth = latest.count - 1 - index
+                        takeCard(take)
+                            .scaleEffect(1 - CGFloat(depth) * 0.1)
+                            .offset(y: CGFloat(depth) * -6)
+                            .opacity(depth == 0 ? 1 : 0.75)
+                            .zIndex(Double(index))
+                    }
                 }
+                .frame(width: 44, height: 64)
+                .padding(.top, 6)
+                Text("\(count)")
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 6)
+                    .frame(minWidth: 20, minHeight: 20)
+                    .background(Capsule().fill(Tint.accent))
+                    .offset(x: 8, y: -2)
             }
-            .frame(width: 58, height: 70)
+            .frame(width: 58, height: 72)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1116,32 +1128,25 @@ struct CaptureView: View {
         .accessibilityLabel(count == 1 ? "See your take" : "See your \(count) takes")
     }
 
-    /// One take as a Polaroid: white all round, a wider strip at the bottom (with the number of
-    /// takes on the top one).
-    private func polaroid(_ take: CapturedTake, count: Int?) -> some View {
+    /// One take: its picture in a rounded card with a thin light edge. A new one fades in
+    /// from soft and blurry.
+    private func takeCard(_ take: CapturedTake) -> some View {
         let fresh = take.id == developing
-        return VStack(spacing: 0) {
-            ZStack {
-                Color(white: 0.93)
-                if let image = thumbs[take.id] {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .saturation(fresh ? develop : 1)
-                        .opacity(fresh ? develop : 1)
-                }
+        return ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            if let image = thumbs[take.id] {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .blur(radius: fresh ? (1 - develop) * 10 : 0)
+                    .opacity(fresh ? develop : 1)
             }
-            .frame(width: 38, height: 48)
-            .clipped()
-            Text(count.map { "\($0)" } ?? "")
-                .font(.system(size: 10, weight: .bold).monospacedDigit())
-                .foregroundStyle(.black.opacity(0.65))
-                .frame(width: 38, height: 13)
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 4)
-        .background(Color.white)
-        .shadow(color: .black.opacity(0.45), radius: 3, y: 1)
+        .frame(width: 44, height: 64)
+        .clipShape(Corner.chip)
+        .overlay(Corner.chip.strokeBorder(.white.opacity(0.85), lineWidth: 1.5))
+        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+        .environment(\.colorScheme, .dark)
         .task(id: take.id) { await loadThumb(take) }
     }
 
