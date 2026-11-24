@@ -96,6 +96,7 @@ Contact: apps@gavingeddes.art
 
 ## Before submitting
 - [ ] Paid Apps agreement, bank and tax info active
+- [ ] Review build made with `"testFlightFree": false` in scripts/subs.config.json (TestFlight builds 2 to 4 have it on, so the app is free there and App Review would never see the paywall)
 - [ ] Pricing and Availability: app price Free
 - [ ] Subscription group "creatrr": creatrr_artist_monthly at $4.99/month with an introductory offer (Free, 1 week, new subscribers), "Ready to Submit" and added to version 1.0 (Plus and Pro not submitted yet)
 - [ ] Demo account password set and tested
