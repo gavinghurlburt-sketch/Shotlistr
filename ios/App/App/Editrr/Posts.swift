@@ -504,6 +504,51 @@ enum CaptionWriter {
 
 /// Filmed, Editing, Ready and Posted this week, over one line on how long the planned posts last.
 /// Tap Posted to change the weekly goal.
+/// The next 30 days as 30 tiny stars spiraling out from today, lit (yellow) where a post is
+/// planned. They drift slowly, like dust in the light; still when Reduce Motion is on.
+struct CoverageStars: View {
+    let days: [Bool]
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    /// Where each day sits in a 36 x 36 box: a spiral, today in the middle.
+    private static let spots: [CGPoint] = (0..<30).map { i in
+        let angle = Double(i) * 2.4
+        let distance = 3 + Double(i).squareRoot() * 2.6
+        // A small fixed nudge per star, so it looks scattered rather than drawn with a ruler.
+        let nudgeX = (sin(Double(i) * 12.9898) * 43758.5453).truncatingRemainder(dividingBy: 1) * 1.5
+        let nudgeY = (sin(Double(i) * 78.233) * 43758.5453).truncatingRemainder(dividingBy: 1) * 1.5
+        return CGPoint(x: 18 + cos(angle) * distance + nudgeX, y: 18 + sin(angle) * distance + nudgeY)
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { timeline in
+            let t = still ? 0 : timeline.date.timeIntervalSinceReferenceDate
+            Canvas { context, size in
+                let scale = min(size.width, size.height) / 36
+                for (i, spot) in Self.spots.enumerated() {
+                    let lit = i < days.count && days[i]
+                    let seed = Double(i)
+                    // Each star wanders on its own slow loop, under a point either way.
+                    let dx = sin(t * (0.35 + seed.truncatingRemainder(dividingBy: 5) * 0.06) + seed * 1.7) * 0.7
+                    let dy = cos(t * (0.3 + seed.truncatingRemainder(dividingBy: 7) * 0.05) + seed * 2.3) * 0.7
+                    let radius = lit ? 1.8 : 1.1
+                    let x = (spot.x + dx) * scale, y = (spot.y + dy) * scale, r = radius * scale
+                    let dot = Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+                    if lit {
+                        // A soft halo that breathes a little, then the star.
+                        let breathe = 0.18 + 0.1 * sin(t * 0.8 + seed)
+                        let halo = Path(ellipseIn: CGRect(x: x - r * 2.2, y: y - r * 2.2, width: r * 4.4, height: r * 4.4))
+                        context.fill(halo, with: .color(Tint.accent.opacity(breathe)))
+                        context.fill(dot, with: .color(Tint.accent))
+                    } else {
+                        context.fill(dot, with: .color(.white.opacity(0.22)))
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct PipelineBar: View {
     let projects: [SavedProject]
     let goal: Int
@@ -522,20 +567,24 @@ struct PipelineBar: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Posted this week: \(counts.posted) of \(counts.goal). Change the weekly goal")
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: counts.low ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(counts.low ? Tint.warn : Tint.good)
-                Text(counts.line)
-                    .foregroundStyle(.white.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .font(.subheadline.weight(.semibold))
-            // How full the next 30 days are, and where the next gap is, in words.
-            if counts.covered > 0 {
-                Text(counts.coverLine)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .fixedSize(horizontal: false, vertical: true)
+            // The next 30 days as a little spiral of stars (lit where a post is planned), then in words:
+            // how far you're set, how full the month is, and the next empty day.
+            HStack(alignment: .center, spacing: 12) {
+                CoverageStars(days: counts.days)
+                    .frame(width: 52, height: 52)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(counts.line)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if counts.covered > 0 {
+                        Text(counts.coverLine)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
         }
     }
