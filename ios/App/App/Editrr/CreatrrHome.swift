@@ -35,6 +35,10 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
     private var bare = false
     /// A finger on the web page is dragging Edits in from the last home tab.
     private var webDragging = false
+    /// Your account menu is open over Edits: the page is in front, see-through under the tabs.
+    private var menuOver = false
+    /// The page's own look, put back when the menu closes.
+    private var webLook: (opaque: Bool, back: UIColor?, scroll: UIColor?, view: UIColor?)?
 
     private lazy var toEditor: UIScreenEdgePanGestureRecognizer = {
         let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(pan(_:)))
@@ -70,6 +74,7 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         content?.add(messages, name: "creatrrPost")
         content?.add(messages, name: "creatrrPostsAsk")
         content?.add(messages, name: "creatrrGoal")
+        content?.add(messages, name: "creatrrMenu")
         nav.backTitle = artistTier ? "Calendar" : "Artists"
         // A post's reminder, tapped: Edits opens on that post, ready to share.
         artist.bridge?.notificationRouter.localNotificationHandler = PostNotificationHandler.shared
@@ -83,8 +88,8 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
 
     /// Only the swipe that can go somewhere is on, so taps near the screen edges are never held up.
     private func refreshSwipes() {
-        toEditor.isEnabled = canSwipeToEditor
-        toArtist.isEnabled = showingEditor
+        toEditor.isEnabled = canSwipeToEditor && !menuOver
+        toArtist.isEnabled = showingEditor && !menuOver
     }
 
     /// From the home tab just before Edits: Projects on creatrr Artist (Songs, Projects, Edits),
@@ -240,7 +245,37 @@ final class CreatrrHome: UIViewController, UIGestureRecognizerDelegate {
         PostBook.changed(ProjectStore.list())
     }
 
-    /// Projects, Artists, the bell or your account was tapped in the header while Edits was open.
+    /// Your account menu, tapped in the header while Edits shows: the page comes in front of editrr
+    /// (the web app draws only its header and tabs, so Edits shows through under the sheet). Closed:
+    /// editrr goes back on top, right where you were.
+    func menuFromWeb(open: Bool) {
+        guard let web = webView else { return }
+        if open {
+            guard !menuOver else { return }
+            menuOver = true
+            webLook = (opaque: web.isOpaque, back: web.backgroundColor, scroll: web.scrollView.backgroundColor,
+                       view: artist.view === web ? nil : artist.view.backgroundColor)
+            web.isOpaque = false
+            web.backgroundColor = .clear
+            web.scrollView.backgroundColor = .clear
+            if artist.view !== web { artist.view.backgroundColor = .clear }
+            view.bringSubviewToFront(artist.view)
+        } else {
+            guard menuOver else { return }
+            menuOver = false
+            if let editor { view.bringSubviewToFront(editor.view) }
+            if let look = webLook {
+                web.isOpaque = look.opaque
+                web.backgroundColor = look.back
+                web.scrollView.backgroundColor = look.scroll
+                if artist.view !== web { artist.view.backgroundColor = look.view }
+            }
+            webLook = nil
+        }
+        refreshSwipes()
+    }
+
+    /// Projects, Artists or a page was tapped in the header while Edits was open.
     func closeFromWeb() {
         guard !panning else { return }
         show(editor: false)
@@ -412,6 +447,8 @@ private final class WebMessages: NSObject, WKScriptMessageHandler {
                 if let tier = message.body as? String { home?.setTier(tier) }
             case "creatrrEditrr":
                 if (message.body as? String) == "close" { home?.closeFromWeb() } else { home?.openFromWeb() }
+            case "creatrrMenu":
+                home?.menuFromWeb(open: (message.body as? String) == "open")
             case "creatrrShoot":
                 if let info = message.body as? [String: Any], let key = info["key"] as? String {
                     home?.shootFromWeb(key: key, time: (info["time"] as? NSNumber).map { $0.doubleValue },

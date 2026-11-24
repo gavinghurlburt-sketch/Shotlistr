@@ -44,7 +44,7 @@ struct EditorView: View {
         }
         .fullScreenCover(item: $model.shootPlan) { plan in
             CaptureView(song: plan.song, length: plan.length, songName: plan.songName, parts: plan.parts,
-                        start: plan.start, end: plan.end, partName: plan.partName, tempo: plan.tempo, maxTakes: 10,
+                        start: plan.start, end: plan.end, partName: plan.partName, tempo: plan.tempo,
                         draft: { takes in Task { await model.finishShoot(plan, takes: takes, draft: true) } }) { takes in
                 // Closed with nothing filmed from a section's record button: straight back to that section.
                 if takes.isEmpty, plan.fromCreatrr, let creatrrBack {
@@ -58,7 +58,7 @@ struct EditorView: View {
         // Film more: new takes into the open performance.
         .fullScreenCover(item: $model.morePlan) { plan in
             CaptureView(song: plan.song, length: plan.length, songName: plan.songName, parts: plan.parts,
-                        start: plan.start, end: plan.end, tempo: plan.tempo, maxTakes: plan.room) { takes in
+                        start: plan.start, end: plan.end, tempo: plan.tempo) { takes in
                 Task { await model.addTakes(takes) }
             }
         }
@@ -433,7 +433,7 @@ struct NewVideoSheet: View {
             if let shoot {
                 divider.padding(.leading, 48)
                 choiceCard(icon: "record.circle", tint: Tint.bad, title: "Shoot",
-                           detail: "Pick part of a song and film up to 10 takes. Each one lines up to the song.",
+                           detail: "Pick part of a song and film as many takes as you like. Each one lines up to the song.",
                            action: shoot)
             }
         }
@@ -531,8 +531,8 @@ struct NewVideoSheet: View {
                         Label("Record", systemImage: "record.circle")
                     }
                     .buttonStyle(GlassButtonStyle(tint: Tint.bad))
-                    .disabled(model.captureSong == nil || model.pickedVideoCount >= 10)
-                    .opacity(model.captureSong == nil || model.pickedVideoCount >= 10 ? 0.45 : 1)
+                    .disabled(model.captureSong == nil)
+                    .opacity(model.captureSong == nil ? 0.45 : 1)
                     .accessibilityHint("Film takes while the song plays. They line up on their own.")
                 }
             }
@@ -543,12 +543,12 @@ struct NewVideoSheet: View {
             if let song = model.captureSong {
                 CaptureView(song: song.asset, length: song.length,
                             songName: model.songName ?? "Song", parts: model.captureParts,
-                            tempo: model.captureTempo, maxTakes: 10 - model.pickedVideoCount) { takes in
+                            tempo: model.captureTempo) { takes in
                     model.addCaptured(takes)
                 }
             }
         }
-        .photosPicker(isPresented: $showVideos, selection: $videoPicks, maxSelectionCount: 10,
+        .photosPicker(isPresented: $showVideos, selection: $videoPicks, maxSelectionCount: EditorModel.maxLayers,
                       selectionBehavior: .ordered, matching: .videos,
                       preferredItemEncoding: .current, photoLibrary: .shared())
         .onChange(of: videoPicks) { _, chosen in
@@ -563,10 +563,10 @@ struct NewVideoSheet: View {
         guard count > 0 else {
             if kind == .performance {
                 return model.captureSong == nil
-                    ? "Pick 1 to 10 takes. To record, pick the song first."
-                    : "Pick 1 to 10 takes, or record them to the song."
+                    ? "Pick your takes. To record, pick the song first."
+                    : "Pick your takes, or record them to the song."
             }
-            return "Pick 1 to 10, in the order they should play."
+            return "Pick your videos, in the order they should play."
         }
         let recorded = model.capturedCount
         if recorded == 0 { return "\(count) \(count == 1 ? "video" : "videos") picked." }

@@ -6,8 +6,7 @@ import SwiftUI
 /// to start), the rest are thumbnails underneath. Delete a take, film more, or use them all.
 struct TakesReview: View {
     let takes: [CapturedTake]
-    let maxTakes: Int
-    /// Back to the camera to film another take (only when there's room).
+    /// Back to the camera to film another take.
     let filmMore: () -> Void
     let delete: (CapturedTake.ID) -> Void
     let use: () -> Void
@@ -17,7 +16,6 @@ struct TakesReview: View {
     @State private var askingDelete = false
     @State private var loop: NSObjectProtocol?
 
-    private var full: Bool { takes.count >= maxTakes }
     private var shown: CapturedTake? { takes.first { $0.id == picked } ?? takes.last }
     private var shownNumber: Int { (shown.flatMap { take in takes.firstIndex { $0.id == take.id } } ?? 0) + 1 }
 
@@ -58,7 +56,7 @@ struct TakesReview: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Delete take \(shownNumber)")
                 Button { leave(filmMore) } label: {
-                    Label(full ? "That's \(maxTakes)" : "Film more", systemImage: "video.badge.plus")
+                    Label("Film more", systemImage: "video.badge.plus")
                         .font(.headline)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -67,8 +65,6 @@ struct TakesReview: View {
                         .background(Color.white.opacity(0.1))
                 }
                 .buttonStyle(.plain)
-                .disabled(full)
-                .opacity(full ? 0.45 : 1)
                 Button { leave(use) } label: {
                     Text(takes.count == 1 ? "Use 1 take" : "Use \(takes.count) takes")
                         .font(.headline)

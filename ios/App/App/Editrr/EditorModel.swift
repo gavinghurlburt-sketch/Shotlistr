@@ -71,8 +71,9 @@ final class EditorModel {
     /// Locked: clips stay where they are (no moving, trimming or nudging), so swiping and
     /// tapping can't knock anything out of sync. Starts locked once everything is lined up.
     var locked = true
-    /// The most lanes a project can hold: videos and text lanes together.
-    static let maxLayers = 10
+    /// The most lanes a project can hold: videos and text lanes together. Film or pick as many
+    /// takes as you like; this is only there so a runaway can't swamp the phone.
+    static let maxLayers = 100
     /// A video shown on its own for a look, without cutting to it (one tap on its number).
     var previewing: Int?
     /// The clip picked for nudging (and outlined).
@@ -324,7 +325,7 @@ final class EditorModel {
         return (pendingSong, length)
     }
     @ObservationIgnored private var pendingSongLength: Double?
-    /// Recorded takes (they count toward the 10 videos).
+    /// Recorded takes.
     var capturedCount = 0
     /// The parts of a song picked from creatrr (Verse, Chorus...), for Record to jump to.
     @ObservationIgnored private(set) var captureParts: [CreatrrPart] = []
@@ -441,13 +442,13 @@ final class EditorModel {
         TakeStore.clear()
     }
 
-    /// Adds takes recorded to the song. They go after any videos already picked, up to 10 in all.
+    /// Adds takes recorded to the song. They go after any videos already picked.
     func addCaptured(_ takes: [CapturedTake]) {
         problem = nil
         // Takes filmed horizontal make a horizontal project.
         if takes.contains(where: { $0.wide }) { pendingWide = true }
         var added = 0
-        for take in takes where pendingVideos.count < 10 {
+        for take in takes where pendingVideos.count < Self.maxLayers {
             pendingHints[pendingVideos.count] = take.hint
             pendingVideos.append(PickedMedia(asset: AVURLAsset(url: take.url), source: .file(take.url.path)))
             added += 1
@@ -455,7 +456,7 @@ final class EditorModel {
         capturedCount += added
         pickedVideoCount = pendingVideos.count
         if added < takes.count {
-            problem = "10 videos is the most, so some takes are left out."
+            problem = "\(Self.maxLayers) videos is the most, so some takes are left out."
         }
     }
     // MARK: Film more (takes into an open performance)
@@ -470,7 +471,6 @@ final class EditorModel {
         let tempo: CaptureTempo?
         let start: Double
         let end: Double?
-        let room: Int
     }
     var morePlan: MorePlan?
 
@@ -495,7 +495,7 @@ final class EditorModel {
         let to = outPoint - soundtrack.shift
         morePlan = MorePlan(song: soundtrack.asset, length: soundtrack.length, songName: soundtrack.name,
                             parts: song?.parts ?? [], tempo: song?.tempo, start: from,
-                            end: to > from + 1 ? to : nil, room: Self.maxLayers - laneCount)
+                            end: to > from + 1 ? to : nil)
     }
 
     /// New takes go on as new videos, each lined up by where the song was when it was filmed
@@ -691,7 +691,7 @@ final class EditorModel {
     func chooseVideos(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
         // Each video needs a little room for its pictures and sound, more if it has to be copied.
-        guard Disk.hasRoom(for: Int64(200 + 100 * min(items.count, 10)) * Disk.megabyte) else {
+        guard Disk.hasRoom(for: Int64(200 + 100 * min(items.count, Self.maxLayers)) * Disk.megabyte) else {
             problem = Disk.fullMessage
             return
         }
@@ -703,12 +703,12 @@ final class EditorModel {
         let kept = pendingVideos.indices.filter { pendingHints[$0] != nil }
         let keptVideos = kept.map { pendingVideos[$0] }
         let keptHints = kept.compactMap { pendingHints[$0] }
-        let assets = await PhotosLoader.load(Array(items.prefix(10 - keptVideos.count)))
+        let assets = await PhotosLoader.load(Array(items.prefix(max(0, Self.maxLayers - keptVideos.count))))
         pendingVideos = keptVideos + assets
         pendingHints = [:]
         for (index, hint) in keptHints.enumerated() { pendingHints[index] = hint }
         pickedVideoCount = pendingVideos.count
-        let tried = min(items.count, 10 - keptVideos.count)
+        let tried = min(items.count, max(0, Self.maxLayers - keptVideos.count))
         if assets.count < tried {
             problem = "\(tried - assets.count) of those videos couldn't be opened, so they're left out."
         }

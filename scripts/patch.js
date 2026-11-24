@@ -135,6 +135,12 @@ replaceOnce("supabase lib", "</head>", "<script id=\"supabase-lib\">" + lib + "<
 replaceOnce("drop duplicate push block", '      <p class="modal-hint" style="margin:16px 0 8px">Notifications</p>\n      <button type="button" id="pushBtn" class="btn small">Turn on notifications</button>\n      <p class="muted small" id="pushStatus" style="margin:8px 0 0"></p>\n', '');
 replaceOnce("account button", '<button id="settingsBtn" class="btn small">Settings</button>', '<span id="cloudStatus" class="small"></span><button id="accountBtn" class="btn small">Sign in</button><button id="settingsBtn" class="btn small hidden">Settings</button>');
 replaceOnce("home copy", "Everything is saved in this browser.", "Sign in to keep them in your account on every device.");
+// The suggestion box lives in the account menu (the Settings sheet is hidden here).
+replaceOnce("suggestion box out of settings", '      <p class="modal-hint" style="margin:16px 0 8px">Suggestion box</p>\n      <textarea id="feedbackText" class="field" rows="3" style="width:100%" placeholder="An idea, something that bugged you, anything. It goes straight to the person who makes creatrr."></textarea>\n      <button type="button" id="feedbackSend" class="btn small" style="margin-top:8px" disabled>Send feedback</button>\n      <p class="muted small" id="feedbackSay" style="margin:8px 0 0"></p>\n', '');
+// No bell: what's new shows at the top of the account menu, and the account button's red dot says so.
+const bellRe = /\s*<button id="bellBtn"[^\n]*?<\/button>/;
+must("bell button", bellRe.test(h));
+h = h.replace(bellRe, "");
 replaceOnce("account modal", "</header>", "</header>\n" + fs.readFileSync("scripts/account.html", "utf8"));
 
 // 7. Sanity: every inline script still parses

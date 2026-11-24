@@ -1003,7 +1003,13 @@ body:not(.art-inline) .appbar-top:has(#backToProjectsBtn:not(.hidden)) .brand { 
 #accountBtn.signed { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; background-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
 #accountBtn.signed:hover { background-color: var(--accent); opacity: .9; }
 #accountBtn { position: relative; }
-#accountBtn.warn::after { content: ""; position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background-color: var(--danger); box-shadow: 0 0 0 2px var(--bg); }
+#accountBtn.warn::after, #accountBtn.has-notes::after { content: ""; position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background-color: var(--danger); box-shadow: 0 0 0 2px var(--bg); }
+/* a menu open over Edits: only the header and tabs are drawn, editrr shows through the rest */
+html:has(body.menu-over-edits) { background: transparent !important; }
+body.menu-over-edits { background: linear-gradient(var(--bg), var(--bg)) top left / 100% var(--edits-top, 0px) no-repeat transparent !important; }
+body.menu-over-edits main, body.menu-over-edits .float-pill, body.menu-over-edits #bandSyncPill { visibility: hidden; }
+body.menu-over-edits main .home-tabs { visibility: visible; }
+body.menu-over-edits .modal .modal-inner { background-color: var(--surface) !important; }
 
 /* workspace tabs */
 .ws-tabs { padding: 4px 16px 10px; gap: 4px; }
@@ -1670,7 +1676,6 @@ bitsperframe:             %d
     <input type="text" id="docTitleInput" class="doc-title hidden" placeholder="Untitled project" aria-label="Project title">
     <span class="spacer"></span>
     <span id="saveStatus" class="small"></span>
-    <button id="bellBtn" class="btn small bell" aria-label="Notifications and audio inbox"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg><span id="bellDot" class="bell-dot hidden"></span></button>
     <span id="cloudStatus" class="small"></span><button id="accountBtn" class="btn small">Sign in</button><button id="settingsBtn" class="btn small hidden">Settings</button>
   </div>
   <nav id="wsTabs" class="ws-tabs hidden" aria-label="Workspaces">
@@ -1709,6 +1714,7 @@ bitsperframe:             %d
     <div class="grab" aria-hidden="true"></div>
     <h3>Account &amp; settings</h3>
     <p id="acctMsg" role="status" style="margin:0 0 10px;font-size:14px;font-weight:600;color:#f5d142;min-height:1em"></p>
+    <div id="acctNotes" class="hidden" style="margin-bottom:14px"></div>
     <div id="acctSignedOut">
       <p class="modal-hint">Sign in to keep your projects and tracks in your account and open them on any device.</p>
       <div style="display:flex;gap:8px;margin-bottom:10px"><button type="button" id="acctTabIn" class="btn small primary">Sign in</button><button type="button" id="acctTabUp" class="btn small">Create account</button></div>
@@ -1750,6 +1756,10 @@ bitsperframe:             %d
     </div>
     <p class="sect">Help</p>
     <button type="button" id="tourReplayBtn2" class="btn small">Show the quick tour again</button>
+    <p class="sect">Suggestion box</p>
+    <textarea id="feedbackText" class="field" rows="3" style="width:100%" placeholder="An idea, something that bugged you, anything. It goes straight to the person who makes creatrr."></textarea>
+    <button type="button" id="feedbackSend" class="btn small" style="margin-top:8px" disabled>Send feedback</button>
+    <p class="muted small" id="feedbackSay" style="margin:8px 0 0"></p>
     <div id="acctBottom" style="margin-top:18px"><button type="button" id="acctSignOut" class="btn small">Sign out</button></div>
   </div>
 </div>
@@ -1866,10 +1876,6 @@ bitsperframe:             %d
       <label for="importProjectInput" class="btn small file-label">Import a backup file</label>
       <p class="modal-hint" style="margin:16px 0 8px">Help</p>
       <button type="button" id="tourReplayBtn" class="btn small">Show the quick tour</button>
-      <p class="modal-hint" style="margin:16px 0 8px">Suggestion box</p>
-      <textarea id="feedbackText" class="field" rows="3" style="width:100%" placeholder="An idea, something that bugged you, anything. It goes straight to the person who makes creatrr."></textarea>
-      <button type="button" id="feedbackSend" class="btn small" style="margin-top:8px" disabled>Send feedback</button>
-      <p class="muted small" id="feedbackSay" style="margin:8px 0 0"></p>
       <div class="modal-actions"><span></span><button id="settingsDone" class="btn primary">Done</button></div>
     </div>
   </div>
@@ -5771,12 +5777,42 @@ function tellNativeHome() {
 var editsOpen = false;
 window.creatrrEditsShown = function (on) { editsOpen = !!on; paintHomeTabs(); };
 function paintHomeTabs() { document.querySelectorAll(".home-tabs .ht").forEach(b => b.classList.toggle("on", b.dataset.home === (editsOpen ? "edits" : homeMode))); }
-document.addEventListener("click", e => {
+function closeEdits() {
   if (!editsOpen) return;
-  if (e.target.closest && e.target.closest('.ht[data-home="edits"]')) return;
   editsOpen = false; paintHomeTabs();
   try { window.webkit.messageHandlers.creatrrEditrr.postMessage("close"); } catch (x) {}
+}
+document.addEventListener("click", e => {
+  if (!editsOpen || !e.target.closest) return;
+  if (e.target.closest('.ht[data-home="edits"]')) return;
+  /* your account menu opens right over Edits (and taps inside a sheet over it leave Edits alone) */
+  if (e.target.closest("#accountBtn, #bellBtn")) { menuOverEdits(true); return; }
+  if (e.target.closest(".modal")) return;
+  closeEdits();
 }, true);
+/* A menu over Edits: the page comes in front of editrr with everything under the tabs see-through,
+   so the sheet slides up over Edits instead of leaving it. Closing the sheet puts editrr back on top. */
+function menuOverEdits(on) {
+  const bc = document.body.classList;
+  if (on === bc.contains("menu-over-edits")) return;
+  if (on) {
+    const tabs = document.querySelector("#projectsView .home-tabs");
+    document.documentElement.style.setProperty("--edits-top", (tabs ? Math.round(tabs.getBoundingClientRect().bottom + 6) : 0) + "px");
+  }
+  bc.toggle("menu-over-edits", on);
+  try { window.webkit.messageHandlers.creatrrMenu.postMessage(on ? "open" : "close"); } catch (x) {}
+}
+(function () {
+  /* a fresh page (after signing out, say) starts with editrr back on top */
+  try { window.webkit.messageHandlers.creatrrMenu.postMessage("close"); } catch (x) {}
+  const watch = () => {
+    if (!document.body.classList.contains("menu-over-edits")) return;
+    if (!document.querySelector("#accountModal:not(.hidden), #notesModal:not(.hidden)")) menuOverEdits(false);
+  };
+  const obs = new MutationObserver(watch);
+  const hook = () => ["accountModal", "notesModal"].forEach(id => { const el = $(id); if (el) obs.observe(el, { attributes: true, attributeFilter: ["class"] }); });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook); else hook();
+})();
 function setTier(t) {
   if (!TIERS[t]) return;
   TIER = t; try { localStorage.setItem("producrr_tier", t); } catch (e) {}
@@ -8723,7 +8759,7 @@ var TOUR = (function () {
   function replay() { if (BAND_CODE) { build(); start(0); return; } ["settingsModal", "accountModal"].forEach(m => { const el = $(m); if (el) el.classList.add("hidden"); }); if (project) goToProjects().then(() => start(0)); else start(0); }
   return { boot, replay };
 })();
-document.addEventListener("click", e => { if (e.target.closest("#tourReplayBtn, #tourReplayBtn2, #tourReplayBtn3")) TOUR.replay(); });
+document.addEventListener("click", e => { if (e.target.closest("#tourReplayBtn, #tourReplayBtn2, #tourReplayBtn3")) { closeEdits(); TOUR.replay(); } });
 
 
 /* ================= band share link =================
@@ -9019,9 +9055,12 @@ async function checkBandNotes() {
   bandNotes = out; paintBell();
 }
 function paintBell() {
-  const b = $("bellBtn"), d = $("bellDot"); if (!b || BAND_CODE) return;
-  b.classList.remove("hidden");
+  if (BAND_CODE) return;
   const n = bandNotes.length + inboxList().length;
+  /* the app: your account button's red dot is the one sign that something's new */
+  const a = $("accountBtn"); if (a) a.classList.toggle("has-notes", n > 0);
+  const b = $("bellBtn"), d = $("bellDot"); if (!b) return;
+  b.classList.remove("hidden");
   d.textContent = n; d.classList.toggle("hidden", !n);
 }
 async function markNoteSeen(n) {
@@ -9032,22 +9071,42 @@ async function markNoteSeen(n) {
 }
 const mb = n => (n / 1048576 >= 0.1 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
 async function renderNotes(msg) {
-  const el = $("notesInner"), files = inboxList();
+  /* the app shows them at the top of your account menu; the browser keeps its own sheet */
+  const inMenu = $("acctNotes"), el = inMenu || $("notesInner"), files = inboxList();
   const artists = files.length ? (await listProjects()).filter(r => r && r.type === "artist" && !String(r.id).startsWith("band_")).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) : [];
   if (!artists.some(a => a.id === inboxPick)) inboxPick = (project && project.type === "artist" ? project.id : "") || (artists[0] && artists[0].id) || "";
   const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
   const notes = bandNotes.length ? bandNotes.map((n, i) => {
     const bits = [n.songs ? plural(n.songs, "song") : "", n.sections ? plural(n.sections, "section") : "", n.photo ? "a band photo" : "", n.refs ? plural(n.refs, "inspiration photo") : ""].filter(Boolean);
     return `<button type="button" class="note-row" data-note="${i}"><b>${esc(n.name)} uploaded their page</b><span>${esc(bits.join(" · ") || "Their details are ready")}</span><span class="note-go">Tap to review and import</span></button>`;
-  }).join("") : `<p class="muted" style="margin:6px 0 0">Nothing new. When a band finishes their link, it shows up here.</p>`;
+  }).join("") : inMenu ? "" : `<p class="muted" style="margin:6px 0 0">Nothing new. When a band finishes their link, it shows up here.</p>`;
   const shared = files.length ? `<h3 style="margin-top:20px">Shared audio</h3>
     <p class="modal-hint">Files you shared to creatrr. Pick the artist, then tap Add as song.</p>
     ${artists.length ? `<select id="inboxArtist" class="field" aria-label="Artist">${artists.map(a => `<option value="${esc(a.id)}"${a.id === inboxPick ? " selected" : ""}>${esc(a.docTitle || "Untitled artist")}</option>`).join("")}</select>` : `<p class="muted small">Create an artist first, then you can add these as songs.</p>`}
     ${files.map(f => `<div class="inbox-row"><div><b>${esc(songNameFromFile(f.name))}</b><span>${esc(f.name)} · ${mb(f.size)}</span></div><button type="button" class="btn small primary" data-inbox-add="${esc(f.id)}"${artists.length ? "" : " disabled"}>Add as song</button><button type="button" class="btn small" data-inbox-rm="${esc(f.id)}" aria-label="Remove">×</button></div>`).join("")}
     <p class="muted small" id="inboxMsg" style="margin:8px 0 0">${esc(msg || "")}</p>` : (msg ? `<p class="muted small" id="inboxMsg">${esc(msg)}</p>` : "");
+  if (inMenu) {
+    inMenu.innerHTML = notes || shared ? `<p class="sect" style="margin-top:4px">New for you</p>${notes}${shared}` : "";
+    inMenu.classList.toggle("hidden", !(notes || shared));
+    return;
+  }
   el.innerHTML = `<div class="grab" aria-hidden="true"></div><h3>Notifications</h3>${notes}${shared}`;
 }
-async function openNotes(msg) { await checkBandNotes(); await renderNotes(msg); $("notesModal").classList.remove("hidden"); }
+async function openNotes(msg) {
+  await checkBandNotes();
+  /* the app: they're in your account menu */
+  if ($("acctNotes") && $("accountBtn")) {
+    if ($("accountModal").classList.contains("hidden")) $("accountBtn").click();
+    await renderNotes(msg); return;
+  }
+  await renderNotes(msg); $("notesModal").classList.remove("hidden");
+}
+/* opening your account menu brings in anything new (shared audio, finished band links) */
+document.addEventListener("click", async e => {
+  if (!e.target.closest("#accountBtn") || !$("acctNotes")) return;
+  await renderNotes();
+  await inboxDrainNative(); await checkBandNotes(); renderNotes();
+});
 document.addEventListener("click", async e => {
   if (e.target.closest("#bellBtn")) { await inboxDrainNative(); openNotes(); return; }
     const add = e.target.closest("[data-inbox-add]");
@@ -9057,6 +9116,8 @@ document.addEventListener("click", async e => {
   const row = e.target.closest("[data-note]"); if (!row) return;
   const n = bandNotes[+row.dataset.note]; if (!n) return;
   $("notesModal").classList.add("hidden");
+  const am = $("accountModal"); if (am) am.classList.add("hidden");
+  closeEdits();
   try { if (project) await goToProjects(); await openProject(n.id); await markNoteSeen(n); openShare(); } catch (er) {}
 });
 document.addEventListener("change", e => { if (e.target.id === "inboxArtist") inboxPick = e.target.value; });

@@ -657,8 +657,6 @@ struct CaptureView: View {
     let songName: String
     /// The section being filmed (Verse, Chorus...), shown under the song's name.
     let partName: String?
-    /// The most takes this time (10 videos in a project, minus any already picked).
-    let maxTakes: Int
     let done: ([CapturedTake]) -> Void
     /// Shoot: keep the takes as a draft project instead of editing now (the X asks).
     let draft: (([CapturedTake]) -> Void)?
@@ -689,13 +687,12 @@ struct CaptureView: View {
     /// Every take starts in the same place: there's no picking another spot here.
     init(song: AVAsset, length: Double, songName: String, parts: [CreatrrPart] = [],
          part: CreatrrPart.ID? = nil, start: Double? = nil, end: Double? = nil,
-         partName: String? = nil, tempo: CaptureTempo? = nil, maxTakes: Int = 10,
+         partName: String? = nil, tempo: CaptureTempo? = nil,
          draft: (([CapturedTake]) -> Void)? = nil, done: @escaping ([CapturedTake]) -> Void) {
         self.songName = songName
         self.partName = partName
         self.draft = draft
         let usable = parts.filter { $0.time < length }
-        self.maxTakes = max(1, maxTakes)
         self.done = done
         let model = CaptureModel(song: song, length: length, tempo: tempo)
         if let part, let index = usable.firstIndex(where: { $0.id == part }) {
@@ -710,8 +707,6 @@ struct CaptureView: View {
         _capture = State(initialValue: model)
     }
 
-    private var full: Bool { capture.takes.count >= maxTakes }
-
     /// The phone is held the wrong way for what's being filmed: sideways while filming vertical,
     /// or upright while filming horizontal. Said big, and Record waits until it's right.
     private var heldWrong: Bool { capture.wide ? !tilt.isLandscape : tilt.isLandscape }
@@ -723,7 +718,6 @@ struct CaptureView: View {
 
     private var recordLabel: String {
         if capture.recording { return "Stop" }
-        if full { return "That's \(maxTakes) takes" }
         if heldWrong { return capture.wide ? "Turn your phone sideways to record" : "Hold your phone upright to record" }
         return "Record to the song"
     }
@@ -803,7 +797,7 @@ struct CaptureView: View {
             }
 
             if reviewing {
-                TakesReview(takes: capture.takes, maxTakes: maxTakes,
+                TakesReview(takes: capture.takes,
                             filmMore: { withAnimation(.snappy) { reviewing = false } },
                             delete: { capture.dropTake($0) },
                             use: { finish() })
@@ -1008,7 +1002,7 @@ struct CaptureView: View {
                 Button { withAnimation(.snappy) { menuOpen = false; reviewing = true } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "square.stack")
-                        Text("\(capture.takes.count) of \(maxTakes)")
+                        Text(capture.takes.count == 1 ? "1 take" : "\(capture.takes.count) takes")
                             .monospacedDigit()
                         Image(systemName: "chevron.right")
                             .font(.subheadline.weight(.bold))
@@ -1046,8 +1040,8 @@ struct CaptureView: View {
                 }
             }
             .buttonStyle(.plain)
-            .disabled(!capture.ready || (!capture.recording && (full || heldWrong)))
-            .opacity(capture.ready && (capture.recording || (!full && !heldWrong)) ? 1 : 0.4)
+            .disabled(!capture.ready || (!capture.recording && heldWrong))
+            .opacity(capture.ready && (capture.recording || !heldWrong) ? 1 : 0.4)
             .accessibilityLabel(recordLabel)
             .sensoryFeedback(.impact, trigger: capture.recording)
             menuButton

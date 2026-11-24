@@ -197,7 +197,7 @@ struct ShootSongSheet: View {
                     .font(.title2.weight(.bold))
                     .padding(.top, 22)
                 Text(forMusic ? "Pick a song, then the whole song or one section. It starts at the playhead."
-                              : "Pick a song, then the part to film. Up to 10 takes, each lined up to the song.")
+                              : "Pick a song, then the part to film. As many takes as you like, each lined up to the song.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
