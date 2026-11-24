@@ -713,6 +713,13 @@ struct CaptureView: View {
     @State private var menuOpen = false
     /// Your takes, big, before you use them (like Photos).
     @State private var reviewing = false
+    /// A small picture of each take, for the Polaroids.
+    @State private var thumbs: [CapturedTake.ID: UIImage] = [:]
+    /// The white flash when a take ends (1 is all white).
+    @State private var flash = 0.0
+    /// The newest Polaroid, developing from white to its picture (0 to 1).
+    @State private var developing: CapturedTake.ID?
+    @State private var develop = 1.0
     /// A short note over the record button (the count-in and click need a tempo).
     @State private var note: String?
     /// The zoom when a pinch began.
@@ -814,6 +821,13 @@ struct CaptureView: View {
             }
             .foregroundStyle(.white)
 
+            // A take just ended: the screen flashes white, like a camera, and fades back.
+            Color.white
+                .opacity(flash)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
             // The count-in: 4, 3, 2, 1 big in the middle.
             if let beat = capture.countBeat {
                 Text("\(beat)")
@@ -911,6 +925,35 @@ struct CaptureView: View {
         }
         .onChange(of: capture.recording) { _, recording in
             if recording { menuOpen = false; note = nil; wheelOn = false }
+        }
+        .onChange(of: capture.takes.map(\.id)) { old, new in
+            // A new take (not one thrown away): flash, and its Polaroid develops.
+            guard let newest = capture.takes.last, !old.contains(newest.id) else { return }
+            tookPicture(newest)
+        }
+    }
+
+    /// The flash, then the new Polaroid slowly shows its picture, white first.
+    private func tookPicture(_ take: CapturedTake) {
+        flash = 0.9
+        developing = take.id
+        develop = 0
+        Task {
+            try? await Task.sleep(for: .milliseconds(60))
+            withAnimation(.easeOut(duration: 0.7)) { flash = 0 }
+            await loadThumb(take)
+            guard developing == take.id else { return }
+            withAnimation(.easeIn(duration: 3)) { develop = 1 }
+        }
+    }
+
+    private func loadThumb(_ take: CapturedTake) async {
+        guard thumbs[take.id] == nil else { return }
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: take.url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 160, height: 160)
+        if let frame = try? await generator.image(at: CMTime(seconds: 0.5, preferredTimescale: 600)) {
+            thumbs[take.id] = UIImage(cgImage: frame.image)
         }
     }
 
@@ -1031,38 +1074,75 @@ struct CaptureView: View {
             .frame(height: 38)
             .shadow(color: .black.opacity(0.5), radius: 4)
         } else if !capture.takes.isEmpty {
-            HStack(spacing: 10) {
-                // Film the last take again.
-                Button { capture.retake() } label: {
-                    Label("Retake", systemImage: "arrow.counterclockwise")
-                        .font(.headline)
-                        .padding(.horizontal, 14)
-                        .frame(height: 38)
-                        .background(Capsule().strokeBorder(.white.opacity(0.8), lineWidth: 1.5))
-                        .background(Capsule().fill(.black.opacity(0.3)))
-                }
-                .buttonStyle(.plain)
-                .disabled(!capture.ready || heldWrong)
-                .accessibilityLabel("Retake the last take")
-                // See the takes (and delete any, film more, or use them).
-                Button { withAnimation(.snappy) { menuOpen = false; reviewing = true } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.stack")
-                        Text(capture.takes.count == 1 ? "1 take" : "\(capture.takes.count) takes")
-                            .monospacedDigit()
-                        Image(systemName: "chevron.right")
-                            .font(.subheadline.weight(.bold))
-                    }
+            // Film the last take again, in the middle under the title.
+            Button { capture.retake() } label: {
+                Label("Retake", systemImage: "arrow.counterclockwise")
                     .font(.headline)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 18)
                     .frame(height: 38)
-                    .background(Capsule().fill(Tint.accent))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("See your \(capture.takes.count) \(capture.takes.count == 1 ? "take" : "takes")")
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                    .contentShape(Capsule())
             }
+            .buttonStyle(.plain)
+            .environment(\.colorScheme, .dark)
+            .disabled(!capture.ready || heldWrong)
+            .accessibilityLabel("Retake the last take")
         }
+    }
+
+    /// Your last three takes, bottom right, like a little stack of Polaroids with the newest on
+    /// top. Tap it to see them all.
+    private var takesStack: some View {
+        let latest = Array(capture.takes.suffix(3))
+        let count = capture.takes.count
+        return Button { withAnimation(.snappy) { menuOpen = false; reviewing = true } } label: {
+            ZStack {
+                ForEach(Array(latest.enumerated()), id: \.element.id) { index, take in
+                    // 0 is the top one; the ones under it peek out, tilted.
+                    let depth = latest.count - 1 - index
+                    polaroid(take, count: depth == 0 ? count : nil)
+                        .rotationEffect(.degrees(depth == 0 ? 0 : (depth == 1 ? -8 : 7)))
+                        .offset(x: CGFloat(depth) * -3, y: CGFloat(depth) * -2)
+                        .zIndex(Double(index))
+                }
+            }
+            .frame(width: 58, height: 70)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(capture.recording || count == 0 ? 0 : 1)
+        .disabled(capture.recording || count == 0)
+        .accessibilityLabel(count == 1 ? "See your take" : "See your \(count) takes")
+    }
+
+    /// One take as a Polaroid: white all round, a wider strip at the bottom (with the number of
+    /// takes on the top one).
+    private func polaroid(_ take: CapturedTake, count: Int?) -> some View {
+        let fresh = take.id == developing
+        return VStack(spacing: 0) {
+            ZStack {
+                Color(white: 0.93)
+                if let image = thumbs[take.id] {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .saturation(fresh ? develop : 1)
+                        .opacity(fresh ? develop : 1)
+                }
+            }
+            .frame(width: 38, height: 48)
+            .clipped()
+            Text(count.map { "\($0)" } ?? "")
+                .font(.system(size: 10, weight: .bold).monospacedDigit())
+                .foregroundStyle(.black.opacity(0.65))
+                .frame(width: 38, height: 13)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
+        .background(Color.white)
+        .shadow(color: .black.opacity(0.45), radius: 3, y: 1)
+        .task(id: take.id) { await loadThumb(take) }
     }
 
     /// Count-in and click on the left, record in the middle, the menu on the right. That's all.
@@ -1090,8 +1170,11 @@ struct CaptureView: View {
             .opacity(capture.ready && (capture.recording || !heldWrong) ? 1 : 0.4)
             .accessibilityLabel(recordLabel)
             .sensoryFeedback(.impact, trigger: capture.recording)
-            menuButton
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 16) {
+                menuButton
+                takesStack
+            }
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
