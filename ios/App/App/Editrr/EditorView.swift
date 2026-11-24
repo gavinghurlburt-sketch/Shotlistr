@@ -55,6 +55,13 @@ struct EditorView: View {
                 Task { await model.finishShoot(plan, takes: takes) }
             }
         }
+        // Film more: new takes into the open performance.
+        .fullScreenCover(item: $model.morePlan) { plan in
+            CaptureView(song: plan.song, length: plan.length, songName: plan.songName, parts: plan.parts,
+                        start: plan.start, end: plan.end, tempo: plan.tempo, maxTakes: plan.room) { takes in
+                Task { await model.addTakes(takes) }
+            }
+        }
         // A section's red record button in creatrr.
         .onReceive(NotificationCenter.default.publisher(for: .editrrShoot)) { _ in takeShoot() }
         .onAppear {
@@ -1408,6 +1415,9 @@ struct EditingView: View {
             mirrorTool
             ToolItem(icon: "wand.and.stars", text: "Auto edit") { autoEditing = true }
             shuffleTool
+            // Film more takes to the song; they come in as new videos, lined up.
+            ToolItem(icon: "video.badge.plus", text: "Film more", enabled: model.canFilmMore,
+                     spoken: "Film more takes to the song. They come in lined up") { model.filmMore() }
             // Remix: another cut from the same takes, kept as its own post. This cut stays.
             ToolItem(icon: "square.stack.3d.up", text: "Remix", enabled: model.busy == nil,
                      spoken: "Remix: make another cut as a new post. This one stays as it is") {

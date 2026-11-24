@@ -458,6 +458,105 @@ final class EditorModel {
             problem = "10 videos is the most, so some takes are left out."
         }
     }
+    // MARK: Film more (takes into an open performance)
+
+    /// The camera for an open performance: its song, from In to Out, with room for this many takes.
+    struct MorePlan: Identifiable {
+        let id = UUID()
+        let song: AVAsset
+        let length: Double
+        let songName: String
+        let parts: [CreatrrPart]
+        let tempo: CaptureTempo?
+        let start: Double
+        let end: Double?
+        let room: Int
+    }
+    var morePlan: MorePlan?
+
+    /// A performance to a song, with room for another video.
+    var canFilmMore: Bool {
+        kind == .performance && soundtrack != nil && songSource != nil && laneCount < Self.maxLayers && busy == nil
+    }
+
+    /// Film more: opens the camera at the song, where this edit's In point is.
+    func filmMore() {
+        guard canFilmMore, let soundtrack else {
+            if kind == .performance && laneCount >= Self.maxLayers {
+                notice = "\(Self.maxLayers) lanes is the most (videos and text together)."
+            }
+            return
+        }
+        pause()
+        // The creatrr song it was made from, for the sections, count-in and click.
+        let song = CreatrrLibrary.songs().first { $0.name.lowercased() == soundtrack.name.lowercased() }
+        // Timeline time is song time + shift.
+        let from = max(0, inPoint - soundtrack.shift)
+        let to = outPoint - soundtrack.shift
+        morePlan = MorePlan(song: soundtrack.asset, length: soundtrack.length, songName: soundtrack.name,
+                            parts: song?.parts ?? [], tempo: song?.tempo, start: from,
+                            end: to > from + 1 ? to : nil, room: Self.maxLayers - laneCount)
+    }
+
+    /// New takes go on as new videos, each lined up by where the song was when it was filmed
+    /// (the song in its sound fine-tunes it). The cut stays as it is; they're ready to cut to.
+    func addTakes(_ takes: [CapturedTake]) async {
+        guard !takes.isEmpty, let soundtrack, let project = currentProject, kind == .performance else { return }
+        pause()
+        problem = nil
+        busy = "Adding your takes…"
+        defer { busy = nil }
+        let before = snapshot()
+        let reference = soundtrack.sound
+        var added = 0
+        for take in takes where laneCount < Self.maxLayers {
+            let source = ProjectStore.adopt(.file(take.url.path), into: project.id)
+            guard let url = ProjectStore.url(of: source, in: project.id),
+                  var layer = try? await Self.makeLayer(id: layers.count, from: AVURLAsset(url: url)) else { continue }
+            layer.sound = try? await SoundReader.read(layer.asset)
+            let hint = take.hint
+            // Where the song's sound in the take fits, at the speed it was filmed to.
+            let heard = layer.sound
+            let match: SoundMatch? = await Task.detached(priority: .userInitiated) { () -> SoundMatch? in
+                guard let reference, let heard else { return nil }
+                let at = hint.speed != 1 ? heard.stretched(by: hint.speed) : heard
+                let primary = LineUp.prepare(reference).flatMap { LineUp.match(at, to: $0) }
+                let backup = FluxLineUp.prepare(reference).flatMap { FluxLineUp.scored(at, to: $0) }
+                return SoundMatch.combine(primary, backup?.lag)
+            }.value
+            if hint.speed != 1, let changed = await Self.withSpeed(layer, hint.speed) { layer = changed }
+            // Recorded here: the place is known. Only a spot close to it counts, so a repeated
+            // chorus can't move it. Places count from the song's first sound, like a new edit's.
+            let known = hint.songTime - soundtrack.trackStart
+            var place = known
+            if let sound = layer.sound, let match {
+                let lead = layer.trackStart - sound.start
+                let spots = ([match.lag] + match.others).map { $0 + lead }
+                if let near = spots.min(by: { abs($0 - known) < abs($1 - known) }), abs(near - known) <= 0.35 {
+                    place = near
+                }
+            }
+            layer.offset = place + soundtrack.trackStart + soundtrack.shift
+            layer.sync = .matched
+            layer.video = videoSources.count
+            videoSources.append(source)
+            layers.append(layer)
+            added += 1
+        }
+        guard added > 0 else {
+            problem = "Those takes couldn't be added. Try filming again."
+            return
+        }
+        history.append(before)
+        future = []
+        rebuildAll()
+        scheduleSave()
+        let left = takes.count - added
+        notice = (added == 1 ? "1 take added as video \(layers.count)." : "\(added) takes added.")
+            + (left > 0 ? " \(Self.maxLayers) lanes is the most, so \(left) didn't fit." : "")
+            + " Cut to it, or run Auto edit again."
+    }
+
     /// Where the open project's videos and song come from (layers point in by `video`).
     @ObservationIgnored private var videoSources: [MediaSource] = []
     @ObservationIgnored private var songSource: MediaSource?
