@@ -1724,6 +1724,8 @@ protocol LyricTapping: AnyObject {
     func lyricTapCleanUp()
     func lyricTap()
     func lyricTapBack()
+    /// Stops the song mid-tapping, keeping every tap so far.
+    func lyricTapStop()
     func lyricTapRestart()
     func lyricTapCheck(_ on: Bool)
     func setSyllables(_ index: Int, _ count: Int)
@@ -1735,8 +1737,9 @@ extension EditorModel: LyricTapping {}
 /// Tap the lyrics' timing, full screen: the song's waveform and the word blocks on top (they
 /// move as you tap), then the words: the one before in green with a check, the one being recorded
 /// big in yellow, and the ones coming up in white. A word of more than one syllable takes a tap
-/// for each (its dots fill as you tap). Play back plays it all to check before Done; Back takes the
-/// last word off and Start over takes them all off. A tall pad for each thumb at the bottom.
+/// for each (its dots fill as you tap). Stop stops the song mid-tapping; Previous steps back a word
+/// at a time to tap again from there; Play back plays it all to check before Done; Start over takes
+/// them all off. A tall pad for each thumb at the bottom.
 struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
     let model: Model
     /// The song's waveform and the word blocks.
@@ -1803,27 +1806,35 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
         .frame(height: 44)
     }
 
-    /// Back (the last word off), Play back (check it with the music), Clean up (the AI nudges the
+    /// Previous (a word back), Stop (while tapping) or Play back (check it with the music), Clean up (the AI nudges the
     /// taps toward the singing, a second at most), Start over (all of them off).
     private func tryAgainRow(count: Int) -> some View {
         let dim: Color = Color.white.opacity(0.3)
         let none: Bool = count == 0
         let checking = model.tapChecking
+        let tapping = model.isPlaying && !checking
         let cleaned = model.tapCleaned
         let busy = model.tapCleanBusy
         return HStack(spacing: 0) {
+            // Previous: a word back each press (stopping the song first). The word before plays in,
+            // and the next tap starts the word taken off. The taps before it stay.
             Button { model.lyricTapBack() } label: {
-                TapRowLabel(title: "Back", icon: "arrow.uturn.backward")
+                TapRowLabel(title: "Previous", icon: "backward.end.fill")
             }
             .foregroundStyle(none ? dim : Color.white)
             .disabled(none)
-            .accessibilityHint("Takes the last word off to do it again")
-            Button { model.lyricTapCheck(!checking) } label: {
-                TapRowLabel(title: checking ? "Stop" : "Play back", icon: checking ? "stop.fill" : "play.fill")
+            .accessibilityHint("Goes back a word to tap it again. The words before it keep their timing")
+            // While tapping, this stops the song where it is; otherwise it plays the taps back.
+            Button {
+                if tapping { model.lyricTapStop() } else { model.lyricTapCheck(!checking) }
+            } label: {
+                TapRowLabel(title: tapping || checking ? "Stop" : "Play back",
+                            icon: tapping || checking ? "stop.fill" : "play.fill")
             }
-            .foregroundStyle(none ? dim : Tint.accent)
-            .disabled(none)
-            .accessibilityHint("Plays from the start with the words as you tapped them")
+            .foregroundStyle(tapping ? Color.white : (none ? dim : Tint.accent))
+            .disabled(none && !tapping)
+            .accessibilityHint(tapping ? "Stops the song. Your taps stay"
+                               : "Plays from the start with the words as you tapped them")
             Button { model.lyricTapCleanUp() } label: {
                 if busy {
                     VStack(spacing: 4) {

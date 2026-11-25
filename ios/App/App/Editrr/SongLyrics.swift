@@ -386,6 +386,13 @@ final class SongLyricsModel: LyricTapping {
         tapLastAt = -1
     }
 
+    /// Stop: the song stops where it is, every tap so far kept.
+    func lyricTapStop() {
+        guard tapTiming, !tapChecking else { return }
+        pause()
+        tapLastAt = -1
+    }
+
     func lyricTapRestart() {
         guard tapTiming, let before = tapBefore else { return }
         pause()

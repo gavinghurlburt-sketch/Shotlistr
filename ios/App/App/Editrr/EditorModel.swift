@@ -4231,6 +4231,14 @@ final class EditorModel {
         lyricsLive.update(words: lyrics, style: lyricStyle)
     }
 
+    /// Stop: the song stops where it is, every tap so far kept. A pad plays on from there;
+    /// Previous steps back a word at a time.
+    func lyricTapStop() {
+        guard tapTiming, !tapChecking else { return }
+        pause()
+        tapLastAt = -1
+    }
+
     /// How many words have been tapped this go.
     var lyricTapCount: Int { tapTiming ? max(0, tapNext - tapFirst) : 0 }
 
