@@ -38,8 +38,8 @@ enum EditorTip: String {
             ["Tap Play, then tap either pad on the beat. Each tap is a cut.",
              "Done picks a take for each cut. Cancel leaves your edit as it was."]
         case .lyricTap:
-            ["Tap Play, then tap either pad as each word is sung. A word with more than one syllable takes a tap for each.",
-             "Mess up? Tap Stop, then Previous to go back a word at a time, and tap on from there. Play back checks it with the music, from the start or from wherever you drag the song to. Done keeps it."]
+            ["Tap Play, then tap either pad as each word is sung. A word with more than one syllable takes a tap for each (tap its dots to change how many).",
+             "Mess up? Tap Stop, then Previous to go back a word at a time, and tap on from there. Play back checks it with the music, from the start or from wherever you drag the song to. One word off? Hold it up top and drag it. Done keeps it."]
         }
     }
 

@@ -610,6 +610,9 @@ final class EditorModel {
     @ObservationIgnored private var tapFrom: Double = 0
     /// The playhead was dragged since the last tap: Play back plays from there, not the start.
     @ObservationIgnored private var tapPlayFromHere = false
+    /// Something was changed by hand this go (a word's taps, a word moved): kept and saved even
+    /// with no taps.
+    @ObservationIgnored private var tapByHand = false
     @ObservationIgnored private var lyricDragStart: (state: EditState, word: LyricWord)?
 
     init() {
@@ -4136,6 +4139,7 @@ final class EditorModel {
         tapLastAt = -1
         tapChecking = false
         tapPlayFromHere = false
+        tapByHand = false
         tapTiming = true
         forgetCleanUp()
         let at = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
@@ -4285,7 +4289,25 @@ final class EditorModel {
         guard lyrics.indices.contains(index) else { return }
         let value = min(6, max(1, count))
         lyrics[index].syl = value == LyricSyllables.guess(lyrics[index].text) ? nil : value
-        if !tapTiming { scheduleSave() }
+        if tapTiming { keepByHand(index, times: false) } else { scheduleSave() }
+    }
+
+    /// A change made by hand while tapping (a word's taps, a word moved) stays whatever happens to
+    /// this go's taps after it: Previous, Start over, Undo clean up and Cancel don't take it back.
+    private func keepByHand(_ i: Int, times: Bool) {
+        guard lyrics.indices.contains(i) else { return }
+        let word = lyrics[i]
+        func apply(_ words: inout [LyricWord]?) {
+            guard words?.indices.contains(i) == true else { return }
+            words?[i].syl = word.syl
+            if times {
+                words?[i].start = word.start
+                words?[i].end = word.end
+            }
+        }
+        apply(&tapBefore)
+        apply(&tapRaw)
+        tapByHand = true
     }
 
     /// Done keeps the tapped times (one Undo takes them all back); Cancel puts the words back.
@@ -4300,8 +4322,11 @@ final class EditorModel {
         tapBefore = nil
         var timed = lyrics
         lyrics = before
+        let byHand = tapByHand
+        tapByHand = false
         guard keep, tapNext > tapFirst else {
             lyricsLive.update(words: lyrics, style: lyricStyle)
+            if byHand { syncLyrics(); scheduleSave() }
             return
         }
         // The last tapped word ends before the next untapped one starts.
@@ -4468,9 +4493,15 @@ final class EditorModel {
             lyricDrag = nil
             return
         }
+        let dragged = lyricDrag?.index
         lyricDragStart = nil
         lyricDrag = nil
         guard lyrics != start.state.lyrics else { return }
+        if tapTiming, let index = dragged {
+            // While tapping: kept through the go's taps, and saved with them at Done.
+            keepByHand(index, times: true)
+            return
+        }
         history.append(start.state)
         syncLyrics()
         scheduleSave()

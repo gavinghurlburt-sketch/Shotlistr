@@ -101,6 +101,9 @@ final class SongLyricsModel: LyricTapping {
     @ObservationIgnored private var tapFrom: Double = 0
     /// The playhead was dragged since the last tap: Play back plays from there, not the start.
     @ObservationIgnored private var tapPlayFromHere = false
+    /// Something was changed by hand this go (a word's taps, a word moved): kept and saved even
+    /// with no taps.
+    @ObservationIgnored private var tapByHand = false
     @ObservationIgnored private var tapLastAt: Double = -1
     /// When the last pad tap landed (phone clock), to drop a bounce right after it.
     @ObservationIgnored private var tapLastPress: Double = 0
@@ -327,6 +330,7 @@ final class SongLyricsModel: LyricTapping {
         tapLastAt = -1
         tapChecking = false
         tapPlayFromHere = false
+        tapByHand = false
         tapTiming = true
         forgetCleanUp()
         let at: Double = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
@@ -441,7 +445,67 @@ final class SongLyricsModel: LyricTapping {
         guard lyrics.indices.contains(index) else { return }
         let value = min(6, max(1, count))
         lyrics[index].syl = value == LyricSyllables.guess(lyrics[index].text) ? nil : value
-        if !tapTiming { save() }
+        if tapTiming { keepByHand(index, times: false) } else { save() }
+    }
+
+    /// A change made by hand while tapping (a word's taps, a word moved) stays whatever happens to
+    /// this go's taps after it: Previous, Start over, Undo clean up and Cancel don't take it back.
+    private func keepByHand(_ i: Int, times: Bool) {
+        guard lyrics.indices.contains(i) else { return }
+        let word = lyrics[i]
+        func apply(_ words: inout [LyricWord]?) {
+            guard words?.indices.contains(i) == true else { return }
+            words?[i].syl = word.syl
+            if times {
+                words?[i].start = word.start
+                words?[i].end = word.end
+            }
+        }
+        apply(&tapBefore)
+        apply(&tapRaw)
+        tapByHand = true
+    }
+
+    // MARK: Moving a word by hand
+
+    /// The word being moved, as it was when the hold began, and all the words then (for Undo).
+    @ObservationIgnored private var wordDrag: (index: Int, word: LyricWord, before: [LyricWord])?
+    /// The word lifted to move it (drawn outlined).
+    var movingWord: Int?
+
+    /// Hold a word to lift it, then drag to move it. The song stops while it's moved.
+    func beginWordDrag(_ index: Int) {
+        guard lyrics.indices.contains(index), wordDrag == nil, !tapChecking else { return }
+        pause()
+        wordDrag = (index: index, word: lyrics[index], before: lyrics)
+        movingWord = index
+    }
+
+    /// The finger has moved this many seconds since the hold. Words keep their order.
+    func dragWord(by seconds: Double) {
+        guard let drag = wordDrag, lyrics.indices.contains(drag.index) else { return }
+        let i = drag.index
+        let floor = i > 0 ? lyrics[i - 1].start + 0.03 : 0
+        let ceiling = i + 1 < lyrics.count ? lyrics[i + 1].start - 0.03 : duration
+        let length = drag.word.end - drag.word.start
+        let begin = min(max(drag.word.start + seconds, floor), max(floor, ceiling))
+        lyrics[i].start = begin
+        lyrics[i].end = begin + length
+    }
+
+    func endWordDrag() {
+        guard let drag = wordDrag else { return }
+        wordDrag = nil
+        movingWord = nil
+        guard lyrics != drag.before else { return }
+        if tapTiming {
+            // While tapping: kept through the go's taps, and saved with them at Done.
+            keepByHand(drag.index, times: true)
+            return
+        }
+        let moved = lyrics
+        lyrics = drag.before
+        change(moved)
     }
 
     /// Done keeps the tapped times (Undo takes them all back); Cancel puts the words back.
@@ -456,7 +520,12 @@ final class SongLyricsModel: LyricTapping {
         tapBefore = nil
         var timed = lyrics
         lyrics = before
-        guard keep, tapNext > tapFirst else { return }
+        let byHand = tapByHand
+        tapByHand = false
+        guard keep, tapNext > tapFirst else {
+            if byHand { save() }
+            return
+        }
         // The last tapped word ends before the next untapped one starts.
         let last = tapNext - 1
         if timed.indices.contains(last), timed.indices.contains(last + 1), timed[last].end > timed[last + 1].start {
@@ -692,13 +761,34 @@ struct SongLyricsView: View {
 }
 
 /// The song's waveform with the words under it as blocks, moving past a playhead in the middle.
-/// Drag to move through the song.
+/// Drag to move through the song; hold a word, then drag, to move its timing by hand.
 struct SongLyricStrip: View {
     let model: SongLyricsModel
     @State private var dragFrom: Double?
 
     static let height: CGFloat = 130
     static let pixelsPerSecond: Double = 70
+    static let waveHeight: CGFloat = 56
+    static let rowTop: CGFloat = waveHeight + 14
+    static let rowHeight: CGFloat = 26
+
+    /// The word under a point (on its own row), with a little slop for short words.
+    private func word(at point: CGPoint, width: CGFloat) -> Int? {
+        let y = point.y - Self.rowTop
+        guard y >= 0 else { return nil }
+        let row = min(1, Int(y / (Self.rowHeight + 4)))
+        let middle = width / 2
+        let pps = Self.pixelsPerSecond
+        var best: (index: Int, distance: CGFloat)?
+        for (index, word) in model.lyrics.enumerated() where index % 2 == row {
+            let start = middle + CGFloat((word.start - model.time) * pps)
+            let end = middle + CGFloat((word.end - model.time) * pps)
+            guard point.x >= start - 8, point.x <= end + 8 else { continue }
+            let distance = point.x < start ? start - point.x : (point.x > end ? point.x - end : 0)
+            if distance < (best?.distance ?? .infinity) { best = (index, distance) }
+        }
+        return best?.index
+    }
 
     var body: some View {
         let time = model.time
@@ -706,11 +796,12 @@ struct SongLyricStrip: View {
         let sound = model.sound
         let duration = model.duration
         let now = model.nowIndex
+        let moving = model.movingWord
         let pps = Self.pixelsPerSecond
         return Canvas { context, size in
             let middle = size.width / 2
             func x(_ seconds: Double) -> CGFloat { middle + CGFloat((seconds - time) * pps) }
-            let waveHeight: CGFloat = 56
+            let waveHeight: CGFloat = Self.waveHeight
             let band = CGRect(x: x(0), y: 6, width: CGFloat(duration * pps), height: waveHeight)
             context.fill(Path(band), with: .color(SongTint.color))
             if let sound {
@@ -728,8 +819,8 @@ struct SongLyricStrip: View {
                 }
                 context.fill(path, with: .color(SongTint.wave))
             }
-            let rowTop: CGFloat = waveHeight + 14
-            let rowHeight: CGFloat = 26
+            let rowTop: CGFloat = Self.rowTop
+            let rowHeight: CGFloat = Self.rowHeight
             for (index, word) in words.enumerated() {
                 let startX = x(word.start)
                 let endX = x(word.end)
@@ -747,26 +838,45 @@ struct SongLyricStrip: View {
                                     .foregroundStyle(sung ? Color.black : Color.white),
                                 at: CGPoint(x: block.minX + 6, y: block.midY), anchor: .leading)
                 }
+                if moving == index {
+                    context.stroke(Path(block), with: .color(.white), lineWidth: 2)
+                }
             }
             context.fill(Path(CGRect(x: middle - 1, y: 0, width: 2, height: size.height)), with: .color(.white))
         }
         .background(Color.white.opacity(0.04))
-        .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 2)
-            .onChanged { drag in
-                if dragFrom == nil {
-                    dragFrom = model.time
-                    model.beginScrub()
-                }
-                let from = dragFrom ?? 0
-                model.scrub(to: from - Double(drag.translation.width) / pps)
+        .overlay {
+            GeometryReader { geo in
+                let width = max(geo.size.width, 1)
+                LaneTouches(
+                    lift: { point in
+                        guard let index = word(at: point, width: width) else { return false }
+                        model.beginWordDrag(index)
+                        return model.movingWord != nil
+                    },
+                    liftMoved: { travel in model.dragWord(by: Double(travel) / Self.pixelsPerSecond) },
+                    trimBegan: { _ in false },
+                    dropped: { model.endWordDrag() },
+                    swipeBegan: {
+                        dragFrom = model.time
+                        model.beginScrub()
+                    },
+                    swipeMoved: { travel in
+                        model.scrub(to: (dragFrom ?? model.time) - Double(travel) / Self.pixelsPerSecond)
+                    },
+                    swipeEnded: {
+                        dragFrom = nil
+                        model.endScrub()
+                    },
+                    tapped: { _ in },
+                    pinchBegan: {},
+                    pinched: { _ in },
+                    pinchEnded: {}
+                )
             }
-            .onEnded { _ in
-                dragFrom = nil
-                model.endScrub()
-            })
+        }
         .accessibilityElement()
-        .accessibilityLabel("The song and its words. Drag to move through the song.")
+        .accessibilityLabel("The song and its words. Drag to move through the song. Hold a word, then drag, to move it.")
     }
 }
 
