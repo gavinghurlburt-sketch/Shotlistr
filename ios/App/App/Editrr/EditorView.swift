@@ -1850,7 +1850,7 @@ struct LyricTapScreen<Model: LyricTapping, Top: View>: View {
             .foregroundStyle(tapping ? Color.white : (none ? dim : Tint.accent))
             .disabled(none && !tapping)
             .accessibilityHint(tapping ? "Stops the song. Your taps stay"
-                               : "Plays from the start with the words as you tapped them")
+                               : "Plays the words as you tapped them, from the start or from where you dragged the song to")
             Button { model.lyricTapCleanUp() } label: {
                 if busy {
                     VStack(spacing: 4) {

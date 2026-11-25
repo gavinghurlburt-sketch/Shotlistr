@@ -608,6 +608,8 @@ final class EditorModel {
     @ObservationIgnored private var tapFirst = 0
     /// Where the playhead was put when tapping started (Start over goes back there).
     @ObservationIgnored private var tapFrom: Double = 0
+    /// The playhead was dragged since the last tap: Play back plays from there, not the start.
+    @ObservationIgnored private var tapPlayFromHere = false
     @ObservationIgnored private var lyricDragStart: (state: EditState, word: LyricWord)?
 
     init() {
@@ -3300,6 +3302,7 @@ final class EditorModel {
 
     func beginScrub() {
         stopLookPreview()
+        if tapTiming && !tapChecking { tapPlayFromHere = true }
         scrubbing = true
         resumeAfterScrub = isPlaying
         if isPlaying { pause() }
@@ -4132,6 +4135,7 @@ final class EditorModel {
         tapSyllable = 0
         tapLastAt = -1
         tapChecking = false
+        tapPlayFromHere = false
         tapTiming = true
         forgetCleanUp()
         let at = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
@@ -4153,6 +4157,7 @@ final class EditorModel {
         tapSyllable = 0
         tapLastAt = -1
         tapChecking = false
+        tapPlayFromHere = false
         lyricSelected = nil
         forgetCleanUp()
         time = tapFrom
@@ -4181,6 +4186,7 @@ final class EditorModel {
         // Two taps closer than a couple of frames are one tap (both thumbs at once).
         if tapLastAt >= 0, abs(at - tapLastAt) < 0.06 { return }
         forgetCleanUp()
+        tapPlayFromHere = false
         // A word of more than one syllable takes a tap for each: these stay on the same word.
         let current = tapNext - 1
         if current >= tapFirst, lyrics.indices.contains(current), tapSyllable < LyricSyllables.count(lyrics[current]) {
@@ -4256,8 +4262,11 @@ final class EditorModel {
             tapChecking = true
             lyricSelected = nil
             lyricsLive.update(words: lyrics, style: lyricStyle)
-            time = tapFrom
-            requestSeek(tapFrom)
+            // From the start of this go, or from where the playhead was dragged to.
+            let from = tapPlayFromHere ? time : tapFrom
+            tapPlayFromHere = false
+            time = from
+            requestSeek(from)
             play()
             return
         }

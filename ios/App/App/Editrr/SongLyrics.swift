@@ -99,6 +99,8 @@ final class SongLyricsModel: LyricTapping {
     @ObservationIgnored private var tapBefore: [LyricWord]?
     @ObservationIgnored private var tapFirst = 0
     @ObservationIgnored private var tapFrom: Double = 0
+    /// The playhead was dragged since the last tap: Play back plays from there, not the start.
+    @ObservationIgnored private var tapPlayFromHere = false
     @ObservationIgnored private var tapLastAt: Double = -1
     /// When the last pad tap landed (phone clock), to drop a bounce right after it.
     @ObservationIgnored private var tapLastPress: Double = 0
@@ -186,6 +188,7 @@ final class SongLyricsModel: LyricTapping {
     }
 
     func beginScrub() {
+        if tapTiming && !tapChecking { tapPlayFromHere = true }
         if isPlaying { pause() }
         scrubbing = true
     }
@@ -323,6 +326,7 @@ final class SongLyricsModel: LyricTapping {
         tapSyllable = 0
         tapLastAt = -1
         tapChecking = false
+        tapPlayFromHere = false
         tapTiming = true
         forgetCleanUp()
         let at: Double = tapNext == 0 ? max(0, min(time, lyrics[0].start - 3)) : max(0, lyrics[tapNext].start - 3)
@@ -351,6 +355,7 @@ final class SongLyricsModel: LyricTapping {
         // Two taps closer than a couple of frames are one tap (both thumbs at once).
         if tapLastAt >= 0, abs(at - tapLastAt) < 0.06 { return }
         forgetCleanUp()
+        tapPlayFromHere = false
         // A word of more than one syllable takes a tap for each: these stay on the same word.
         let current = tapNext - 1
         if current >= tapFirst, lyrics.indices.contains(current), tapSyllable < LyricSyllables.count(lyrics[current]) {
@@ -405,6 +410,7 @@ final class SongLyricsModel: LyricTapping {
         tapSyllable = 0
         tapLastAt = -1
         tapChecking = false
+        tapPlayFromHere = false
         forgetCleanUp()
         seek(tapFrom)
     }
@@ -416,7 +422,9 @@ final class SongLyricsModel: LyricTapping {
         pause()
         if on {
             tapChecking = true
-            seek(tapFrom)
+            // From the start of this go, or from where the playhead was dragged to.
+            seek(tapPlayFromHere ? time : tapFrom)
+            tapPlayFromHere = false
             play()
             return
         }
