@@ -1707,6 +1707,9 @@ struct TapBeatPanel: View {
 /// once) is ignored. 85 ms apart is about 12 taps a second, faster than the fastest rap.
 enum LyricTapGuard {
     static let shortestGap: Double = 0.085
+    /// tapSyllable after Previous, Back to tapping or picking a word: the word before is done and
+    /// the screen waits on the next one, so the next tap starts it (it shows big, its dots empty).
+    static let wordDone = 99
     /// True for a tap to ignore; otherwise it's counted and the clock starts again from it.
     static func tooSoon(after last: inout Double) -> Bool {
         let now = ProcessInfo.processInfo.systemUptime
@@ -1937,6 +1940,8 @@ extension LyricTapScreen {
             let now = model.time + 0.01
             return words.lastIndex(where: { $0.start <= now })
         }
+        // After Previous or Back to tapping, the word to tap next waits big, not the one before it.
+        if model.tapSyllable >= LyricTapGuard.wordDone { return nil }
         if model.lyricTapCount > 0 && words.indices.contains(model.tapNext - 1) { return model.tapNext - 1 }
         return nil
     }
@@ -1950,11 +1955,15 @@ extension LyricTapScreen {
         let firstTapped: Int = model.tapNext - model.lyricTapCount
         // Checking, before the first word: the first word is next.
         let next: Int = current.map { $0 + 1 } ?? (checking ? 0 : model.tapNext)
-        let upTo: Int = min(words.count, next + 4)
-        let ahead: [Int] = next < upTo ? Array(next..<upTo) : []
         let big: Int? = current ?? (words.indices.contains(next) ? next : nil)
+        // The big word isn't in the coming-up row as well.
+        let aheadFrom: Int = current == nil && big != nil ? next + 1 : next
+        let upTo: Int = min(words.count, aheadFrom + 4)
+        let ahead: [Int] = aheadFrom < upTo ? Array(aheadFrom..<upTo) : []
         var prev: Int? = nil
         if let current, current > 0, checking || current - 1 >= firstTapped { prev = current - 1 }
+        // Waiting on the next word mid-go: the word before it shows done.
+        if current == nil, !checking, next - 1 >= firstTapped, words.indices.contains(next - 1) { prev = next - 1 }
         let spoken: String = big.map { "Now: " + words[$0].text } ?? "All words timed"
         return VStack(spacing: 10) {
             // The word before: done.
@@ -1993,7 +2002,7 @@ extension LyricTapScreen {
                 } else {
                     HStack(alignment: .top, spacing: 14) {
                         ForEach(ahead, id: \.self) { i in
-                            upcoming(i, ahead: i - next)
+                            upcoming(i, ahead: i - aheadFrom)
                                 .id("u\(i)")
                                 .transition(TapQueueLook.slideIn)
                         }

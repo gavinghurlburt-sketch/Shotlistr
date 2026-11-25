@@ -386,7 +386,7 @@ final class SongLyricsModel: LyricTapping {
         if before.indices.contains(i), lyrics.indices.contains(i) { lyrics[i] = before[i] }
         let from = i > tapFirst ? lyrics[i - 1].start : lyrics[i].start - 2
         seek(max(0, from - 1))
-        tapSyllable = 99
+        tapSyllable = LyricTapGuard.wordDone
         tapLastAt = -1
     }
 
@@ -424,7 +424,7 @@ final class SongLyricsModel: LyricTapping {
         let last = tapNext - 1
         let from = last >= tapFirst && lyrics.indices.contains(last) ? lyrics[last].start - 1 : tapFrom
         seek(max(0, from))
-        tapSyllable = 99
+        tapSyllable = LyricTapGuard.wordDone
         tapLastAt = -1
     }
 

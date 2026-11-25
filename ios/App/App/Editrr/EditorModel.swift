@@ -3664,7 +3664,7 @@ final class EditorModel {
             // Tapping a word while tapping out the timing: the next tap times that word.
             tapNext = index
             tapFirst = min(tapFirst, index)
-            tapSyllable = 99   // the word before it counts as done
+            tapSyllable = LyricTapGuard.wordDone   // the word before it counts as done
         }
         pause()
         let word = lyrics[index]
@@ -4229,7 +4229,7 @@ final class EditorModel {
         time = at
         requestSeek(at)
         // The word before is done; the next tap starts this one again.
-        tapSyllable = 99
+        tapSyllable = LyricTapGuard.wordDone
         tapLastAt = -1
         lyricSelected = i > tapFirst ? i - 1 : nil
         lyricsLive.update(words: lyrics, style: lyricStyle)
@@ -4267,7 +4267,7 @@ final class EditorModel {
         let at = max(0, from)
         time = at
         requestSeek(at)
-        tapSyllable = 99
+        tapSyllable = LyricTapGuard.wordDone
         tapLastAt = -1
     }
 
