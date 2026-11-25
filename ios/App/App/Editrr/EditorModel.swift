@@ -289,6 +289,8 @@ final class EditorModel {
     var tapChecking = false
     /// When the last tap landed (song time), so both thumbs at once count once.
     @ObservationIgnored private var tapLastAt: Double = -1
+    /// When the last pad tap landed (phone clock), to drop a bounce right after it.
+    @ObservationIgnored private var tapLastPress: Double = 0
     /// Clean up has nudged the taps toward the singing (its button then takes it back).
     var tapCleaned = false
     /// Clean up is waiting on the AI to finish listening.
@@ -4162,6 +4164,8 @@ final class EditorModel {
     /// A pad: plays from the playhead when stopped; while playing, the next word starts now.
     func lyricTap() {
         guard tapTiming, !lyrics.isEmpty else { return }
+        // A double tap by accident (even on Play) counts once.
+        if LyricTapGuard.tooSoon(after: &tapLastPress) { return }
         // Checking: a pad goes back to tapping, from just before the last tapped word.
         if tapChecking {
             lyricTapCheck(false)

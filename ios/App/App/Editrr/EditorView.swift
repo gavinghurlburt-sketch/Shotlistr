@@ -1703,6 +1703,19 @@ struct TapBeatPanel: View {
     }
 }
 
+/// A tap that lands impossibly soon after the one before (a finger bouncing, or both thumbs at
+/// once) is ignored. 85 ms apart is about 12 taps a second, faster than the fastest rap.
+enum LyricTapGuard {
+    static let shortestGap: Double = 0.085
+    /// True for a tap to ignore; otherwise it's counted and the clock starts again from it.
+    static func tooSoon(after last: inout Double) -> Bool {
+        let now = ProcessInfo.processInfo.systemUptime
+        if last > 0, now - last < shortestGap { return true }
+        last = now
+        return false
+    }
+}
+
 /// What the tap screen drives: an edit's lyrics, or a creatrr song's lyrics for the whole song.
 @MainActor
 protocol LyricTapping: AnyObject {

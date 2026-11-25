@@ -100,6 +100,8 @@ final class SongLyricsModel: LyricTapping {
     @ObservationIgnored private var tapFirst = 0
     @ObservationIgnored private var tapFrom: Double = 0
     @ObservationIgnored private var tapLastAt: Double = -1
+    /// When the last pad tap landed (phone clock), to drop a bounce right after it.
+    @ObservationIgnored private var tapLastPress: Double = 0
     /// Clean up has nudged the taps toward the singing (its button then takes it back).
     var tapCleaned = false
     /// Clean up is waiting on the AI to finish listening.
@@ -333,6 +335,8 @@ final class SongLyricsModel: LyricTapping {
 
     func lyricTap() {
         guard tapTiming, !lyrics.isEmpty else { return }
+        // A double tap by accident (even on Play) counts once.
+        if LyricTapGuard.tooSoon(after: &tapLastPress) { return }
         if tapChecking {
             lyricTapCheck(false)
             return
