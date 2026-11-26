@@ -643,7 +643,9 @@ struct SongLyricsView: View {
         .preferredColorScheme(.dark)
         .task { await model.load() }
         .sheet(isPresented: $typing) {
-            SongWordsSheet(text: model.typedText) { text in model.setTyped(text) }
+            SongWordsSheet(text: model.typedText,
+                           highlight: LyricText.wordAt(model.time, in: model.lyrics)
+                               .flatMap { LyricText.range(ofWord: $0, in: model.lyrics) }) { text in model.setTyped(text) }
                 .presentationDetents([.large])
                 .frostedSheet()
         }
@@ -952,6 +954,8 @@ struct SongLyricPreview: View {
 /// Typing or pasting the song's words, one lyric line per line.
 struct SongWordsSheet: View {
     @State var text: String
+    /// A word to show and highlight when the panel opens (the one at the playhead).
+    var highlight: NSRange? = nil
     let save: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -974,11 +978,9 @@ struct SongWordsSheet: View {
             Text("One lyric line per line. Words you keep keep their timing.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.6))
-            TextEditor(text: $text)
-                .scrollContentBackground(.hidden)
+            WordsTextView(text: $text, highlight: highlight)
                 .padding(8)
                 .background(Color.white.opacity(0.06))
-                .font(.body)
         }
         .padding(.horizontal, 16)
         .foregroundStyle(.white)

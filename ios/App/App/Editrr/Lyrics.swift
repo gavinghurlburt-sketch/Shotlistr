@@ -783,6 +783,27 @@ enum LyricText {
         return kept.joined(separator: "\n")
     }
 
+    /// Where word `index` sits in `typed(words)` (for showing it in the words panel).
+    static func range(ofWord index: Int, in words: [LyricWord]) -> NSRange? {
+        guard words.indices.contains(index) else { return nil }
+        var offset = 0
+        for (n, line) in LyricTiming.lines(words).enumerated() {
+            if n > 0 { offset += 1 }   // the line break
+            for (k, i) in line.enumerated() {
+                if k > 0 { offset += 1 }   // the space
+                let length = (words[i].text as NSString).length
+                if i == index { return NSRange(location: offset, length: length) }
+                offset += length
+            }
+        }
+        return nil
+    }
+
+    /// The word the panel opens on: the picked one, else the one at the playhead.
+    static func wordAt(_ seconds: Double, in words: [LyricWord]) -> Int? {
+        words.lastIndex(where: { $0.start <= seconds + 0.02 }) ?? (words.isEmpty ? nil : 0)
+    }
+
     /// The words, one line per lyric line, for editing as text.
     static func typed(_ words: [LyricWord]) -> String {
         LyricTiming.lines(words).map { line in line.map { words[$0].text }.joined(separator: " ") }

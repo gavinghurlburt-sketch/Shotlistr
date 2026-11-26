@@ -10,6 +10,8 @@ struct LyricsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var typing = false
     @State private var typed = ""
+    /// The word the words panel opens on (the one at the playhead in the lyrics), highlighted.
+    @State private var typedWord: NSRange?
     @State private var addingFont = false
     @State private var naming: NameAsk?
     @State private var presetName = ""
@@ -55,7 +57,7 @@ struct LyricsSheet: View {
             }
         }
         .sheet(isPresented: $typing) {
-            LyricsTypingSheet(text: $typed) { model.setTypedLyrics(typed) }
+            LyricsTypingSheet(text: $typed, highlight: typedWord) { model.setTypedLyrics(typed) }
                 .presentationDetents([.large])
                 .presentationBackground(.ultraThinMaterial)
         }
@@ -108,6 +110,7 @@ struct LyricsSheet: View {
             }
             Button {
                 typed = ""
+                typedWord = nil
                 typing = true
             } label: {
                 Label("Type or paste the words", systemImage: "text.cursor")
@@ -123,6 +126,8 @@ struct LyricsSheet: View {
             HStack(spacing: 8) {
                 Button {
                     typed = LyricText.typed(model.lyrics)
+                    let at = model.lyricSelected ?? model.lyricNow ?? LyricText.wordAt(model.time, in: model.lyrics)
+                    typedWord = at.flatMap { LyricText.range(ofWord: $0, in: model.lyrics) }
                     typing = true
                 } label: {
                     Label("Fix words", systemImage: "text.cursor")
@@ -541,6 +546,8 @@ struct LyricsSheet: View {
 /// Typing or pasting the words, one lyric line per line.
 struct LyricsTypingSheet: View {
     @Binding var text: String
+    /// A word to show and highlight when the panel opens (the one at the playhead).
+    var highlight: NSRange? = nil
     let save: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -560,9 +567,7 @@ struct LyricsTypingSheet: View {
             Text("One lyric line per line. Words you don't change keep their timing.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.65))
-            TextEditor(text: $text)
-                .scrollContentBackground(.hidden)
-                .font(.body)
+            WordsTextView(text: $text, highlight: highlight)
                 .padding(10)
                 .background(Tint.surface2, in: Corner.card)
         }
@@ -592,6 +597,91 @@ struct LyricAudioPicker: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Listen to")
+        }
+    }
+}
+
+/// The words panel's text: opens scrolled to the word at the playhead, highlighted in yellow. The
+/// highlight goes as soon as you change anything.
+struct WordsTextView: UIViewRepresentable {
+    @Binding var text: String
+    var highlight: NSRange?
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.backgroundColor = .clear
+        view.textColor = .white
+        view.tintColor = UIColor(Tint.accent)
+        view.font = .preferredFont(forTextStyle: .body)
+        view.adjustsFontForContentSizeCategory = true
+        view.autocorrectionType = .no
+        view.smartQuotesType = .no
+        view.smartDashesType = .no
+        view.keyboardAppearance = .dark
+        view.delegate = context.coordinator
+        view.attributedText = Self.styled(text, highlight: highlight)
+        if let highlight, highlight.location + highlight.length <= (text as NSString).length {
+            DispatchQueue.main.async {
+                view.layoutIfNeeded()
+                // Scroll so the word sits about a third of the way down.
+                let range = NSRange(location: highlight.location, length: max(1, highlight.length))
+                if let start = view.position(from: view.beginningOfDocument, offset: range.location),
+                   let end = view.position(from: start, offset: range.length),
+                   let textRange = view.textRange(from: start, to: end) {
+                    let rect = view.firstRect(for: textRange)
+                    if rect.origin.y.isFinite {
+                        let most = max(0, view.contentSize.height - view.bounds.height)
+                        let y = min(most, max(0, rect.minY - view.bounds.height / 3))
+                        view.setContentOffset(CGPoint(x: 0, y: y), animated: false)
+                    }
+                } else {
+                    view.scrollRangeToVisible(range)
+                }
+            }
+        }
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        // Only when the text changed from outside (typing already matches).
+        if view.text != text {
+            view.attributedText = Self.styled(text, highlight: nil)
+        }
+    }
+
+    static func styled(_ text: String, highlight: NSRange?) -> NSAttributedString {
+        let out = NSMutableAttributedString(string: text, attributes: [
+            .font: UIFont.preferredFont(forTextStyle: .body),
+            .foregroundColor: UIColor.white
+        ])
+        if let highlight, highlight.location + highlight.length <= out.length {
+            out.addAttributes([.backgroundColor: UIColor(Tint.accent), .foregroundColor: UIColor.black],
+                              range: highlight)
+        }
+        return out
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var text: Binding<String>
+        private var plain = false
+        init(text: Binding<String>) { self.text = text }
+
+        func textViewDidChange(_ view: UITextView) {
+            if !plain {
+                // The first change takes the highlight off (keeping the cursor where it is).
+                plain = true
+                let cursor = view.selectedRange
+                view.attributedText = WordsTextView.styled(view.text, highlight: nil)
+                view.selectedRange = cursor
+                view.typingAttributes = [.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.white]
+            }
+            text.wrappedValue = view.text
+        }
+
+        func textViewDidBeginEditing(_ view: UITextView) {
+            view.typingAttributes = [.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.white]
         }
     }
 }
