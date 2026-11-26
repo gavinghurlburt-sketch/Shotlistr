@@ -94,6 +94,10 @@ struct AutoStyle: Equatable, Sendable {
     /// Layer indexes (0-based) to show more of, or to leave out when anything else can show.
     var moreOf: Set<Int> = []
     var lessOf: Set<Int> = []
+    /// Only these layers (0-based), wherever they have footage. Empty: any.
+    var onlyOf: Set<Int> = []
+    /// Every take gets about the same screen time.
+    var evenly = false
     /// Shuffle: a number that makes a different (but still good) cut each time. Nil: the best cut.
     var shuffle: UInt64? = nil
 }
@@ -452,6 +456,10 @@ enum AutoEditor {
                 let most = rated.map { $0.rating.cover }.max() ?? 0
                 choices = most > 0 ? rated.filter { $0.rating.cover >= most - 0.001 } : []
             }
+            // "Only take 6": just those, wherever they have footage (the rest fill in where they don't).
+            if !style.onlyOf.isEmpty, choices.contains(where: { style.onlyOf.contains($0.clip.layer) }) {
+                choices.removeAll { !style.onlyOf.contains($0.clip.layer) }
+            }
             if choices.count > 1, let previous = picks.last {
                 choices.removeAll { $0.clip.layer == previous }
             }
@@ -466,7 +474,13 @@ enum AutoEditor {
                     luck = Double.random(in: 0..<0.35, using: &roll)
                     dice = roll
                 }
-                return (choice.clip, value(choice.rating.score, choice.clip.layer, recent, uses, style) + luck)
+                var even = 0.0
+                if style.evenly {
+                    // All takes equally: the less a take has been on so far, the more it's wanted.
+                    let fewest = choices.map { uses[$0.clip.layer, default: 0] }.min() ?? 0
+                    even = -0.6 * Double(uses[choice.clip.layer, default: 0] - fewest)
+                }
+                return (choice.clip, value(choice.rating.score, choice.clip.layer, recent, uses, style) + luck + even)
             }
             let best = valued.max { $0.value < $1.value }
             let layer = best?.clip.layer ?? picks.last ?? clips.first?.layer ?? 0

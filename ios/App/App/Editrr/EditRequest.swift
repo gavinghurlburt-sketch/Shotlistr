@@ -73,6 +73,10 @@ enum EditRequestReader {
         var moreOf: [Int]
         @Guide(description: "Video numbers (starting at 1) the request asks to show less of or leave out, named by number or described by their color, lighting or look. Empty when none are meant.")
         var lessOf: [Int]
+        @Guide(description: "Video numbers (starting at 1) the request asks to use only, like \"only take 6\" or \"just video 2\". Empty unless the request says only or just.")
+        var onlyOf: [Int]
+        @Guide(description: "True when the request asks to use all the videos or takes equally, evenly or the same amount. False otherwise.")
+        var evenly: Bool
         @Guide(description: "A transition between cuts the request asks for. crossfade: a dissolve or fade between shots. blur: a blur between shots. zoomPunch: a quick zoom into the next shot. whip: a whip pan or swipe. dipToBlack: fade through black. flash: a white flash. mixed: a variety of transitions. none when no transition is asked for.")
         var transition: TransitionChoice
         @Guide(description: "How long each transition takes. quick, normal or slow. normal when not mentioned.")
@@ -108,6 +112,8 @@ enum EditRequestReader {
             The request may name videos by number or describe them by color or lighting, like \
             "the red shots" or "the dark ones". Use this list to find which videos it means:
             \(described)
+            Videos are also called takes or clips: take 6 is video 6. "Use take 6" means more of \
+            video 6; "only take 6" or "just take 6" means only video 6. \
             Only list videos the request names or describes. \
             The request may also ask for transitions, effects or a color look. Leave each of those \
             at none (or false) unless the request asks for it.
@@ -128,6 +134,10 @@ enum EditRequestReader {
         let valid = 1...max(videoCount, 1)
         style.moreOf = Set(reading.moreOf.filter { valid.contains($0) }.map { $0 - 1 })
         style.lessOf = Set(reading.lessOf.filter { valid.contains($0) }.map { $0 - 1 }).subtracting(style.moreOf)
+        style.onlyOf = Set(reading.onlyOf.filter { valid.contains($0) }.map { $0 - 1 })
+        style.evenly = reading.evenly && style.onlyOf.isEmpty
+        // Only some takes: none of them is also left out.
+        style.lessOf.subtract(style.onlyOf)
 
         var fx = FXPlan()
         switch reading.transition {
@@ -223,6 +233,10 @@ enum EditRequestReader {
         if !style.lessOf.isEmpty {
             parts.append("less of " + style.lessOf.sorted().map { "video \($0 + 1)" }.joined(separator: " and "))
         }
+        if !style.onlyOf.isEmpty {
+            parts.append("only " + style.onlyOf.sorted().map { "video \($0 + 1)" }.joined(separator: " and "))
+        }
+        if style.evenly { parts.append("every video about equally") }
         return parts.joined(separator: ", ")
     }
 }

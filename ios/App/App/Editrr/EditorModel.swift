@@ -1777,6 +1777,9 @@ final class EditorModel {
             previewing = nil
         } else {
             previewing = index
+            // Previewing a video picks it too, so Cut to it cuts to the one you're looking at.
+            selected = index
+            lyricsPicked = false
             let at = isPlaying ? min(max(0, player.currentTime().seconds), duration) : time
             if !hasFootage(index, at: at) { notice = "Video \(index + 1) has nothing at this spot." }
         }

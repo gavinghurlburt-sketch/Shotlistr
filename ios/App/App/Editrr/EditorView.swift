@@ -3024,7 +3024,7 @@ struct AutoEditSheet: View {
 
             if EditRequestReader.isAvailable {
                 TextField("", text: $request,
-                          prompt: Text("Optional: faster cuts, crossfades, flashes in the chorus, black & white…")
+                          prompt: Text("Optional: faster cuts, use all takes equally, more of take 6, crossfades, black & white…")
                             .foregroundStyle(.white.opacity(0.45)),
                           axis: .vertical)
                     // Room for a few sentences: 5 lines tall, growing to 10.
