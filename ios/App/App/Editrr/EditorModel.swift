@@ -1060,7 +1060,7 @@ final class EditorModel {
     /// a starter recipe's settings instead of the pace alone.
     /// `tapped`: cut at these times (from Tap the beat) instead of finding the cuts.
     func autoEdit(pace: AutoPace, request: String = "", shuffle: Bool = false, recipe: AutoStyle? = nil,
-                  tapped: [Double]? = nil) async {
+                  tapped: [Double]? = nil, keepCuts: Bool = false) async {
         guard busy == nil, !layers.isEmpty, duration > 0 else { return }
         pause()
         notice = nil
@@ -1130,8 +1130,10 @@ final class EditorModel {
 
         // Kept for Shuffle (without its luck), then a new roll when shuffling. (Tapped cuts are
         // yours, so Shuffle keeps to the last Auto edit.)
-        if tapped == nil { lastAuto = (style, plan, understood) }
+        if tapped == nil && !keepCuts { lastAuto = (style, plan, understood) }
         if shuffling { style.shuffle = UInt64.random(in: 1...UInt64.max) }
+        // Alter edit with nothing typed: a fresh roll, so it comes out different.
+        if keepCuts && typed.isEmpty { style.shuffle = UInt64.random(in: 1...UInt64.max) }
 
         // 1. One look a second at every clip (only what hasn't been looked at yet), 3 at a time.
         var wanted: [Int: Set<Int>] = [:]
@@ -1219,7 +1221,14 @@ final class EditorModel {
         // 3. Where to cut, and which video for each stretch. Tapped cuts land on the nearest beat
         // when one is close (a tap is usually a hair late), each on a whole frame.
         let times: [Double]
-        if let tapped {
+        // Alter edit: the cuts stay exactly where they are (the rhythm you liked); only which video
+        // shows in each changes.
+        let kept = cuts.filter { $0.time >= from - 1e-6 && $0.time < to - 1e-6 }
+        if keepCuts {
+            var at = kept.map(\.time)
+            if at.first.map({ $0 > from + 1e-6 }) ?? true { at.insert(from, at: 0) }
+            times = at
+        } else if let tapped {
             var kept = [from]
             for tap in tapped.sorted() {
                 var at = tap - 0.05
@@ -1236,11 +1245,24 @@ final class EditorModel {
         // 4. Swap the new cuts in between In and Out; outside stays as it was.
         let showingAtEnd = cuts.last(where: { $0.time <= to + 1e-6 })?.layer
         var next = cuts.filter { $0.time < from - 1e-6 }
-        for (time, layer) in zip(times, picks) { next.append(Cut(time: time, layer: layer)) }
+        for (time, layer) in zip(times, picks) {
+            // Alter edit keeps each cut's own effects, transition and zoom; only its video changes.
+            if keepCuts, var cut = kept.first(where: { abs($0.time - time) < 1e-6 }) {
+                cut.layer = layer
+                next.append(cut)
+            } else {
+                next.append(Cut(time: time, layer: layer))
+            }
+        }
         if to < duration - 0.01, let showingAtEnd { next.append(Cut(time: to, layer: showingAtEnd)) }
         next.append(contentsOf: cuts.filter { $0.time > to + 1e-6 })
         var cleaned: [Cut] = []
-        for cut in next where cleaned.last?.layer != cut.layer { cleaned.append(cut) }
+        for cut in next {
+            // The same video twice in a row is one cut, unless it has a look of its own.
+            if let last = cleaned.last, last.layer == cut.layer,
+               !keepCuts || (cut.transition == nil && cut.fx == nil && cut.zoom == .off) { continue }
+            cleaned.append(cut)
+        }
         if let first = cleaned.first, first.time > 0 { cleaned.insert(Cut(time: 0, layer: first.layer), at: 0) }
         let touched = plan.apply(to: &cleaned, from: from, until: to, duration: duration, loud: loud)
 
@@ -1254,7 +1276,10 @@ final class EditorModel {
             ? "Auto edit made \(count) cuts (no beat found, so evenly spaced). Undo takes it back."
             : "Auto edit made \(count) cuts on the beat. Undo takes it back."
         let effects = touched > 0 ? " Effects are on \(touched) of them." : ""
-        if shuffling {
+        if keepCuts {
+            let asked = understood.map { "Went with \($0). " } ?? ""
+            notice = asked + "Kept your \(kept.count) cuts where they are and picked new videos for them. Undo takes it back."
+        } else if shuffling {
             notice = "Shuffled: a fresh cut with \(count) cuts. Shuffle again for another, or Undo to go back."
         } else if tapped != nil {
             notice = "Your taps made \(count) cuts, each to the best-looking take. Undo takes it back."
@@ -1272,6 +1297,13 @@ final class EditorModel {
     /// Shows a feature's tip the first time only.
     func firstTip(_ which: EditorTip) {
         if which.firstTime() { tip = which }
+    }
+
+    /// Whether there are cuts between Start and End for Alter edit to keep.
+    var hasCutsToAlter: Bool {
+        let from = min(max(0, inPoint), duration)
+        let to = outPoint > from ? min(outPoint, duration) : duration
+        return cuts.contains { $0.time > from + 0.05 && $0.time < to - 0.05 }
     }
 
     var tapBeatOn = false

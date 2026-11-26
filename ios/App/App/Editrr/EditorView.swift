@@ -1682,6 +1682,7 @@ struct ExportSheet: View {
 /// Done turns the taps into cuts, each to the best-looking take.
 struct TapBeatPanel: View {
     let model: EditorModel
+    @State private var altering = false
 
     var body: some View {
         let playing = model.isPlaying
@@ -1702,6 +1703,21 @@ struct TapBeatPanel: View {
                     .disabled(model.beatTaps.isEmpty)
             }
             .buttonStyle(.plain)
+            // Alter edit: keep the rhythm of the cuts you have, let the AI pick new videos for them.
+            if !playing && model.beatTaps.isEmpty {
+                Button { altering = true } label: {
+                    Label("Alter edit: same cuts, new videos", systemImage: "wand.and.stars")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 36)
+                        .background(Rectangle().fill(Color.white.opacity(model.hasCutsToAlter ? 0.12 : 0.05)))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(model.hasCutsToAlter ? Tint.accent : Color.white.opacity(0.35))
+                .disabled(!model.hasCutsToAlter || model.busy != nil)
+                .accessibilityHint("Keeps every cut where it is and picks which video shows in each")
+            }
             // A pad for each thumb: either one taps.
             HStack(spacing: 10) {
                 TapPad(playing: playing, idle: model.beatTaps.isEmpty ? "Play" : "Start over",
@@ -1712,6 +1728,12 @@ struct TapBeatPanel: View {
         }
         .foregroundStyle(.white)
         .padding(.top, 4)
+        // The pads stay open after, so you can alter again or tap new cuts.
+        .sheet(isPresented: $altering) {
+            AutoEditSheet(model: model, keepCuts: true)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(.ultraThinMaterial)
+        }
     }
 
     private func press() {
@@ -3009,6 +3031,8 @@ struct ProjectTile: View {
 /// Auto edit: pick how often to cut, then let it cut on the beat to the best-looking video.
 struct AutoEditSheet: View {
     let model: EditorModel
+    /// Alter edit: the cuts stay where they are; the AI only picks which video shows in each.
+    var keepCuts = false
     @AppStorage("autoPace") private var pace: AutoPace = .normal
     @State private var request = ""
     @Environment(\.dismiss) private var dismiss
@@ -3017,15 +3041,18 @@ struct AutoEditSheet: View {
         // Scrolls, so the bigger request box never pushes the button off a half-height sheet.
         ScrollView {
         VStack(spacing: 16) {
-            Text("Auto edit")
+            Text(keepCuts ? "Alter edit" : "Auto edit")
                 .font(.title3.weight(.bold))
-            Text(model.hasRange
+            Text(keepCuts
+                 ? "Keeps every cut where it is, so the rhythm stays, and picks which video shows in each. Say what you want, or leave it blank for a fresh mix."
+                 : model.hasRange
                  ? "Cuts between Start and End on the beat, to whichever video looks best: faces, close-ups, sharp and well lit."
                  : "Cuts the whole song on the beat, to whichever video looks best: faces, close-ups, sharp and well lit.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
 
+            if !keepCuts {
             VStack(spacing: 6) {
                 Text("How often to cut")
                     .font(.footnote.weight(.semibold))
@@ -3037,10 +3064,13 @@ struct AutoEditSheet: View {
                     }
                 }
             }
+            }
 
             if EditRequestReader.isAvailable {
                 TextField("", text: $request,
-                          prompt: Text("Optional: faster cuts, use all takes equally, more of take 6, crossfades, black & white…")
+                          prompt: Text(keepCuts
+                                       ? "Optional: more close-ups, use all takes equally, more of take 6, only takes 2 and 3…"
+                                       : "Optional: faster cuts, use all takes equally, more of take 6, crossfades, black & white…")
                             .foregroundStyle(.white.opacity(0.45)),
                           axis: .vertical)
                     // Room for a few sentences: 5 lines tall, growing to 10.
@@ -3061,14 +3091,17 @@ struct AutoEditSheet: View {
             Button {
                 dismiss()
                 let typed = request
-                Task { await model.autoEdit(pace: pace, request: typed) }
+                let keep = keepCuts
+                Task { await model.autoEdit(pace: pace, request: typed, keepCuts: keep) }
             } label: {
-                Label("Make the edit", systemImage: "wand.and.stars")
+                Label(keepCuts ? "Alter the edit" : "Make the edit", systemImage: "wand.and.stars")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(GlassButtonStyle(tint: Tint.teal, selected: true, big: true))
 
-            Text("It replaces the cuts there. Ask only for effects or transitions and it keeps your cuts and adds them. Typed requests are read on your phone; nothing is sent anywhere. Undo takes it back.")
+            Text(keepCuts
+                 ? "Your cuts and their effects stay; only the videos in them change. Typed requests are read on your phone; nothing is sent anywhere. Undo takes it back."
+                 : "It replaces the cuts there. Ask only for effects or transitions and it keeps your cuts and adds them. Typed requests are read on your phone; nothing is sent anywhere. Undo takes it back.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
