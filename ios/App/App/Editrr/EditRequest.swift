@@ -77,8 +77,8 @@ enum EditRequestReader {
         var onlyOf: [Int]
         @Guide(description: "True when the request asks to use all the videos or takes equally, evenly or the same amount. False otherwise.")
         var evenly: Bool
-        @Guide(description: "True when the request asks not to cut between videos or takes that look alike or too similar, are the same angle or shot, or look jumpy. False otherwise.")
-        var avoidAlike: Bool
+        @Guide(description: "True only when the request asks to cut between videos or takes that look alike or are the same angle anyway. False otherwise, including when it asks not to.")
+        var allowAlike: Bool
         @Guide(description: "A transition between cuts the request asks for. crossfade: a dissolve or fade between shots. blur: a blur between shots. zoomPunch: a quick zoom into the next shot. whip: a whip pan or swipe. dipToBlack: fade through black. flash: a white flash. mixed: a variety of transitions. none when no transition is asked for.")
         var transition: TransitionChoice
         @Guide(description: "How long each transition takes. quick, normal or slow. normal when not mentioned.")
@@ -138,7 +138,7 @@ enum EditRequestReader {
         style.lessOf = Set(reading.lessOf.filter { valid.contains($0) }.map { $0 - 1 }).subtracting(style.moreOf)
         style.onlyOf = Set(reading.onlyOf.filter { valid.contains($0) }.map { $0 - 1 })
         style.evenly = reading.evenly && style.onlyOf.isEmpty
-        style.avoidAlike = reading.avoidAlike
+        if reading.allowAlike { style.avoidAlike = false }
         // Only some takes: none of them is also left out.
         style.lessOf.subtract(style.onlyOf)
 
@@ -240,7 +240,7 @@ enum EditRequestReader {
             parts.append("only " + style.onlyOf.sorted().map { "video \($0 + 1)" }.joined(separator: " and "))
         }
         if style.evenly { parts.append("every video about equally") }
-        if style.avoidAlike { parts.append("no cuts between look-alike takes") }
+        if !style.avoidAlike { parts.append("cuts between look-alike takes too") }
         return parts.joined(separator: ", ")
     }
 }

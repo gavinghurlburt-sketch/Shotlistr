@@ -99,7 +99,8 @@ struct AutoStyle: Equatable, Sendable {
     /// Every take gets about the same screen time.
     var evenly = false
     /// Never cut from a take to one that looks a lot like it (same angle, same background).
-    var avoidAlike = false
+    /// On unless the request says to cut between them anyway.
+    var avoidAlike = true
     /// Which layers look a lot like each other (filled in when `avoidAlike` is on).
     var alike: [Int: Set<Int>] = [:]
     /// Shuffle: a number that makes a different (but still good) cut each time. Nil: the best cut.
