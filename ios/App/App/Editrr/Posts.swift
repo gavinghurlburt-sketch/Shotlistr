@@ -247,10 +247,14 @@ enum PostBook {
     /// first one with none. Even when you're covered for weeks, gaps show, so you film something new.
     static func coverage(_ all: [PostSlot], now: Date = Date()) -> (days: [Bool], covered: Int, nextEmpty: Date?) {
         let today = day(now)
-        let taken = Set(all.compactMap { slot -> Date? in
-            if let posted = slot.plan.posted { return day(posted) }
-            return slot.plan.date.map { day($0) }
-        })
+        var taken = Set<Date>()
+        for slot in all {
+            if let posted = slot.plan.posted {
+                taken.insert(day(posted))
+            } else if let date = slot.plan.date {
+                taken.insert(day(date))
+            }
+        }
         var days: [Bool] = []
         var nextEmpty: Date?
         for offset in 0..<30 {
@@ -350,13 +354,12 @@ enum PostBook {
                 return each.id == project?.id
             }
             guard !mine.isEmpty else { continue }
-            let planned = mine.filter { $0.plan.date != nil }.sorted { $0.plan.date! < $1.plan.date! }
+            let planned: [PostSlot] = mine.filter { $0.plan.date != nil }.sorted { ($0.plan.date ?? .distantFuture) < ($1.plan.date ?? .distantFuture) }
             // New ones: every cut with lyrics first, then every cut without, so the looks change.
-            let new = mine.filter { $0.plan.date == nil }.enumerated().sorted { a, b in
-                let kindA = each.postKinds.firstIndex(of: a.element.lyrics) ?? 0
-                let kindB = each.postKinds.firstIndex(of: b.element.lyrics) ?? 0
-                return kindA != kindB ? kindA < kindB : a.offset < b.offset
-            }.map(\.element)
+            var new: [PostSlot] = []
+            for kind in each.postKinds {
+                for slot in mine where slot.plan.date == nil && slot.lyrics == kind { new.append(slot) }
+            }
             groups.append(Group(id: each.id, song: each.songKey, posts: planned + new))
         }
         // Mix: each day goes to the edit with the most left, but not the edit (or, where there's a
@@ -365,9 +368,12 @@ enum PostBook {
         var lastEdit: UUID?
         var lastSong: String?
         while groups.contains(where: { !$0.posts.isEmpty }) {
-            let left = groups.indices.filter { !groups[$0].posts.isEmpty }
-            let otherSong = left.filter { groups[$0].song != lastSong && groups[$0].id != lastEdit }
-            let otherEdit = left.filter { groups[$0].id != lastEdit }
+            let left: [Int] = groups.indices.filter { !groups[$0].posts.isEmpty }
+            let otherSong: [Int] = left.filter { (index: Int) -> Bool in
+                let group = groups[index]
+                return group.song != lastSong && group.id != lastEdit
+            }
+            let otherEdit: [Int] = left.filter { (index: Int) -> Bool in groups[index].id != lastEdit }
             let pool = !otherSong.isEmpty ? otherSong : (!otherEdit.isEmpty ? otherEdit : left)
             // Most left first; on a tie, the edit whose next post was planned soonest.
             let pick = pool.max { a, b in
@@ -399,20 +405,26 @@ enum PostBook {
         let cal = calendar
         let today = day(now)
         let all = slots(projects)
-        let taken = Set(all.compactMap { slot -> Date? in
-            if let posted = slot.plan.posted { return day(posted) }
-            return slot.plan.date.map { day($0) }
-        })
+        var taken = Set<Date>()
+        for slot in all {
+            if let posted = slot.plan.posted {
+                taken.insert(day(posted))
+            } else if let date = slot.plan.date {
+                taken.insert(day(date))
+            }
+        }
         var run = 0
         var at = taken.contains(today) ? today : (cal.date(byAdding: .day, value: 1, to: today) ?? today)
         while taken.contains(at), run < 3650 {
             run += 1
             at = cal.date(byAdding: .day, value: 1, to: at) ?? at
         }
-        let waiting = projects.filter { !$0.justFilmed && !isOlder($0, now: now) }
-            .flatMap { slots([$0]) }
-            .filter { $0.plan.date == nil && $0.plan.posted == nil }
-            .count
+        var waiting = 0
+        for project in projects where !project.justFilmed && !isOlder(project, now: now) {
+            for slot in slots([project]) where slot.plan.date == nil && slot.plan.posted == nil {
+                waiting += 1
+            }
+        }
         return run + waiting
     }
 

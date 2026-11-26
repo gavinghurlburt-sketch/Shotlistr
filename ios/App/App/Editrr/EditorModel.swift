@@ -6611,20 +6611,30 @@ final class EditorModel {
         guard let project = postProject(id) else { return 0 }
         let others = projects.map { postProject($0.id) ?? $0 }
         let picks = PostBook.fill(adding: project, among: others)
-        let unplanned = Set(PostBook.slots([project]).filter { $0.plan.date == nil && $0.plan.posted == nil }
-            .map { PostBook.key(project.id, $0.cut.id, $0.lyrics) })
-        let added = picks.filter { unplanned.contains(PostBook.key($0.project, $0.cut, $0.lyrics)) }.count
+        var unplanned = Set<String>()
+        for slot in PostBook.slots([project]) where slot.plan.date == nil && slot.plan.posted == nil {
+            unplanned.insert(PostBook.key(project.id, slot.cut.id, slot.lyrics))
+        }
+        var added = 0
+        for pick in picks where unplanned.contains(PostBook.key(pick.project, pick.cut, pick.lyrics)) { added += 1 }
         guard added > 0, let last = picks.map(\.date).max() else {
             notice = "Every post of \u{201C}\(project.name)\u{201D} already has a day."
             return 0
         }
         // Only the edits whose days changed get saved.
         var changed: [UUID: [(cut: UUID, lyrics: Bool, date: Date)]] = [:]
-        let current = Dictionary(PostBook.slots(others + (others.contains { $0.id == id } ? [] : [project]))
-            .map { (PostBook.key($0.project.id, $0.cut.id, $0.lyrics), $0.plan.date) }, uniquingKeysWith: { first, _ in first })
+        var everyEdit: [SavedProject] = others
+        if !others.contains(where: { $0.id == id }) { everyEdit.append(project) }
+        var current: [String: Date] = [:]
+        for slot in PostBook.slots(everyEdit) {
+            let key = PostBook.key(slot.project.id, slot.cut.id, slot.lyrics)
+            if current[key] == nil, let date = slot.plan.date { current[key] = PostBook.day(date) }
+        }
         for pick in picks {
-            let was = current[PostBook.key(pick.project, pick.cut, pick.lyrics)] ?? nil
-            if was.map(PostBook.day) != pick.date { changed[pick.project, default: []].append((pick.cut, pick.lyrics, pick.date)) }
+            let was: Date? = current[PostBook.key(pick.project, pick.cut, pick.lyrics)]
+            if was != pick.date {
+                changed[pick.project, default: []].append((cut: pick.cut, lyrics: pick.lyrics, date: pick.date))
+            }
         }
         for (edit, moves) in changed {
             changeProject(edit) { saved in
@@ -6635,8 +6645,10 @@ final class EditorModel {
             }
         }
         let moved = picks.count - added
-        notice = "Planned \(added) post\(added == 1 ? "" : "s"), one a day through \(PostBook.spoken(last))"
-            + (moved > 0 ? ", mixed in with the \(moved) already planned." : ".")
+        let posts = added == 1 ? "1 post" : "\(added) posts"
+        let through = PostBook.spoken(last)
+        let mixed = moved > 0 ? ", mixed in with the \(moved) already planned." : "."
+        notice = "Planned \(posts), one a day through \(through)\(mixed)"
         return added
     }
 
