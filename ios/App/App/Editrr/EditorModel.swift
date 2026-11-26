@@ -3406,7 +3406,23 @@ final class EditorModel {
 
     func endScrub() {
         scrubbing = false
+        if tapTiming && !tapChecking { tapFromPlayhead() }
         if resumeAfterScrub { play() }
+    }
+
+    /// The playhead was dragged while tapping: the next tap times the first word at or after it.
+    /// Words before it keep their taps; it and the ones after get tapped again as you go.
+    private func tapFromPlayhead() {
+        guard let i = lyrics.firstIndex(where: { $0.start >= time - 0.05 }) else { return }
+        tapNext = i
+        if i < tapFirst {
+            tapFirst = i
+            tapFrom = min(tapFrom, time)
+        }
+        tapSyllable = LyricTapGuard.wordDone
+        tapLastAt = -1
+        lyricSelected = nil
+        lyricsLive.update(words: lyrics, style: lyricStyle)
     }
 
     private func requestSeek(_ seconds: Double) {

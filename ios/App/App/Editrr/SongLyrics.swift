@@ -198,7 +198,23 @@ final class SongLyricsModel: LyricTapping {
 
     func scrub(to seconds: Double) { seek(seconds) }
 
-    func endScrub() { scrubbing = false }
+    func endScrub() {
+        scrubbing = false
+        if tapTiming && !tapChecking { tapFromPlayhead() }
+    }
+
+    /// The playhead was dragged while tapping: the next tap times the first word at or after it.
+    /// Words before it keep their taps; it and the ones after get tapped again as you go.
+    private func tapFromPlayhead() {
+        guard let i = lyrics.firstIndex(where: { $0.start >= time - 0.05 }) else { return }
+        tapNext = i
+        if i < tapFirst {
+            tapFirst = i
+            tapFrom = min(tapFrom, time)
+        }
+        tapSyllable = LyricTapGuard.wordDone
+        tapLastAt = -1
+    }
 
     func close() {
         if tapTiming { finishTapTiming(keep: true) }

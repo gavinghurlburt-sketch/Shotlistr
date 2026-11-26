@@ -39,7 +39,7 @@ enum EditorTip: String {
              "Done picks a take for each cut. Cancel leaves your edit as it was."]
         case .lyricTap:
             ["Tap Play, then tap either pad as each word is sung. A word with more than one syllable takes a tap for each (tap its dots to change how many).",
-             "Mess up? Tap Stop, then Previous to go back a word at a time, and tap on from there. Play back checks it with the music, from the start or from wherever you drag the song to. One word off? Hold it up top and drag it. Done keeps it."]
+             "Mess up? Tap Stop, then Previous to go back a word at a time, or drag the song up top to any spot, and tap on from there. Play back checks it with the music, from the start or from wherever you drag the song to. One word off? Hold it up top and drag it. Done keeps it."]
         }
     }
 
