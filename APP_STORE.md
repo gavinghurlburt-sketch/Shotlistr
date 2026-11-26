@@ -26,7 +26,8 @@ SONGS
 - Your songs with their sections, colors and tempo
 - Upload a track once and plan everything around it
 
-PROJECTS: PLAN, SHOOT, CUT
+CALENDAR: PLAN, SHOOT, CUT
+- Your shoot days and post days on one calendar
 - Plan: pick the sections, build a shot list with reference photos, notes and hooks
 - Shoot: film on your iPhone, or bring in takes from a nicer camera
 - Cut: every take lines up with the music and lands on one timeline
@@ -42,6 +43,7 @@ EDITS
 - Type what you want ("faster cuts, more close-ups") and Auto edit does it, on iPhones with Apple Intelligence
 - Export vertical 1080x1920 and share straight to Instagram, TikTok, YouTube or Photos
 - Editing happens on your iPhone; your videos are never uploaded
+- Plan when each edit goes up: Remix a cut, let Plan all spread your posts across the calendar, and get a reminder on post day
 
 SUBSCRIPTION
 creatrr is free to download. creatrr Artist is needed to use it: $4.99 per month, with a 7-day free trial for new subscribers.
@@ -75,9 +77,9 @@ The app's PrivacyInfo.xcprivacy (ios/App/App/Editrr) lists the same six types.
 
 ## Screenshots
 Required (Apple spec page, read Nov 19, 2026): at least one "iPhone with Dynamic Island (medium display)" screenshot, 1206 x 2622 or 1179 x 2556 portrait (a regular iPhone 16/17 screenshot). Up to 10.
-Suggested set (creatrr Artist, home tabs Songs, Projects, Edits):
+Suggested set (creatrr Artist, home tabs Songs, Calendar, Edits):
 1. Songs: the artist page with songs and sections
-2. Projects: a project on its Plan stage with a shot list
+2. Calendar: the month with shoot days and post thumbnails (or a project on its Plan stage with a shot list)
 3. Shoot: camera with the song section title and the record button
 4. Edits: timeline with several synced takes
 5. Lyrics on a video
@@ -88,7 +90,7 @@ If iPad stays supported (TARGETED_DEVICE_FAMILY 1,2), Apple also requires at lea
 creatrr is a music video app: plan shoots, film takes to a song, and edit them. A subscription is required (Apple in-app purchase, entitlements via RevenueCat); sandbox purchases work on the paywall.
 Sign in: account button (top right) > Sign in.
 Demo account: creatrr.test.user@gmail.com / PASSWORD   <-- set the password in the app first
-Home tabs are Songs, Projects and Edits. Video editor: the Edits tab. Projects run through Plan, Shoot and Cut stages. Filming: open a song, tap the red record button on a section. Camera, microphone and Photos are used only for filming and editing on the device.
+Home tabs are Songs, Calendar and Edits. Video editor: the Edits tab. Projects are planned from the Calendar tab and run through Plan, Shoot and Cut stages; planned posts show on the calendar with a reminder on post day. Filming: open a song, tap the red record button on a section. Camera, microphone and Photos are used only for filming and editing on the device.
 Lyrics from audio use Apple's on-device speech recognition. Typed Auto edit requests use Apple Intelligence's on-device model where available.
 Hook import (Import a hook) sends a few frames to Anthropic's Claude after the user agrees on a permission screen.
 Restore Purchases and Terms / Privacy links are on the paywall. Account deletion: account button > Delete account.
@@ -96,7 +98,7 @@ Contact: apps@gavingeddes.art
 
 ## Before submitting
 - [ ] Paid Apps agreement, bank and tax info active
-- [ ] Review build made with `"testFlightFree": false` in scripts/subs.config.json (TestFlight builds 2 to 4 have it on, so the app is free there and App Review would never see the paywall)
+- [ ] Review build made with `"testFlightFree": false` in scripts/subs.config.json (TestFlight builds so far have it on, so the app is free there and App Review would never see the paywall)
 - [ ] Pricing and Availability: app price Free
 - [ ] Subscription group "creatrr": creatrr_artist_monthly at $4.99/month with an introductory offer (Free, 1 week, new subscribers), "Ready to Submit" and added to version 1.0 (Plus and Pro not submitted yet)
 - [ ] Demo account password set and tested
