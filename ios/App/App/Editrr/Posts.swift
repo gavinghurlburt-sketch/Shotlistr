@@ -315,49 +315,105 @@ enum PostBook {
         return last < monthAgo && project.updated < monthAgo
     }
 
-    // MARK: Plan them all
+    // MARK: Fill the calendar
 
-    /// Days for every post of this edit that has none yet: from tomorrow, no more than the weekly
-    /// goal in any week (Sunday to Saturday), spread out, never the same song two days running, and
-    /// never on a day that already has a post.
-    static func autoPlan(for project: SavedProject, among projects: [SavedProject], goal: Int,
-                         now: Date = Date()) -> [(cut: UUID, lyrics: Bool, date: Date)] {
-        let others = projects.filter { $0.id != project.id } + [project]
-        var taken: [(date: Date, song: String)] = slots(others).compactMap { slot in
-            guard let date = slot.plan.date ?? slot.plan.posted else { return nil }
-            return (date: PostBook.day(date), song: slot.project.songKey)
+    /// Plan all, like filling a glass of water: posts go one a day from today, with no gaps, so the
+    /// days close by fill up before any go further out. Every post planned after today moves too,
+    /// so each new edit mixes in with the rest: edits take turns (and songs, where they can), never
+    /// the same edit two days running while another has posts left. Posted posts, and anything on
+    /// today or before, stay put.
+    static func fill(adding project: SavedProject?, among projects: [SavedProject],
+                     now: Date = Date()) -> [(project: UUID, cut: UUID, lyrics: Bool, date: Date)] {
+        let cal = calendar
+        let today = day(now)
+        var all = projects
+        if let project {
+            if let at = all.firstIndex(where: { $0.id == project.id }) { all[at] = project } else { all.append(project) }
         }
-        // With lyrics first for every cut, then without: the most different-looking posts go up first.
-        var open: [(cut: UUID, lyrics: Bool)] = []
-        for lyrics in project.postKinds {
-            for cut in project.cutList where !cut.plan(lyrics: lyrics).isPlanned && cut.plan(lyrics: lyrics).posted == nil {
-                open.append((cut.id, lyrics))
+        // Days that keep what they have: anything posted, and anything planned for today or before.
+        var fixed = Set<Date>()
+        for slot in slots(all) {
+            if let posted = slot.plan.posted {
+                fixed.insert(day(posted))
+            } else if let date = slot.plan.date, day(date) <= today {
+                fixed.insert(day(date))
             }
         }
-        guard !open.isEmpty else { return [] }
-        let goal = max(1, goal)
-        let spacing = max(1, Int((7.0 / Double(goal)).rounded(.down)))
-        let song = project.songKey
-        let cal = calendar
-        var picks: [(cut: UUID, lyrics: Bool, date: Date)] = []
-        var candidate = cal.date(byAdding: .day, value: 1, to: day(now)) ?? day(now)
-        var tries = 0
-        while picks.count < open.count, tries < 400 {
-            tries += 1
-            defer { candidate = cal.date(byAdding: .day, value: 1, to: candidate) ?? candidate }
-            let near = taken.map { abs(cal.dateComponents([.day], from: $0.date, to: candidate).day ?? 99) }
-            // Nothing that day, and the others far enough off.
-            guard !near.contains(0), near.allSatisfy({ $0 >= spacing }) else { continue }
-            // Not the same song the day before or after.
-            if zip(taken, near).contains(where: { $0.0.song == song && $0.1 <= 1 }) { continue }
-            // No more than the goal in this week.
-            if let week = cal.dateInterval(of: .weekOfYear, for: candidate),
-               taken.filter({ week.contains($0.date) }).count >= goal { continue }
-            let slot = open[picks.count]
-            picks.append((slot.cut, slot.lyrics, candidate))
-            taken.append((candidate, song))
+        // What moves: every post planned after today, and this edit's posts with no day yet. Each
+        // edit keeps its own order: its planned ones as they were, then its new ones.
+        struct Group { let id: UUID; let song: String; var posts: [PostSlot] }
+        var groups: [Group] = []
+        for each in all {
+            let mine = slots([each]).filter { slot in
+                guard slot.plan.posted == nil else { return false }
+                if let date = slot.plan.date { return day(date) > today }
+                return each.id == project?.id
+            }
+            guard !mine.isEmpty else { continue }
+            let planned = mine.filter { $0.plan.date != nil }.sorted { $0.plan.date! < $1.plan.date! }
+            // New ones: every cut with lyrics first, then every cut without, so the looks change.
+            let new = mine.filter { $0.plan.date == nil }.enumerated().sorted { a, b in
+                let kindA = each.postKinds.firstIndex(of: a.element.lyrics) ?? 0
+                let kindB = each.postKinds.firstIndex(of: b.element.lyrics) ?? 0
+                return kindA != kindB ? kindA < kindB : a.offset < b.offset
+            }.map(\.element)
+            groups.append(Group(id: each.id, song: each.songKey, posts: planned + new))
         }
-        return picks
+        // Mix: each day goes to the edit with the most left, but not the edit (or, where there's a
+        // choice, the song) of the day before.
+        var order: [PostSlot] = []
+        var lastEdit: UUID?
+        var lastSong: String?
+        while groups.contains(where: { !$0.posts.isEmpty }) {
+            let left = groups.indices.filter { !groups[$0].posts.isEmpty }
+            let otherSong = left.filter { groups[$0].song != lastSong && groups[$0].id != lastEdit }
+            let otherEdit = left.filter { groups[$0].id != lastEdit }
+            let pool = !otherSong.isEmpty ? otherSong : (!otherEdit.isEmpty ? otherEdit : left)
+            // Most left first; on a tie, the edit whose next post was planned soonest.
+            let pick = pool.max { a, b in
+                let countA = groups[a].posts.count, countB = groups[b].posts.count
+                if countA != countB { return countA < countB }
+                let dateA = groups[a].posts[0].plan.date ?? .distantFuture
+                let dateB = groups[b].posts[0].plan.date ?? .distantFuture
+                return dateA > dateB
+            }!
+            order.append(groups[pick].posts.removeFirst())
+            lastEdit = groups[pick].id
+            lastSong = groups[pick].song
+        }
+        // Pour: one a day from today (tomorrow, when today already has one), skipping kept days.
+        var out: [(project: UUID, cut: UUID, lyrics: Bool, date: Date)] = []
+        var next = today
+        for slot in order {
+            while fixed.contains(next) { next = cal.date(byAdding: .day, value: 1, to: next) ?? next }
+            out.append((slot.project.id, slot.cut.id, slot.lyrics, next))
+            next = cal.date(byAdding: .day, value: 1, to: next) ?? next
+        }
+        return out
+    }
+
+    /// Days until the content runs out: from today, one post a day, the days in a row with a post
+    /// (posted or planned), plus every finished post not on the calendar yet (each is a day more
+    /// once it's planned). Today with nothing yet doesn't break the run when tomorrow has one.
+    static func daysOfContent(_ projects: [SavedProject], now: Date = Date()) -> Int {
+        let cal = calendar
+        let today = day(now)
+        let all = slots(projects)
+        let taken = Set(all.compactMap { slot -> Date? in
+            if let posted = slot.plan.posted { return day(posted) }
+            return slot.plan.date.map { day($0) }
+        })
+        var run = 0
+        var at = taken.contains(today) ? today : (cal.date(byAdding: .day, value: 1, to: today) ?? today)
+        while taken.contains(at), run < 3650 {
+            run += 1
+            at = cal.date(byAdding: .day, value: 1, to: at) ?? at
+        }
+        let waiting = projects.filter { !$0.justFilmed && !isOlder($0, now: now) }
+            .flatMap { slots([$0]) }
+            .filter { $0.plan.date == nil && $0.plan.posted == nil }
+            .count
+        return run + waiting
     }
 
     // MARK: Reminders and creatrr's calendar
@@ -555,8 +611,16 @@ struct PipelineBar: View {
     let changeGoal: () -> Void
 
     var body: some View {
-        let counts = PostBook.pipeline(projects, goal: goal)
-        VStack(alignment: .leading, spacing: 10) {
+        // Redrawn every minute, so the days count goes down as days pass and up as edits come in.
+        TimelineView(.everyMinute) { timeline in
+            content(now: timeline.date)
+        }
+    }
+
+    private func content(now: Date) -> some View {
+        let counts = PostBook.pipeline(projects, goal: goal, now: now)
+        let days = PostBook.daysOfContent(projects, now: now)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 cell("\(counts.filmed)", "Filmed", .white)
                 cell("\(counts.editing)", "Editing", .white)
@@ -567,25 +631,26 @@ struct PipelineBar: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Posted this week: \(counts.posted) of \(counts.goal). Change the weekly goal")
             }
-            // The next 30 days as a little spiral of stars (lit where a post is planned), then in words:
-            // how far you're set, how full the month is, and the next empty day.
+            // The next 30 days as a little spiral of stars (lit where a post is planned), then one
+            // big number: the days until the content runs out.
             HStack(alignment: .center, spacing: 12) {
                 CoverageStars(days: counts.days)
                     .frame(width: 52, height: 52)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(counts.line)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if counts.covered > 0 {
-                        Text(counts.coverLine)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                Text("\(days)")
+                    .font(.system(size: 44, weight: .heavy).monospacedDigit())
+                    .foregroundStyle(Tint.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: days)
+                Text(days == 1 ? "day until your content runs out" : "days until your content runs out")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -633,7 +698,7 @@ struct GoalSheet: View {
                 .disabled(model.postGoal >= 14)
                 .accessibilityLabel("More")
             }
-            Text("Plan them all spreads your posts out to hit this, and creatrr tells you when it's time to film more.")
+            Text("Plan all fills your calendar one post a day from today, and creatrr tells you when it's time to film more to keep up with this.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)

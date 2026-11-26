@@ -6603,24 +6603,41 @@ final class EditorModel {
         }
     }
 
-    /// Plan them all: a day for every post of this edit that has none, spread out to the weekly
-    /// goal. Returns how many were planned.
+    /// Plan them all: a day for every post of this edit that has none, one a day from today with no
+    /// gaps, mixed in with the posts already planned after today (those move to make room, so edits
+    /// take turns). Returns how many of this edit's posts were planned.
     @discardableResult
     func planAll(_ id: UUID) -> Int {
         guard let project = postProject(id) else { return 0 }
-        let picks = PostBook.autoPlan(for: project, among: projects, goal: postGoal)
-        guard let first = picks.map({ $0.date }).min() else {
+        let others = projects.map { postProject($0.id) ?? $0 }
+        let picks = PostBook.fill(adding: project, among: others)
+        let unplanned = Set(PostBook.slots([project]).filter { $0.plan.date == nil && $0.plan.posted == nil }
+            .map { PostBook.key(project.id, $0.cut.id, $0.lyrics) })
+        let added = picks.filter { unplanned.contains(PostBook.key($0.project, $0.cut, $0.lyrics)) }.count
+        guard added > 0, let last = picks.map(\.date).max() else {
             notice = "Every post of \u{201C}\(project.name)\u{201D} already has a day."
             return 0
         }
-        changeProject(id) { saved in
-            saved.makeCutsReal()
-            for pick in picks {
-                saved.changeCut(pick.cut) { $0.change(lyrics: pick.lyrics) { $0.date = pick.date } }
+        // Only the edits whose days changed get saved.
+        var changed: [UUID: [(cut: UUID, lyrics: Bool, date: Date)]] = [:]
+        let current = Dictionary(PostBook.slots(others + (others.contains { $0.id == id } ? [] : [project]))
+            .map { (PostBook.key($0.project.id, $0.cut.id, $0.lyrics), $0.plan.date) }, uniquingKeysWith: { first, _ in first })
+        for pick in picks {
+            let was = current[PostBook.key(pick.project, pick.cut, pick.lyrics)] ?? nil
+            if was.map(PostBook.day) != pick.date { changed[pick.project, default: []].append((pick.cut, pick.lyrics, pick.date)) }
+        }
+        for (edit, moves) in changed {
+            changeProject(edit) { saved in
+                saved.makeCutsReal()
+                for move in moves {
+                    saved.changeCut(move.cut) { $0.change(lyrics: move.lyrics) { $0.date = move.date } }
+                }
             }
         }
-        notice = "Planned \(picks.count) post\(picks.count == 1 ? "" : "s"), starting \(PostBook.spoken(first))."
-        return picks.count
+        let moved = picks.count - added
+        notice = "Planned \(added) post\(added == 1 ? "" : "s"), one a day through \(PostBook.spoken(last))"
+            + (moved > 0 ? ", mixed in with the \(moved) already planned." : ".")
+        return added
     }
 
     /// Deletes a Remix (never the Main cut). Its posts come off the calendar.
