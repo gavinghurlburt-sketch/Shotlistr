@@ -14,8 +14,17 @@ enum TakeLook {
     }
 
     static func look(at url: URL) async -> Look? {
+        await look(of: Video(asset: AVURLAsset(url: url)))
+    }
+
+    /// A video to look at, handed to the background check.
+    struct Video: @unchecked Sendable {
+        let asset: AVAsset
+    }
+
+    static func look(of video: Video) async -> Look? {
         await Task.detached(priority: .utility) { () -> Look? in
-            let asset = AVURLAsset(url: url)
+            let asset = video.asset
             guard let length = try? await asset.load(.duration).seconds, length > 0.2 else { return nil }
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true

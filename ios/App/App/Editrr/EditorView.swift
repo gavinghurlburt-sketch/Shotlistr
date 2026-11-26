@@ -644,6 +644,8 @@ struct EditingView: View {
     @State private var lookOpen = false
     /// The track whose color picker is open, from the clip tools.
     @State private var coloring: Int?
+    /// The video waiting on "Delete video N?" (it can't be undone).
+    @State private var deletingVideo: Int?
     /// Picking a photo or video to put on top, and the Mask sheet.
     @State private var overlayPicking = false
     @State private var overlayItems: [PhotosPickerItem] = []
@@ -1490,6 +1492,20 @@ struct EditingView: View {
                         .presentationCompactAdaptation(.popover)
                     }
                 lockTool
+                ToolItem(icon: "trash", text: "Delete", tint: Tint.bad, on: true,
+                         enabled: model.layers.count > 1, spoken: "Delete this video") { deletingVideo = index }
+                    .confirmationDialog("Delete video \(index + 1)?",
+                                        isPresented: Binding(get: { deletingVideo == index },
+                                                             set: { if !$0 { deletingVideo = nil } }),
+                                        titleVisibility: .visible) {
+                        Button("Delete video \(index + 1)", role: .destructive) {
+                            deletingVideo = nil
+                            model.deleteVideo(index)
+                        }
+                        Button("Cancel", role: .cancel) { deletingVideo = nil }
+                    } message: {
+                        Text("Its parts of the edit go to the other videos. This can't be undone.")
+                    }
             }
         }
     }

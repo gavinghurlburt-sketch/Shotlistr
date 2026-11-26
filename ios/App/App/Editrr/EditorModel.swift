@@ -567,6 +567,8 @@ final class EditorModel {
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     /// What Auto edit has seen of each video: one look per second (seconds into the video).
     @ObservationIgnored private var looks: [Int: [Int: Look]] = [:]
+    /// Each video's overall look, for keeping look-alike takes apart (by `video`).
+    @ObservationIgnored private var takeLooks: [Int: TakeLook.Look] = [:]
     @ObservationIgnored private var built: TimelineBuilder.Built?
     /// Where the clips after the performance started when the video was last built.
     @ObservationIgnored private var builtTail: [Double] = []
@@ -1018,6 +1020,7 @@ final class EditorModel {
         draggingCut = nil
         draft = nil
         looks = [:]
+        takeLooks = [:]
         rebuildAll()
         stage = .editing
     }
@@ -1171,6 +1174,33 @@ final class EditorModel {
                 }
             }
             for (video, found) in results { looks[video, default: [:]].merge(found) { $1 } }
+        }
+        // Look-alike takes (same angle, same background), when the request asked to keep them apart.
+        if style.avoidAlike {
+            busy = "Comparing your takes…"
+            var prints: [Int: TakeLook.Look] = [:]
+            for layer in layers where prints[layer.video] == nil {
+                if let seen = takeLooks[layer.video] {
+                    prints[layer.video] = seen
+                } else if let seen = await TakeLook.look(of: TakeLook.Video(asset: layer.asset)) {
+                    takeLooks[layer.video] = seen
+                    prints[layer.video] = seen
+                }
+            }
+            var alike: [Int: Set<Int>] = [:]
+            for a in layers.indices {
+                for b in layers.indices where b > a {
+                    let same = layers[a].video == layers[b].video
+                    guard same || {
+                        guard let one = prints[layers[a].video], let two = prints[layers[b].video],
+                              let distance = TakeLook.distance(one, two) else { return false }
+                        return distance < TakeLook.alike
+                    }() else { continue }
+                    alike[a, default: []].insert(b)
+                    alike[b, default: []].insert(a)
+                }
+            }
+            style.alike = alike
         }
 
         // 2. The beat, and which parts of the song are loud.
@@ -3116,8 +3146,8 @@ final class EditorModel {
     }
 
     /// A copy of a video as a new layer (on the end of `layers`), in the same place with the same trims.
-    private func copyOf(_ original: Layer) -> Layer {
-        Layer(id: layers.count, asset: original.asset, track: original.track,
+    private func copyOf(_ original: Layer, id: Int? = nil) -> Layer {
+        Layer(id: id ?? layers.count, asset: original.asset, track: original.track,
               trackStart: original.trackStart, length: original.length,
               orientation: original.orientation, displaySize: original.displaySize,
               fps: original.fps, thumbnail: original.thumbnail, sound: original.sound,
@@ -3127,6 +3157,61 @@ final class EditorModel {
               video: original.video, color: original.color, audio: original.audio,
               speed: original.speed, original: original.original, muted: original.muted,
               voice: original.voice)
+    }
+
+    /// Deletes a video from the performance (it can't be undone, so the screen asks first). The
+    /// stretches it showed go to the video before them, or another one with footage there, and
+    /// the videos after it move up a number. Other cuts (Remixes) follow the same way.
+    func deleteVideo(_ index: Int) {
+        guard kind == .performance, layers.indices.contains(index), layers.count > 1 else { return }
+        pause()
+        letGoOfAll()
+        previewing = nil
+        selected = nil
+        lastAuto = nil
+        layers = layers.enumerated()
+            .filter { $0.offset != index }
+            .enumerated()
+            .map { copyOf($0.element.element, id: $0.offset) }
+        func moved(_ list: [Cut]) -> [Cut] {
+            var out: [Cut] = []
+            for var cut in list.sorted(by: { $0.time < $1.time }) {
+                if cut.layer == index {
+                    // Its stretch: the video before it if that has footage here, else any that does.
+                    let probe = min(duration, cut.time + 0.05)
+                    let before = out.last?.layer
+                    if let before, hasFootage(before, at: probe) {
+                        cut.layer = before
+                    } else {
+                        cut.layer = layers.indices.first(where: { hasFootage($0, at: probe) }) ?? before ?? 0
+                    }
+                } else if cut.layer > index {
+                    cut.layer -= 1
+                }
+                out.append(cut)
+            }
+            // Two cuts in a row to the same video: the second does nothing, unless it has a look of its own.
+            var kept: [Cut] = []
+            for cut in out {
+                if let last = kept.last, last.layer == cut.layer, cut.transition == nil, cut.fx == nil,
+                   cut.zoom == .off {
+                    continue
+                }
+                kept.append(cut)
+            }
+            return kept
+        }
+        cuts = moved(cuts)
+        if var list = currentProject?.variations {
+            for i in list.indices { list[i].cuts = moved(list[i].cuts) }
+            currentProject?.variations = list
+        }
+        // Undo steps point at the old numbers, so they go.
+        history = []
+        future = []
+        rebuildAll()
+        scheduleSave()
+        notice = "Deleted video \(index + 1)."
     }
 
     /// A finger took hold of a clip: held it to move it, or grabbed an edge to trim it.

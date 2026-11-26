@@ -98,6 +98,10 @@ struct AutoStyle: Equatable, Sendable {
     var onlyOf: Set<Int> = []
     /// Every take gets about the same screen time.
     var evenly = false
+    /// Never cut from a take to one that looks a lot like it (same angle, same background).
+    var avoidAlike = false
+    /// Which layers look a lot like each other (filled in when `avoidAlike` is on).
+    var alike: [Int: Set<Int>] = [:]
     /// Shuffle: a number that makes a different (but still good) cut each time. Nil: the best cut.
     var shuffle: UInt64? = nil
 }
@@ -459,6 +463,12 @@ enum AutoEditor {
             // "Only take 6": just those, wherever they have footage (the rest fill in where they don't).
             if !style.onlyOf.isEmpty, choices.contains(where: { style.onlyOf.contains($0.clip.layer) }) {
                 choices.removeAll { !style.onlyOf.contains($0.clip.layer) }
+            }
+            // No cut between look-alike takes: when only look-alikes have footage, it stays on the
+            // one showing (a jump between two takes of the same angle looks like a glitch).
+            if style.avoidAlike, let previous = picks.last, let twins = style.alike[previous], !twins.isEmpty {
+                let others = choices.filter { !twins.contains($0.clip.layer) }
+                if !others.isEmpty { choices = others }
             }
             if choices.count > 1, let previous = picks.last {
                 choices.removeAll { $0.clip.layer == previous }
