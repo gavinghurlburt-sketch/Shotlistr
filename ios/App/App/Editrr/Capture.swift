@@ -1554,6 +1554,10 @@ struct CaptureView: View {
     /// The lenses (0.5, 1, 3...) and the front/back switch, like the iPhone camera.
     private var lensRow: some View {
         HStack(spacing: 10) {
+            // Exposure on the left and the camera switch on the right, in same-size spots, so the
+            // lenses sit in the middle.
+            exposureButton
+                .frame(width: 78, alignment: .trailing)
             if capture.lenses.count > 1 {
                 HStack(spacing: 4) {
                     ForEach(capture.lenses) { lens in
@@ -1575,7 +1579,6 @@ struct CaptureView: View {
                 .padding(4)
                 .background(Capsule().fill(.black.opacity(0.25)))
             }
-            exposureButton
             Button { capture.flip() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera")
                     .font(.body.weight(.semibold))
@@ -1584,6 +1587,7 @@ struct CaptureView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(capture.front ? "Use the back camera" : "Use the front camera")
+            .frame(width: 78, alignment: .leading)
         }
         .padding(.bottom, 14)
     }

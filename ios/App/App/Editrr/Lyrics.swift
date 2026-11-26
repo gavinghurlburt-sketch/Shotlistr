@@ -737,7 +737,7 @@ enum LyricText {
     static func words(fromTyped text: String, start: Double, perWord: Double = 0.4) -> [LyricWord] {
         var words: [LyricWord] = []
         var at = start
-        for line in text.components(separatedBy: .newlines) {
+        for line in withoutSectionNames(text).components(separatedBy: .newlines) {
             let parts = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
             for (i, part) in parts.enumerated() {
                 words.append(LyricWord(text: part, start: at, end: at + perWord * 0.85, br: i == parts.count - 1))
@@ -745,6 +745,42 @@ enum LyricText {
             }
         }
         return words
+    }
+
+    /// Pasted lyrics without their section names: a line that's only "Chorus", "[Verse 1: Name]",
+    /// "V2", "Ch", "Pre-chorus x2", "(Bridge)" and the like comes out, and "Chorus: words" keeps
+    /// just the words. A name only counts on its own (a "ch" inside a lyric line stays).
+    static func withoutSectionNames(_ text: String) -> String {
+        let name = #"(?:(?:pre|post)[ \-]?(?:chorus|hook)|prechorus|postchorus|verse|chorus|bridge|intro|outro|hook|refrain|interlude|breakdown|instrumental(?: break)?|(?:guitar |piano |sax )?solo|coda|tag|vamp|build[ \-]?up|spoken(?: word)?|ad[ \-]?libs?|(?:final|last|double) chorus|repeat(?: chorus| hook| verse)?|v|vs|ch|chr|cho|pc|br|brdg)"#
+        let number = #"(?:[ .#\-]*(?:\d+|one|two|three|four|five|i{1,3}|iv))?"#
+        let times = #"(?:\s*[\(\[]?\s*[x×]\s*\d+\s*[\)\]]?)?"#
+        let alone = try? NSRegularExpression(
+            pattern: #"^[\s\[\(\{\*\-_#]*"# + name + number + times + #"[\s\]\)\}\*\-_:]*$"#,
+            options: [.caseInsensitive])
+        let leading = try? NSRegularExpression(
+            pattern: #"^\s*[\[\(]?\s*"# + name + number + #"\s*[\]\)]?\s*:\s+(?=\S)"#,
+            options: [.caseInsensitive])
+        let repeatMark = try? NSRegularExpression(pattern: #"\s*[\(\[]\s*[x×]\s*\d+\s*[\)\]]\s*$"#,
+                                                  options: [.caseInsensitive])
+        var kept: [String] = []
+        for line in text.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let whole = NSRange(trimmed.startIndex..., in: trimmed)
+            // A whole line in square brackets is a note about the song, not words sung.
+            if trimmed.hasPrefix("["), trimmed.hasSuffix("]") { continue }
+            // "x2" by itself.
+            if trimmed.range(of: #"^[\(\[]?\s*[x×]\s*\d+\s*[\)\]]?$"#, options: [.regularExpression, .caseInsensitive]) != nil { continue }
+            if let alone, alone.firstMatch(in: trimmed, range: whole) != nil { continue }
+            var words = trimmed
+            if let leading {
+                words = leading.stringByReplacingMatches(in: words, range: NSRange(words.startIndex..., in: words), withTemplate: "")
+            }
+            if let repeatMark {
+                words = repeatMark.stringByReplacingMatches(in: words, range: NSRange(words.startIndex..., in: words), withTemplate: "")
+            }
+            kept.append(words)
+        }
+        return kept.joined(separator: "\n")
     }
 
     /// The words, one line per lyric line, for editing as text.
