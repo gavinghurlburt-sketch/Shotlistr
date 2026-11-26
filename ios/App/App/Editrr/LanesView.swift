@@ -255,19 +255,52 @@ struct LanesView: View {
                 while tileX < stop {
                     let at = time + Double(tileX + tile / 2 - middle) / pps
                     if let image = strip?.frame(at: at - layer.offset) ?? fallback {
-                        pictures.draw(Image(decorative: image, scale: 1),
-                                      in: CGRect(x: tileX, y: rect.minY, width: tile, height: rect.height))
+                        // Like a film strip: each frame in its own box, with a thin dark matte
+                        // and slightly rounded corners between them.
+                        let cell = CGRect(x: tileX, y: rect.minY, width: tile, height: rect.height).insetBy(dx: 1.5, dy: 2)
+                        var framed = pictures
+                        framed.clip(to: Path(roundedRect: cell, cornerRadius: 3, style: .continuous))
+                        framed.draw(Image(decorative: image, scale: 1), in: cell)
                     }
                     tileX += tile
                 }
                 return true
             }
 
-            /// The take's frames inside its clip; false when it has none yet (it's drawn as before).
+            /// A tall track's clip, like the edit page: the frames as a film strip on a dark matte,
+            /// the take's own sound along the bottom (what lines it up with the song). False when it has no
+            /// frames yet.
+            func drawTall(_ layer: Layer, in rect: CGRect, into inside: inout GraphicsContext) -> Bool {
+                let soundBand = EditMetrics.clipSoundHeight
+                let pictures = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - soundBand)
+                inside.fill(Path(rect), with: .color(.black.opacity(0.85)))
+                guard frames(of: layer, in: pictures, into: &inside) else { return false }
+                let sound = CGRect(x: rect.minX, y: pictures.maxY, width: rect.width, height: soundBand)
+                inside.fill(Path(sound), with: .color(ClipSoundTint.color))
+                if let soundPrint = layer.sound {
+                    let shift = layer.offset - layer.trackStart
+                    var bars = Path()
+                    var px = max(sound.minX, 0)
+                    let end = min(sound.maxX, size.width)
+                    while px < end {
+                        let timeline = time + Double(px - middle) / pps
+                        let frame = Int(((timeline - shift) - soundPrint.start) * SoundPrint.rate)
+                        if frame >= 0, frame < soundPrint.loudness.count {
+                            let height = max(1, CGFloat(soundPrint.loudness[frame]) * (sound.height - 4))
+                            bars.addRect(CGRect(x: px, y: sound.maxY - 2 - height, width: 2, height: height))
+                        }
+                        px += 3
+                    }
+                    inside.fill(bars, with: .color(ClipSoundTint.wave))
+                }
+                return true
+            }
+
+            /// The take's film strip inside its clip; false when it has no frames yet (it's drawn as before).
             func drewFrames(of layer: Layer, clippedTo shape: Path, in rect: CGRect) -> Bool {
                 var pictures = context
                 pictures.clip(to: shape)
-                return frames(of: layer, in: rect, into: &pictures)
+                return drawTall(layer, in: rect, into: &pictures)
             }
 
             /// Loudness bars for a sound whose asset time + shift = timeline time (from the bottom
@@ -329,7 +362,9 @@ struct LanesView: View {
                                      width: width(layer.clipEnd - layer.clipStart), height: laneHeight - 8)
                 // Lifted: a little bigger and raised, with a shadow, as if popped out of its lane.
                 let band = lifted ? resting.insetBy(dx: -2, dy: -3).offsetBy(dx: 0, dy: -2) : resting
-                let shape = Path(band)
+                // Tall tracks get the edit page's soft corners; short ones stay square.
+                let shape = tall ? Path(roundedRect: band, cornerRadius: min(5, band.width / 2), style: .continuous) : Path(band)
+                var filmed = false
 
                 // Other spots its sound fits (a repeated chorus): dashed, with the song time.
                 for spot in layer.alternatives {
@@ -356,22 +391,26 @@ struct LanesView: View {
                     }
                 } else if tall, band.maxX > 0, band.minX < size.width,
                           drewFrames(of: layer, clippedTo: shape, in: band) {
-                    // Tall tracks: the take's frames, dimmed where another take is the one showing,
-                    // full brightness (with its color stripe) where this one shows.
+                    // Tall tracks: the take's film strip and sound, dimmed where another take is the
+                    // one showing, full brightness (with its color stripe) where this one shows.
+                    filmed = true
                     context.fill(shape, with: .color(.black.opacity(0.55)))
+                    let pictureHeight = band.height - EditMetrics.clipSoundHeight
                     for segment in segments where segment.layer == layer.id {
                         let lit = CGRect(x: x(segment.start), y: band.minY, width: width(segment.end - segment.start),
                                          height: band.height).intersection(band)
                         guard !lit.isNull, lit.width > 0.5, lit.maxX > 0, lit.minX < size.width else { continue }
                         var bright = context
+                        bright.clip(to: shape)
                         bright.clip(to: Path(lit))
-                        _ = frames(of: layer, in: band, into: &bright)
-                        bright.fill(Path(lit), with: .linearGradient(
+                        _ = drawTall(layer, in: band, into: &bright)
+                        let litPictures = CGRect(x: lit.minX, y: lit.minY, width: lit.width, height: pictureHeight)
+                        bright.fill(Path(litPictures), with: .linearGradient(
                             Gradient(colors: [tint.opacity(0.35), tint.opacity(0)]),
                             startPoint: CGPoint(x: lit.minX, y: lit.midY),
                             endPoint: CGPoint(x: max(lit.maxX, lit.minX + 1), y: lit.midY)))
-                        context.fill(Path(CGRect(x: lit.minX, y: lit.minY, width: min(4, lit.width), height: lit.height)),
-                                     with: .color(tint))
+                        bright.fill(Path(CGRect(x: lit.minX, y: lit.minY, width: min(4, lit.width), height: pictureHeight)),
+                                    with: .color(tint))
                     }
                     context.stroke(shape, with: .color(tint.opacity(0.8)), lineWidth: 1)
                 } else {
@@ -392,7 +431,9 @@ struct LanesView: View {
                                      with: .color(tint))
                     }
                 }
-                wave(layer.sound, shift: layer.offset - layer.trackStart, in: band, color: .white.opacity(0.35))
+                if !filmed {
+                    wave(layer.sound, shift: layer.offset - layer.trackStart, in: band, color: .white.opacity(0.35))
+                }
 
                 // Keyframes: small diamonds along the bottom of the clip.
                 for key in layer.keyframes {
