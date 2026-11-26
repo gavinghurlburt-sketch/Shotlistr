@@ -140,6 +140,7 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
             configureFrameRate()
             // A new camera format starts back at no zoom: keep the zoom you had.
             setZoom(zoomBase * CGFloat(zoomShown))
+            applyExposure()
         }
     }
     var front = false
@@ -331,6 +332,80 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         lenses.last { $0.shown <= zoomShown + 0.01 } ?? lenses.first
     }
 
+    // MARK: Exposure
+
+    /// Brighter or darker than the camera would pick, in stops (0 is the camera's own).
+    var brightness: Float = 0
+    /// The exposure holds still, so a take doesn't brighten or darken when the light changes.
+    var exposureLocked = false
+
+    /// How far Brightness goes on the camera in use (at most 2 stops each way).
+    var brightnessRange: ClosedRange<Float> {
+        guard let device = cameraInput?.device else { return -2...2 }
+        let least = max(-2, device.minExposureTargetBias)
+        return least...max(least, min(2, device.maxExposureTargetBias))
+    }
+
+    /// Whether anything is set by hand (Brightness, the lock, or a spot to measure).
+    var exposureChanged: Bool { brightness != 0 || exposureLocked || metered }
+    private var metered = false
+
+    func setBrightness(_ value: Float) {
+        let range = brightnessRange
+        brightness = min(max(value, range.lowerBound), range.upperBound)
+        guard let device = cameraInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            device.setExposureTargetBias(brightness, completionHandler: nil)
+            device.unlockForConfiguration()
+        } catch {}
+    }
+
+    func setExposureLocked(_ on: Bool) {
+        guard let device = cameraInput?.device else { exposureLocked = false; return }
+        let mode: AVCaptureDevice.ExposureMode = on ? .locked : .continuousAutoExposure
+        guard device.isExposureModeSupported(mode) else { exposureLocked = false; return }
+        do {
+            try device.lockForConfiguration()
+            device.exposureMode = mode
+            device.unlockForConfiguration()
+            exposureLocked = on
+        } catch {}
+    }
+
+    /// Measures the light (and focuses) at a spot of the camera's own picture (0 to 1 each way).
+    func meter(at point: CGPoint) {
+        guard let device = cameraInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusPointOfInterest = point
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = point
+                // Locked: it measures once at the new spot, then holds again.
+                let mode: AVCaptureDevice.ExposureMode = exposureLocked ? .autoExpose : .continuousAutoExposure
+                if device.isExposureModeSupported(mode) { device.exposureMode = mode }
+            }
+            device.unlockForConfiguration()
+        } catch {}
+        metered = point != CGPoint(x: 0.5, y: 0.5)
+    }
+
+    /// Back to the camera's own exposure: no Brightness, no lock, measured in the middle.
+    func resetExposure() {
+        setExposureLocked(false)
+        meter(at: CGPoint(x: 0.5, y: 0.5))
+        setBrightness(0)
+    }
+
+    /// The camera in use gets the Brightness and lock you picked (after a switch or a new format).
+    private func applyExposure() {
+        setBrightness(brightness)
+        if exposureLocked { setExposureLocked(true) }
+    }
+
     func flip() {
         guard !recording, let device = Self.camera(front: !front),
               let input = try? AVCaptureDeviceInput(device: device) else { return }
@@ -348,6 +423,9 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
         watchRotation()
         orientOutput()
         setUpLenses()
+        // The other camera finds its own light (a lock was for the old one), with the same Brightness.
+        exposureLocked = false
+        applyExposure()
     }
 
     /// Vertical or horizontal, before the first take (once there are takes, it stays).
@@ -673,9 +751,23 @@ final class CaptureModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     }
 }
 
+/// Lets Shoot turn a tap on the picture into a spot on the camera's own picture.
+@MainActor final class PreviewHandle {
+    weak var view: CameraPreview.PreviewView?
+
+    /// A point on screen (window points) as a spot on the camera's picture, or nil off the picture.
+    func cameraPoint(fromScreen point: CGPoint) -> CGPoint? {
+        guard let view else { return nil }
+        let local = view.convert(point, from: nil)
+        guard view.bounds.contains(local) else { return nil }
+        return view.preview.captureDevicePointConverted(fromLayerPoint: local)
+    }
+}
+
 /// The camera picture, filling its space.
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    var handle: PreviewHandle?
 
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
@@ -687,6 +779,7 @@ struct CameraPreview: UIViewRepresentable {
         view.preview.session = session
         view.preview.videoGravity = .resizeAspectFill
         view.backgroundColor = .black
+        handle?.view = view
         return view
     }
 
@@ -736,6 +829,12 @@ struct CaptureView: View {
     @State private var hideToken = 0
     /// How the phone is held: upright or sideways (flat on a table keeps the last one).
     @State private var tilt: UIDeviceOrientation = .portrait
+    /// The Brightness slider and lock, above the lenses.
+    @State private var exposureOpen = false
+    /// Where the picture was last tapped to measure light (screen points), shown as a square.
+    @State private var meterSpot: CGPoint?
+    @State private var meterToken = 0
+    @State private var previewHandle = PreviewHandle()
     @Environment(\.dismiss) private var dismiss
 
     /// `part` starts it at one of the song's parts (Shoot, or a section's record button in creatrr).
@@ -780,7 +879,7 @@ struct CaptureView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            CameraPreview(session: capture.session)
+            CameraPreview(session: capture.session, handle: previewHandle)
                 .aspectRatio(9.0 / 16.0, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(edges: .bottom)
@@ -795,6 +894,13 @@ struct CaptureView: View {
                         }
                         .onEnded { _ in pinchFrom = nil }
                 )
+                // Tap the picture: it focuses and measures the light there, like the iPhone camera.
+                .simultaneousGesture(
+                    SpatialTapGesture(coordinateSpace: .global)
+                        .onEnded { value in meter(atScreen: value.location) }
+                )
+
+            meterSquare
 
             VStack(spacing: 0) {
                 topBar
@@ -812,6 +918,10 @@ struct CaptureView: View {
                         .transition(.opacity)
                 }
                 if !capture.recording {
+                    if exposureOpen {
+                        exposurePanel
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
                     ZStack(alignment: .bottom) {
                         // Stays in place under the wheel, so the press that opened it keeps going.
                         lensRow.opacity(wheelOn ? 0.05 : 1)
@@ -1308,6 +1418,139 @@ struct CaptureView: View {
         .frostedPopup()
     }
 
+    /// The sun: opens Brightness and the exposure lock. Yellow (with the Brightness) once changed.
+    private var exposureButton: some View {
+        let changed = capture.exposureChanged
+        return Button { withAnimation(.snappy) { exposureOpen.toggle() } } label: {
+            HStack(spacing: 4) {
+                Image(systemName: capture.exposureLocked ? "lock.fill" : "sun.max")
+                    .font(.body.weight(.semibold))
+                if capture.brightness != 0 {
+                    Text(brightnessLabel(capture.brightness))
+                        .font(.system(size: 12, weight: .bold).monospacedDigit())
+                }
+            }
+            .foregroundStyle(changed || exposureOpen ? Tint.accent : .white)
+            .padding(.horizontal, capture.brightness != 0 ? 10 : 0)
+            .frame(minWidth: 40, minHeight: 40)
+            .background(Capsule().fill(.black.opacity(0.45)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Exposure")
+        .accessibilityValue(capture.exposureLocked ? "Locked, brightness \(brightnessLabel(capture.brightness))"
+                            : "Brightness \(brightnessLabel(capture.brightness))")
+    }
+
+    /// Brightness, Lock and Auto: how light the picture is, and keeping it from changing mid-take.
+    private var exposurePanel: some View {
+        let range = capture.brightnessRange
+        return VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "sun.min")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                Slider(value: Binding(get: { Double(capture.brightness) },
+                                      set: { capture.setBrightness(Float(($0 * 10).rounded() / 10)) }),
+                       in: Double(range.lowerBound)...Double(range.upperBound))
+                    .tint(Tint.accent)
+                    .accessibilityLabel("Brightness")
+                    .accessibilityValue(brightnessLabel(capture.brightness))
+                Image(systemName: "sun.max.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(brightnessLabel(capture.brightness))
+                    .font(.system(size: 13, weight: .bold).monospacedDigit())
+                    .foregroundStyle(capture.brightness != 0 ? Tint.accent : .white)
+                    .frame(width: 38, alignment: .trailing)
+            }
+            HStack(spacing: 8) {
+                exposureChoice(capture.exposureLocked ? "Locked" : "Lock",
+                               icon: capture.exposureLocked ? "lock.fill" : "lock.open",
+                               on: capture.exposureLocked) {
+                    capture.setExposureLocked(!capture.exposureLocked)
+                }
+                .accessibilityHint("Keeps the light from changing while you film")
+                exposureChoice("Auto", icon: "a.circle", on: false) {
+                    capture.resetExposure()
+                    withAnimation(.snappy) { meterSpot = nil }
+                }
+                .disabled(!capture.exposureChanged)
+                .opacity(capture.exposureChanged ? 1 : 0.4)
+                .accessibilityHint("Back to the camera's own exposure")
+            }
+            Text("Tap the picture to set where it measures the light.")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(Rectangle().fill(.black.opacity(0.6)))
+        .padding(.horizontal, 24)
+        .padding(.bottom, 10)
+        .sensoryFeedback(.selection, trigger: capture.brightness == 0)
+    }
+
+    private func exposureChoice(_ name: String, icon: String, on: Bool,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.footnote.weight(.semibold))
+                Text(name).font(.footnote.weight(.semibold))
+            }
+            .foregroundStyle(on ? Color.black : Color.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 34)
+            .background(Rectangle().fill(on ? Tint.accent : .white.opacity(0.12)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func brightnessLabel(_ value: Float) -> String {
+        abs(value) < 0.05 ? "0" : String(format: "%+.1f", value)
+    }
+
+    /// A tap on the picture: focus and measure the light there, and show the square for a moment.
+    private func meter(atScreen point: CGPoint) {
+        guard capture.ready, !menuOpen, let spot = previewHandle.cameraPoint(fromScreen: point) else { return }
+        capture.meter(at: spot)
+        meterToken += 1
+        let token = meterToken
+        withAnimation(.snappy) { meterSpot = point }
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            guard meterToken == token else { return }
+            withAnimation(.easeOut(duration: 0.4)) { meterSpot = nil }
+        }
+    }
+
+    /// The yellow square where the picture was tapped (it says Locked when the lock is on).
+    private var meterSquare: some View {
+        GeometryReader { proxy in
+            if let spot = meterSpot {
+                let origin = proxy.frame(in: .global).origin
+                VStack(spacing: 4) {
+                    Rectangle()
+                        .strokeBorder(Tint.accent, lineWidth: 1.5)
+                        .frame(width: 72, height: 72)
+                    if capture.exposureLocked {
+                        Text("Locked")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Rectangle().fill(Tint.accent))
+                    }
+                }
+                .position(x: spot.x - origin.x, y: spot.y - origin.y + (capture.exposureLocked ? 10 : 0))
+                .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
     /// The lenses (0.5, 1, 3...) and the front/back switch, like the iPhone camera.
     private var lensRow: some View {
         HStack(spacing: 10) {
@@ -1332,6 +1575,7 @@ struct CaptureView: View {
                 .padding(4)
                 .background(Capsule().fill(.black.opacity(0.25)))
             }
+            exposureButton
             Button { capture.flip() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera")
                     .font(.body.weight(.semibold))
